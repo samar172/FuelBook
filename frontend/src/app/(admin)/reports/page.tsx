@@ -76,7 +76,9 @@ export default function ReportsPage() {
   const exp = expenseQ.data;
   const aging = agingQ.data;
 
-  const chartData = useMemo(() => {
+  const chartData = useMemo<
+    { date: string; sales: number; collections: number; expenses: number }[]
+  >(() => {
     if (!r) return [];
     return r.byDate.map((d: any) => ({
       date: format(parseISO(d.date), "dd MMM"),
@@ -86,7 +88,9 @@ export default function ReportsPage() {
     }));
   }, [r]);
 
-  const fuelMixData = useMemo(() => {
+  const fuelMixData = useMemo<
+    { name: string; value: number; qty: number }[]
+  >(() => {
     if (!r) return [];
     return Object.entries(r.fuelMix as Record<string, any>)
       .filter(([, v]: any) => Number(v.amtPaise) > 0)
@@ -97,7 +101,7 @@ export default function ReportsPage() {
       }));
   }, [r]);
 
-  const channelData = useMemo(() => {
+  const channelData = useMemo<{ name: string; value: number }[]>(() => {
     if (!r) return [];
     return r.collectionsByChannel.map((c: any) => ({
       name: c.name,
@@ -236,9 +240,9 @@ export default function ReportsPage() {
                     }
                   />
                   <Tooltip
-                    formatter={(v: number) =>
+                    formatter={(v) =>
                       "₹" +
-                      v.toLocaleString("en-IN", {
+                      Number(v).toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })
@@ -279,14 +283,14 @@ export default function ReportsPage() {
                         outerRadius={80}
                         paddingAngle={2}
                       >
-                        {fuelMixData.map((_, i) => (
+                        {fuelMixData.map((_: unknown, i: number) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(v: number) =>
+                        formatter={(v) =>
                           "₹" +
-                          v.toLocaleString("en-IN", {
+                          Number(v).toLocaleString("en-IN", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })
@@ -349,14 +353,14 @@ export default function ReportsPage() {
                         outerRadius={80}
                         paddingAngle={2}
                       >
-                        {channelData.map((_, i) => (
+                        {channelData.map((_: unknown, i: number) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(v: number) =>
+                        formatter={(v) =>
                           "₹" +
-                          v.toLocaleString("en-IN", {
+                          Number(v).toLocaleString("en-IN", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })

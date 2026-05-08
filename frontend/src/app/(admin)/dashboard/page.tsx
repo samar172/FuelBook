@@ -240,9 +240,9 @@ export default function DashboardPage() {
                       }
                     />
                     <Tooltip
-                      formatter={(v: number) =>
+                      formatter={(v) =>
                         "₹" +
-                        v.toLocaleString("en-IN", {
+                        Number(v).toLocaleString("en-IN", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })
