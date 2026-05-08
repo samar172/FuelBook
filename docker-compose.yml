@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fuelbook-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fuelbook
+    ports:
+      - "5432:5432"
+    volumes:
+      - fuelbook_pg:/var/lib/postgresql/data
+
+volumes:
+  fuelbook_pg:

@@ -1,0 +1,414 @@
+// FuelBook — Petrol Pump Management System
+// Money: stored as BigInt paise (1 INR = 100 paise)
+// Volume: stored as BigInt millilitres (1 L = 1000 ml)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== SETUP =====================
+
+model Pump {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  address   String
+  city      String
+  state     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reconciliation thresholds (per pump, configurable)
+  discrepancyMlThreshold    BigInt @default(500)
+  discrepancyPaiseThreshold BigInt @default(5000)
+
+  tanks             Tank[]
+  nozzles           Nozzle[]
+  fuelRates         FuelRate[]
+  users             User[]
+  shiftReports      ShiftReport[]
+  expenseCategories ExpenseCategory[]
+  creditCustomers   CreditCustomer[]
+  paymentTimeSlots  PaymentTimeSlot[]
+  paymentChannels   PaymentChannel[]
+  tankerReceipts    TankerReceipt[]
+}
+
+enum FuelType {
+  HSD
+  MS
+  MS_POWER
+  CNG
+}
+
+model Tank {
+  id          String   @id @default(cuid())
+  pumpId      String
+  pump        Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name        String
+  fuelType    FuelType
+  capacityMl  BigInt
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  nozzles        Nozzle[]
+  stockEntries   StockEntry[]
+  tankerReceipts TankerReceipt[]
+
+  @@unique([pumpId, name])
+}
+
+model Nozzle {
+  id        String   @id @default(cuid())
+  pumpId    String
+  pump      Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  tankId    String
+  tank      Tank     @relation(fields: [tankId], references: [id])
+  code      String
+  fuelType  FuelType
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  readings NozzleReading[]
+
+  @@unique([pumpId, code])
+}
+
+model FuelRate {
+  id            String   @id @default(cuid())
+  pumpId        String
+  pump          Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  fuelType      FuelType
+  ratePaise     BigInt
+  effectiveFrom DateTime
+  createdAt     DateTime @default(now())
+  createdBy     String
+
+  @@index([pumpId, fuelType, effectiveFrom])
+}
+
+// ===================== USERS + PERMISSIONS =====================
+
+enum Role {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+model User {
+  id        String   @id @default(cuid())
+  pumpId    String?
+  pump      Pump?    @relation(fields: [pumpId], references: [id])
+  name      String
+  phone     String   @unique
+  pinHash   String
+  role      Role     @default(MANAGER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions UserPermission?
+}
+
+// Owner can grant/revoke specific permissions to managers (and staff in v2)
+model UserPermission {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  canCreateShift          Boolean @default(true)
+  canEditNozzleReadings   Boolean @default(true)
+  canEditStock            Boolean @default(true)
+  canEditTankerReceipts   Boolean @default(true)
+  canEditCollections      Boolean @default(true)
+  canEditOutstanding      Boolean @default(true)
+  canEditExpenses         Boolean @default(true)
+  canEditCreditSales      Boolean @default(true)
+  canSubmitShift          Boolean @default(true)
+  canLockShift            Boolean @default(false)
+  canEditFuelRates        Boolean @default(false)
+  canManageCreditCustomers Boolean @default(false)
+  canManageExpenseCategories Boolean @default(false)
+  canManageUsers          Boolean @default(false)
+  canManagePump           Boolean @default(false)
+  canViewReports          Boolean @default(true)
+  canExportReports        Boolean @default(false)
+}
+
+// ===================== SHIFT REPORT =====================
+
+enum ShiftType {
+  DAY
+  NIGHT
+}
+
+enum ShiftStatus {
+  DRAFT
+  SUBMITTED
+  LOCKED
+}
+
+model ShiftReport {
+  id         String      @id @default(cuid())
+  pumpId     String
+  pump       Pump        @relation(fields: [pumpId], references: [id])
+  reportDate DateTime    @db.Date
+  shiftType  ShiftType
+  status     ShiftStatus @default(DRAFT)
+
+  // Opening cash carried from previous shift's closing
+  openingCashPaise BigInt @default(0)
+
+  // Computed totals (denormalized — recomputed on every save)
+  totalSalesPaise        BigInt @default(0) // Sum of fuel sales (qty x rate)
+  totalCreditIssuedPaise BigInt @default(0) // Credit portion of credit sales
+  totalCashFromCreditSalesPaise BigInt @default(0) // Cash portion of credit sales (eg Vijay's 5000)
+  totalOutstandingReceivedPaise BigInt @default(0) // Past credit collected today
+  totalCollectionsPaise  BigInt @default(0) // Sum of PaymentModeCollection rows
+  totalExpensesPaise     BigInt @default(0)
+  closingCashPaise       BigInt @default(0)
+
+  // Reconciliation: meter method vs stock method
+  totalSaleMlByMeter BigInt  @default(0)
+  totalSaleMlByStock BigInt  @default(0)
+  discrepancyMl      BigInt  @default(0)
+  discrepancyFlag    Boolean @default(false)
+
+  // Cash flow check: collections should equal totalSales - totalCreditIssued + totalOutstandingReceived
+  // Difference is captured here for the owner's daily reconciliation
+  cashFlowDifferencePaise BigInt @default(0)
+
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  submittedAt DateTime?
+  lockedAt    DateTime?
+  createdById String
+
+  nozzleReadings      NozzleReading[]
+  stockEntries        StockEntry[]
+  tankerReceipts      TankerReceipt[]
+  outstandingReceipts OutstandingReceipt[]
+  paymentCollections  PaymentModeCollection[]
+  expenseEntries      ExpenseEntry[]
+  creditSales         CreditSale[]
+
+  @@unique([pumpId, reportDate, shiftType])
+  @@index([pumpId, reportDate])
+}
+
+// ===================== NOZZLE READINGS =====================
+
+model NozzleReading {
+  id               String      @id @default(cuid())
+  shiftReportId    String
+  shiftReport      ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  nozzleId         String
+  nozzle           Nozzle      @relation(fields: [nozzleId], references: [id])
+  fuelType         FuelType
+  openingReadingMl BigInt
+  closingReadingMl BigInt
+  testingMl        BigInt      @default(0)
+
+  @@unique([shiftReportId, nozzleId])
+}
+
+// ===================== STOCK + TANKER RECEIPTS =====================
+
+model StockEntry {
+  id             String      @id @default(cuid())
+  shiftReportId  String
+  shiftReport    ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  tankId         String
+  tank           Tank        @relation(fields: [tankId], references: [id])
+  fuelType       FuelType
+  openingStockMl BigInt
+  closingStockMl BigInt
+
+  @@unique([shiftReportId, tankId])
+}
+
+model TankerReceipt {
+  id            String      @id @default(cuid())
+  pumpId        String
+  pump          Pump        @relation(fields: [pumpId], references: [id])
+  shiftReportId String?
+  shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])
+  tankId        String
+  tank          Tank        @relation(fields: [tankId], references: [id])
+  receivedMl    BigInt
+  ratePaise     BigInt?
+  totalCostPaise BigInt?
+  billNo        String?
+  vendorName    String?
+  receivedAt    DateTime    @default(now())
+  notes         String?
+
+  @@index([pumpId, receivedAt])
+}
+
+// ===================== PAYMENT COLLECTIONS =====================
+// Configurable channels (HDFC POS, Paytm, PhonePe, DT Plus, HP Pay, SBI Deposit, Cash, ...)
+// Configurable time slots (Before 12, After 12, Morning, Evening, ...)
+
+model PaymentChannel {
+  id        String  @id @default(cuid())
+  pumpId    String
+  pump      Pump    @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name      String  // "HDFC POS", "Paytm", "PhonePe", "DT Plus", "HP Pay", "SBI Bank Deposit", "Cash"
+  kind      String  // "CASH" | "CARD" | "UPI" | "BANK_DEPOSIT" | "WALLET" | "OTHER"
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  collections PaymentModeCollection[]
+
+  @@unique([pumpId, name])
+}
+
+model PaymentTimeSlot {
+  id        String  @id @default(cuid())
+  pumpId    String
+  pump      Pump    @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name      String  // "Before 12", "After 12", "Morning", "Full Shift"
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  collections PaymentModeCollection[]
+
+  @@unique([pumpId, name])
+}
+
+model PaymentModeCollection {
+  id            String      @id @default(cuid())
+  shiftReportId String
+  shiftReport   ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  channelId     String
+  channel       PaymentChannel @relation(fields: [channelId], references: [id])
+  timeSlotId    String?
+  timeSlot      PaymentTimeSlot? @relation(fields: [timeSlotId], references: [id])
+  amountPaise   BigInt
+  reference     String?
+
+  @@index([shiftReportId, channelId])
+}
+
+// ===================== CREDIT CUSTOMERS =====================
+
+model CreditCustomer {
+  id                  String   @id @default(cuid())
+  pumpId              String
+  pump                Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name                String
+  phone               String?
+  vehicleNo           String?
+  creditLimitPaise    BigInt   @default(0)
+  currentBalancePaise BigInt   @default(0)
+  isActive            Boolean  @default(true)
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  creditSales         CreditSale[]
+  outstandingReceipts OutstandingReceipt[]
+
+  @@index([pumpId, isActive])
+}
+
+// A credit sale during the shift — supports SPLIT PAYMENT
+// Example: Vijay buys 100L @ ₹100 = ₹10,000. He pays ₹5,000 cash on the spot.
+// totalAmountPaise = 1,000,000  (₹10,000 in paise)
+// amountPaidPaise  = 500,000    (₹5,000 cash collected at sale time)
+// amountCreditPaise = 500,000   (added to customer's currentBalancePaise)
+model CreditSale {
+  id                String         @id @default(cuid())
+  shiftReportId     String
+  shiftReport       ShiftReport    @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          CreditCustomer @relation(fields: [customerId], references: [id])
+  fuelType          FuelType
+  quantityMl        BigInt
+  ratePaise         BigInt
+  totalAmountPaise  BigInt
+  amountPaidPaise   BigInt         @default(0) // partial cash paid at sale time
+  amountCreditPaise BigInt                       // remainder added to customer's balance
+  paidViaChannelId  String?                       // which channel for the paid portion (CASH/CARD/UPI)
+  vehicleNo         String?
+  reference         String?
+  saleAt            DateTime       @default(now())
+
+  @@index([shiftReportId])
+  @@index([customerId])
+}
+
+// Outstanding (past credit) collected during this shift
+model OutstandingReceipt {
+  id              String          @id @default(cuid())
+  shiftReportId   String
+  shiftReport     ShiftReport     @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  customerId      String?
+  customer        CreditCustomer? @relation(fields: [customerId], references: [id])
+  customerNameRaw String
+  amountPaise     BigInt
+  channelId       String?         // optional: which channel — to also reflect in collections
+  reference       String?
+  receivedAt      DateTime        @default(now())
+
+  @@index([shiftReportId])
+  @@index([customerId])
+}
+
+// ===================== EXPENSES =====================
+
+model ExpenseCategory {
+  id          String   @id @default(cuid())
+  pumpId      String
+  pump        Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name        String
+  isRecurring Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  entries ExpenseEntry[]
+
+  @@unique([pumpId, name])
+}
+
+model ExpenseEntry {
+  id                  String          @id @default(cuid())
+  shiftReportId       String
+  shiftReport         ShiftReport     @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  categoryId          String
+  category            ExpenseCategory @relation(fields: [categoryId], references: [id])
+  ref                 String?
+  lastBillDate        DateTime?       @db.Date
+  openingBalancePaise BigInt          @default(0)
+  dayExpensePaise     BigInt
+  notes               String?
+
+  @@index([shiftReportId, categoryId])
+}
+
+// ===================== AUDIT =====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  beforeJson Json?
+  afterJson  Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
