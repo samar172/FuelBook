@@ -20,9 +20,40 @@ import exportRoutes from './routes/exports';
 const app = express();
 
 app.use(helmet());
+
+// CORS allow-list. Each entry is either an exact origin
+// (e.g. `https://fuelbook.vercel.app`) or a wildcard suffix
+// like `*.vercel.app` which matches any subdomain.
+const allowList = (process.env.FRONTEND_URL || 'http://localhost:3000')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const isOriginAllowed = (origin: string): boolean => {
+  for (const entry of allowList) {
+    if (entry.startsWith('*.')) {
+      const suffix = entry.slice(1); // ".vercel.app"
+      try {
+        const host = new URL(origin).hostname;
+        if (host === suffix.slice(1) || host.endsWith(suffix)) return true;
+      } catch {
+        // ignore malformed origin
+      }
+    } else if (origin === entry) {
+      return true;
+    }
+  }
+  return false;
+};
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL?.split(',') || ['http://localhost:3000'],
+    origin: (origin, cb) => {
+      // Server-to-server / curl / mobile apps send no Origin — allow.
+      if (!origin) return cb(null, true);
+      if (isOriginAllowed(origin)) return cb(null, true);
+      return cb(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
   })
 );
