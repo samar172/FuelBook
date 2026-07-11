@@ -18,6 +18,17 @@ export const loginSchema = z.object({
   pin: z.string().min(4).max(8),
 });
 
+export const registerSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(8).max(15),
+  pin: z.string().min(4).max(8),
+  businessName: z.string().min(1),
+});
+
+export const switchPumpSchema = z.object({
+  pumpId: z.string().min(1),
+});
+
 // ===== PUMP / TANK / NOZZLE =====
 export const createPumpSchema = z.object({
   name: z.string().min(1),
@@ -25,6 +36,15 @@ export const createPumpSchema = z.object({
   address: z.string().min(1),
   city: z.string().min(1),
   state: z.string().min(1),
+});
+
+export const updatePumpSchema = z.object({
+  name: z.string().min(1).optional(),
+  address: z.string().min(1).optional(),
+  city: z.string().min(1).optional(),
+  state: z.string().min(1).optional(),
+  discrepancyMlThreshold: bigIntStrOptional,
+  discrepancyPaiseThreshold: bigIntStrOptional,
 });
 
 export const createTankSchema = z.object({
@@ -42,6 +62,11 @@ export const createNozzleSchema = z.object({
 export const setFuelRateSchema = z.object({
   fuelType: fuelTypeEnum,
   ratePaise: bigIntStr,
+  effectiveFrom: z.string().datetime().optional(),
+});
+
+export const updateFuelRateSchema = z.object({
+  ratePaise: bigIntStrOptional,
   effectiveFrom: z.string().datetime().optional(),
 });
 
@@ -71,6 +96,7 @@ export const updatePermissionsSchema = z.object({
   canManagePump: z.boolean().optional(),
   canViewReports: z.boolean().optional(),
   canExportReports: z.boolean().optional(),
+  canManageEmployees: z.boolean().optional(),
 });
 
 // ===== SHIFT =====
@@ -192,4 +218,24 @@ export const paymentChannelSchema = z.object({
 export const paymentTimeSlotSchema = z.object({
   name: z.string().min(1),
   sortOrder: z.number().int().default(0),
+});
+
+// ===== EMPLOYEES =====
+export const createEmployeeSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional(),
+});
+
+export const updateEmployeeSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().optional(),
+});
+
+export const employeeAssignmentsBulkSchema = z.object({
+  assignments: z.array(
+    z.object({
+      nozzleId: z.string().min(1),
+      employeeId: z.string().min(1),
+    })
+  ),
 });

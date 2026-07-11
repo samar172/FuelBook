@@ -16,6 +16,7 @@ import userRoutes from './routes/users';
 import dashboardRoutes from './routes/dashboard';
 import tankerRoutes from './routes/tankerReceipts';
 import exportRoutes from './routes/exports';
+import employeeRoutes from './routes/employees';
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/tanker-receipts', tankerRoutes);
 app.use('/api/exports', exportRoutes);
+app.use('/api/employees', employeeRoutes);
 
 app.use(appErrorHandler);
 app.use(errorHandler);

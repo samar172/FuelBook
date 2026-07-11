@@ -76,4 +76,5 @@ const makeOwnerPermissions = () => ({
   canManagePump: true,
   canViewReports: true,
   canExportReports: true,
+  canManageEmployees: true,
 });

@@ -686,13 +686,13 @@ function ChannelFormDialog({
   onDone: () => void;
 }) {
   const isEdit = !!channel;
-  const [form, setForm] = useState({ name: "", kind: "CASH", sortOrder: 0 });
+  const [form, setForm] = useState({ name: "", kind: "CASH", sortOrder: "0" });
   useEffect(() => {
     if (open) {
       setForm({
         name: channel?.name ?? "",
         kind: channel?.kind ?? "CASH",
-        sortOrder: channel?.sortOrder ?? 0,
+        sortOrder: String(channel?.sortOrder ?? 0),
       });
     }
   }, [open, channel]);
@@ -749,7 +749,7 @@ function ChannelFormDialog({
             <Input
               type="number"
               value={form.sortOrder}
-              onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+              onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
             />
           </Field>
         </div>
@@ -875,10 +875,10 @@ function SlotFormDialog({
   onDone: () => void;
 }) {
   const isEdit = !!slot;
-  const [form, setForm] = useState({ name: "", sortOrder: 0 });
+  const [form, setForm] = useState({ name: "", sortOrder: "0" });
   useEffect(() => {
     if (open) {
-      setForm({ name: slot?.name ?? "", sortOrder: slot?.sortOrder ?? 0 });
+      setForm({ name: slot?.name ?? "", sortOrder: String(slot?.sortOrder ?? 0) });
     }
   }, [open, slot]);
 
@@ -920,7 +920,7 @@ function SlotFormDialog({
             <Input
               type="number"
               value={form.sortOrder}
-              onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+              onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
             />
           </Field>
         </div>

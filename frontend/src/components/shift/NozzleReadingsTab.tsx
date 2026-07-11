@@ -39,9 +39,9 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
       return (await api.put(`/api/shifts/${shift.id}/nozzle-readings`, {
         readings: readings.map((r: any) => ({
           nozzleId: r.nozzleId,
-          openingReadingMl: String(r.openingMl),
-          closingReadingMl: String(r.closingMl),
-          testingMl: String(r.testingMl),
+          openingReadingMl: r.openingMl === "" ? "0" : String(r.openingMl),
+          closingReadingMl: r.closingMl === "" ? "0" : String(r.closingMl),
+          testingMl: r.testingMl === "" ? "0" : String(r.testingMl),
         })),
       })).data;
     },
@@ -52,8 +52,12 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
     onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
   });
 
+  // Keep the field empty while the user is typing/clearing it — only ever
+  // coerce to "0" ml at save time. Deriving `value` straight from a helper
+  // on every render (the old behavior) meant an empty string always got
+  // converted back to 0 before the next paint, so backspacing never worked.
   const update = (idx: number, field: string, valueLitres: string) => {
-    const ml = valueLitres === "" ? "0" : litresToMl(valueLitres);
+    const ml = valueLitres === "" ? "" : litresToMl(valueLitres);
     setReadings((rs: any[]) => rs.map((r, i) => (i === idx ? { ...r, [field]: ml } : r)));
   };
 
@@ -98,7 +102,7 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
                           type="number"
                           step="0.001"
                           disabled={disabled}
-                          value={mlToLitres(r.openingMl)}
+                          value={r.openingMl === "" ? "" : mlToLitres(r.openingMl)}
                           onChange={(e) => update(r.idx, "openingMl", e.target.value)}
                           className="max-w-[140px]"
                         />
@@ -108,7 +112,7 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
                           type="number"
                           step="0.001"
                           disabled={disabled}
-                          value={mlToLitres(r.closingMl)}
+                          value={r.closingMl === "" ? "" : mlToLitres(r.closingMl)}
                           onChange={(e) => update(r.idx, "closingMl", e.target.value)}
                           className="max-w-[140px]"
                         />
@@ -118,7 +122,7 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
                           type="number"
                           step="0.001"
                           disabled={disabled}
-                          value={mlToLitres(r.testingMl)}
+                          value={r.testingMl === "" ? "" : mlToLitres(r.testingMl)}
                           onChange={(e) => update(r.idx, "testingMl", e.target.value)}
                           className="max-w-[100px]"
                         />

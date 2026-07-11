@@ -31,6 +31,7 @@ const PERMISSIONS = [
   { key: "canManagePump", label: "Manage pump setup" },
   { key: "canViewReports", label: "View reports" },
   { key: "canExportReports", label: "Export reports" },
+  { key: "canManageEmployees", label: "Manage employees" },
 ];
 
 export default function UsersPage() {

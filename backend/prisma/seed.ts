@@ -10,11 +10,20 @@ const RUPEES = (rupees: number) => BigInt(Math.round(rupees * 100));
 async function main() {
   console.log('[seed] starting…');
 
+  // --- Business ---
+  const business = await prisma.business.upsert({
+    where: { id: 'seed-business' },
+    update: {},
+    create: { id: 'seed-business', name: 'Shree Hari Petrol Pump Business' },
+  });
+  console.log('[seed] business:', business.name);
+
   // --- Pump ---
   const pump = await prisma.pump.upsert({
-    where: { code: 'SHP' },
+    where: { businessId_code: { businessId: business.id, code: 'SHP' } },
     update: {},
     create: {
+      businessId: business.id,
       name: 'Shree Hari Petrol Pump',
       code: 'SHP',
       address: 'NH-21, Main Bazaar',
@@ -76,6 +85,7 @@ async function main() {
     where: { phone: '9000000001' },
     update: {},
     create: {
+      businessId: business.id,
       pumpId: pump.id,
       name: 'Owner',
       phone: '9000000001',

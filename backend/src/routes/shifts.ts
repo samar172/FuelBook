@@ -10,6 +10,7 @@ import {
   outstandingReceiptsBulkSchema,
   expenseEntriesBulkSchema,
   creditSaleSchema,
+  employeeAssignmentsBulkSchema,
 } from '../schemas';
 import { buildCarryForward, initializeShiftChildren } from '../services/carryForward';
 import { recomputeShift } from '../services/shiftCalc';
@@ -105,6 +106,7 @@ router.post('/', requirePermission('canCreateShift'), async (req, res, next) => 
           outstandingReceipts: true,
           expenseEntries: { include: { category: true } },
           creditSales: { include: { customer: true } },
+          employeeAssignments: { include: { employee: true, nozzle: true } },
         },
       });
     });
@@ -129,6 +131,7 @@ router.get('/:id', async (req, res, next) => {
         outstandingReceipts: { include: { customer: true } },
         expenseEntries: { include: { category: true } },
         creditSales: { include: { customer: true } },
+        employeeAssignments: { include: { employee: true, nozzle: true } },
       },
     });
     res.json(shift);
@@ -272,6 +275,48 @@ router.put(
         return tx.shiftReport.findUniqueOrThrow({
           where: { id: shift.id },
           include: { nozzleReadings: { include: { nozzle: true } } },
+        });
+      });
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+// ----- Employee-nozzle assignments bulk upsert -----
+router.put(
+  '/:id/employee-assignments',
+  requirePermission('canEditNozzleReadings'),
+  async (req, res, next) => {
+    try {
+      const shift = await ensureEditable(req.params.id);
+      const { assignments } = employeeAssignmentsBulkSchema.parse(req.body);
+
+      const nozzles = await prisma.nozzle.findMany({
+        where: { id: { in: assignments.map((a) => a.nozzleId) }, pumpId: shift.pumpId },
+      });
+      const nozzleIds = new Set(nozzles.map((n) => n.id));
+      const employees = await prisma.employee.findMany({
+        where: { id: { in: assignments.map((a) => a.employeeId) }, pumpId: shift.pumpId },
+      });
+      const employeeIds = new Set(employees.map((e) => e.id));
+      for (const a of assignments) {
+        if (!nozzleIds.has(a.nozzleId)) throw new AppError(400, `Unknown nozzle ${a.nozzleId}`);
+        if (!employeeIds.has(a.employeeId)) throw new AppError(400, `Unknown employee ${a.employeeId}`);
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        for (const a of assignments) {
+          await tx.shiftEmployeeAssignment.upsert({
+            where: { shiftReportId_nozzleId: { shiftReportId: shift.id, nozzleId: a.nozzleId } },
+            update: { employeeId: a.employeeId },
+            create: { shiftReportId: shift.id, nozzleId: a.nozzleId, employeeId: a.employeeId },
+          });
+        }
+        return tx.shiftReport.findUniqueOrThrow({
+          where: { id: shift.id },
+          include: { employeeAssignments: { include: { employee: true, nozzle: true } } },
         });
       });
       res.json(result);

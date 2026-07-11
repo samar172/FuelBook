@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Lock, Send, AlertTriangle, FileSpreadsheet } from "lucide-react";
 
 import { NozzleReadingsTab } from "@/components/shift/NozzleReadingsTab";
+import { EmployeesTab } from "@/components/shift/EmployeesTab";
 import { StockTab } from "@/components/shift/StockTab";
 import { CollectionsTab } from "@/components/shift/CollectionsTab";
 import { OutstandingTab } from "@/components/shift/OutstandingTab";
@@ -110,6 +111,7 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
       <Tabs defaultValue="nozzles" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="nozzles">Nozzle Readings</TabsTrigger>
+          <TabsTrigger value="employees">Employees</TabsTrigger>
           <TabsTrigger value="stock">Stock</TabsTrigger>
           <TabsTrigger value="collections">Collections</TabsTrigger>
           <TabsTrigger value="credit-sales">Credit Sales</TabsTrigger>
@@ -120,6 +122,9 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
 
         <TabsContent value="nozzles">
           <NozzleReadingsTab shift={shift} disabled={isLocked} />
+        </TabsContent>
+        <TabsContent value="employees">
+          <EmployeesTab shift={shift} disabled={isLocked} />
         </TabsContent>
         <TabsContent value="stock">
           <StockTab shift={shift} disabled={isLocked} />

@@ -33,6 +33,8 @@ export type ApiUser = {
   name: string;
   phone: string;
   role: "OWNER" | "MANAGER" | "STAFF";
+  businessId?: string | null;
+  businessName?: string;
   pumpId: string | null;
   pumpName?: string;
   permissions: Record<string, boolean> | null;

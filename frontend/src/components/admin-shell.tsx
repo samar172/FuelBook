@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   LayoutDashboard,
@@ -16,15 +17,26 @@ import {
   BarChart3,
   Menu,
   X,
+  Building2,
+  HardHat,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ApiUser, clearAuth, getAuthUser } from "@/lib/api";
+import { api, ApiUser, clearAuth, getAuthUser, setAuth } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/shifts", label: "Shift Reports", icon: ClipboardList },
+  { href: "/employees", label: "Employees", icon: HardHat },
   { href: "/credit", label: "Credit Customers", icon: Wallet },
   { href: "/tanker-receipts", label: "Tanker Receipts", icon: Truck },
   { href: "/expenses", label: "Expense Categories", icon: Tags },
@@ -32,6 +44,7 @@ const NAV = [
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings/users", label: "Users", icon: Users },
   { href: "/settings/pump", label: "Pump Setup", icon: Settings },
+  { href: "/settings/pumps", label: "Manage Pumps", icon: Building2, ownerOnly: true },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -99,8 +112,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-60 lg:w-64 shrink-0 bg-white border-r flex-col">
-        <SidebarBranding pumpName={user.pumpName} />
-        <SidebarNav pathname={pathname} />
+        <SidebarBranding user={user} />
+        <SidebarNav pathname={pathname} user={user} />
         <SidebarFooter user={user} onLogout={logout} />
       </aside>
 
@@ -118,7 +131,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               Navigation
             </DialogPrimitive.Title>
             <div className="flex items-center justify-between border-b">
-              <SidebarBranding pumpName={user.pumpName} className="flex-1" />
+              <SidebarBranding user={user} className="flex-1" />
               <button
                 aria-label="Close menu"
                 onClick={() => setNavOpen(false)}
@@ -127,7 +140,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <SidebarNav pathname={pathname} />
+            <SidebarNav pathname={pathname} user={user} />
             <SidebarFooter user={user} onLogout={logout} />
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
@@ -143,33 +156,70 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 }
 
 function SidebarBranding({
-  pumpName,
+  user,
   className,
 }: {
-  pumpName?: string;
+  user: ApiUser;
   className?: string;
 }) {
+  const { data: pumps = [] } = useQuery({
+    queryKey: ["setup-pumps"],
+    queryFn: async () => (await api.get("/api/setup/pumps")).data,
+    enabled: user.role === "OWNER",
+  });
+
+  const switchPump = async (pumpId: string) => {
+    if (pumpId === user.pumpId) return;
+    try {
+      const { data } = await api.post("/api/auth/switch-pump", { pumpId });
+      setAuth(data.token, {
+        ...user,
+        pumpId: data.user.pumpId,
+        pumpName: data.user.pumpName,
+      });
+      window.location.reload();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || "Failed to switch pump");
+    }
+  };
+
   return (
     <div className={cn("p-4 border-b", className)}>
       <div className="flex items-center gap-2">
         <div className="bg-primary text-primary-foreground rounded-lg p-2">
           <Fuel className="h-5 w-5" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="font-semibold leading-none">FuelBook</div>
-          <div className="text-xs text-muted-foreground mt-0.5 truncate">
-            {pumpName || "Pump"}
-          </div>
+          {user.role === "OWNER" && pumps.length > 0 ? (
+            <Select value={user.pumpId ?? undefined} onValueChange={switchPump}>
+              <SelectTrigger className="h-6 mt-1 text-xs border-none px-0 shadow-none [&_svg]:h-3 [&_svg]:w-3">
+                <SelectValue placeholder="Select pump" />
+              </SelectTrigger>
+              <SelectContent>
+                {pumps.map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="text-xs text-muted-foreground mt-0.5 truncate">
+              {user.pumpName || "Pump"}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function SidebarNav({ pathname }: { pathname: string }) {
+function SidebarNav({ pathname, user }: { pathname: string; user: ApiUser }) {
+  const items = NAV.filter((n) => !n.ownerOnly || user.role === "OWNER");
   return (
     <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-      {NAV.map((n) => {
+      {items.map((n) => {
         const active = pathname === n.href || pathname.startsWith(n.href + "/");
         const Icon = n.icon;
         return (

@@ -38,8 +38,8 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
       return (await api.put(`/api/shifts/${shift.id}/stock-entries`, {
         entries: entries.map((e: any) => ({
           tankId: e.tankId,
-          openingStockMl: String(e.openingMl),
-          closingStockMl: String(e.closingMl),
+          openingStockMl: e.openingMl === "" ? "0" : String(e.openingMl),
+          closingStockMl: e.closingMl === "" ? "0" : String(e.closingMl),
         })),
       })).data;
     },
@@ -49,8 +49,10 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
     },
   });
 
+  // Keep the field empty while typing — only coerce to "0" ml at save time,
+  // otherwise a derived `value` snaps an empty input straight back to 0.
   const update = (idx: number, field: string, valueLitres: string) => {
-    const ml = valueLitres === "" ? "0" : litresToMl(valueLitres);
+    const ml = valueLitres === "" ? "" : litresToMl(valueLitres);
     setEntries((es: any[]) => es.map((e, i) => (i === idx ? { ...e, [field]: ml } : e)));
   };
 
@@ -112,7 +114,7 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
                       type="number"
                       step="0.001"
                       disabled={disabled}
-                      value={mlToLitres(e.openingMl)}
+                      value={e.openingMl === "" ? "" : mlToLitres(e.openingMl)}
                       onChange={(ev) => update(idx, "openingMl", ev.target.value)}
                       className="max-w-[140px]"
                     />
@@ -123,7 +125,7 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
                       type="number"
                       step="0.001"
                       disabled={disabled}
-                      value={mlToLitres(e.closingMl)}
+                      value={e.closingMl === "" ? "" : mlToLitres(e.closingMl)}
                       onChange={(ev) => update(idx, "closingMl", ev.target.value)}
                       className="max-w-[140px]"
                     />

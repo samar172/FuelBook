@@ -47,8 +47,8 @@ export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean
           categoryId: r.categoryId,
           ref: r.ref || undefined,
           lastBillDate: r.lastBillDate || undefined,
-          openingBalancePaise: r.openingBalancePaise,
-          dayExpensePaise: r.dayExpensePaise,
+          openingBalancePaise: r.openingBalancePaise === "" ? "0" : r.openingBalancePaise,
+          dayExpensePaise: r.dayExpensePaise === "" ? "0" : r.dayExpensePaise,
           notes: r.notes || undefined,
         })),
       })).data;
@@ -125,11 +125,11 @@ export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean
                       type="number"
                       step="0.01"
                       disabled={disabled}
-                      value={paiseToRupees(r.openingBalancePaise || "0")}
+                      value={r.openingBalancePaise === "" ? "" : paiseToRupees(r.openingBalancePaise)}
                       onChange={(e) =>
                         setRows((rs) =>
                           rs.map((x, i) =>
-                            i === idx ? { ...x, openingBalancePaise: rupeesToPaise(e.target.value || "0") } : x
+                            i === idx ? { ...x, openingBalancePaise: e.target.value === "" ? "" : rupeesToPaise(e.target.value) } : x
                           )
                         )
                       }
@@ -141,11 +141,11 @@ export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean
                       type="number"
                       step="0.01"
                       disabled={disabled}
-                      value={paiseToRupees(r.dayExpensePaise || "0")}
+                      value={r.dayExpensePaise === "" ? "" : paiseToRupees(r.dayExpensePaise)}
                       onChange={(e) =>
                         setRows((rs) =>
                           rs.map((x, i) =>
-                            i === idx ? { ...x, dayExpensePaise: rupeesToPaise(e.target.value || "0") } : x
+                            i === idx ? { ...x, dayExpensePaise: e.target.value === "" ? "" : rupeesToPaise(e.target.value) } : x
                           )
                         )
                       }

@@ -13,16 +13,28 @@ datasource db {
 
 // ===================== SETUP =====================
 
-model Pump {
+model Business {
   id        String   @id @default(cuid())
   name      String
-  code      String   @unique
-  address   String
-  city      String
-  state     String
-  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  pumps Pump[]
+  users User[]
+}
+
+model Pump {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  code       String
+  address    String
+  city       String
+  state      String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Reconciliation thresholds (per pump, configurable)
   discrepancyMlThreshold    BigInt @default(500)
@@ -38,6 +50,9 @@ model Pump {
   paymentTimeSlots  PaymentTimeSlot[]
   paymentChannels   PaymentChannel[]
   tankerReceipts    TankerReceipt[]
+  employees         Employee[]
+
+  @@unique([businessId, code])
 }
 
 enum FuelType {
@@ -75,7 +90,8 @@ model Nozzle {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  readings NozzleReading[]
+  readings    NozzleReading[]
+  assignments ShiftEmployeeAssignment[]
 
   @@unique([pumpId, code])
 }
@@ -102,16 +118,18 @@ enum Role {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  pumpId    String?
-  pump      Pump?    @relation(fields: [pumpId], references: [id])
-  name      String
-  phone     String   @unique
-  pinHash   String
-  role      Role     @default(MANAGER)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(cuid())
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
+  pumpId     String?
+  pump       Pump?     @relation(fields: [pumpId], references: [id])
+  name       String
+  phone      String    @unique
+  pinHash    String
+  role       Role      @default(MANAGER)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   permissions UserPermission?
 }
@@ -139,6 +157,7 @@ model UserPermission {
   canManagePump           Boolean @default(false)
   canViewReports          Boolean @default(true)
   canExportReports        Boolean @default(false)
+  canManageEmployees      Boolean @default(false)
 }
 
 // ===================== SHIFT REPORT =====================
@@ -198,6 +217,7 @@ model ShiftReport {
   paymentCollections  PaymentModeCollection[]
   expenseEntries      ExpenseEntry[]
   creditSales         CreditSale[]
+  employeeAssignments ShiftEmployeeAssignment[]
 
   @@unique([pumpId, reportDate, shiftType])
   @@index([pumpId, reportDate])
@@ -393,6 +413,40 @@ model ExpenseEntry {
   notes               String?
 
   @@index([shiftReportId, categoryId])
+}
+
+// ===================== EMPLOYEES =====================
+// Pump attendants — distinct from `User` (login accounts). Employees don't log in;
+// they're assigned to nozzles per shift so fuel volume/value can be attributed to them.
+
+model Employee {
+  id        String   @id @default(cuid())
+  pumpId    String
+  pump      Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments ShiftEmployeeAssignment[]
+
+  @@index([pumpId, isActive])
+}
+
+model ShiftEmployeeAssignment {
+  id            String      @id @default(cuid())
+  shiftReportId String
+  shiftReport   ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  employeeId    String
+  employee      Employee    @relation(fields: [employeeId], references: [id])
+  nozzleId      String
+  nozzle        Nozzle      @relation(fields: [nozzleId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([shiftReportId, nozzleId])
+  @@index([shiftReportId, employeeId])
+  @@index([employeeId])
 }
 
 // ===================== AUDIT =====================

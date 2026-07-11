@@ -10,22 +10,29 @@ import { Button } from "@/components/ui/button";
 import { Fuel } from "lucide-react";
 import { toast } from "sonner";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
-  const [phone, setPhone] = useState("9000000001");
-  const [pin, setPin] = useState("1234");
+  const [name, setName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await api.post("/api/auth/login", { phone, pin });
+      const { data } = await api.post("/api/auth/register", {
+        name,
+        businessName,
+        phone,
+        pin,
+      });
       setAuth(data.token, data.user);
       toast.success(`Welcome, ${data.user.name}`);
-      router.push("/dashboard");
+      router.push("/setup");
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || "Login failed");
+      toast.error(e?.response?.data?.error || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -39,10 +46,30 @@ export default function LoginPage() {
             <Fuel className="h-6 w-6" />
           </div>
           <CardTitle>FuelBook</CardTitle>
-          <CardDescription>Petrol Pump Management — Owner / Manager Sign in</CardDescription>
+          <CardDescription>Register your business as the owner</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Your name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Owner's full name"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="businessName">Business name</Label>
+              <Input
+                id="businessName"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="e.g. Shree Hari Petrol Pump Business"
+                required
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
               <Input
@@ -67,15 +94,12 @@ export default function LoginPage() {
               />
             </div>
             <Button className="w-full" disabled={loading} type="submit">
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "Creating account…" : "Create business account"}
             </Button>
-            <p className="text-xs text-muted-foreground text-center pt-2">
-              Default: 9000000001 / 1234 (owner) — change after first login.
-            </p>
             <p className="text-sm text-center pt-2">
-              New pump owner?{" "}
-              <Link href="/register" className="underline">
-                Register your business
+              Already have an account?{" "}
+              <Link href="/login" className="underline">
+                Sign in
               </Link>
             </p>
           </form>

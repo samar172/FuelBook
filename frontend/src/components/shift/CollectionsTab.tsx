@@ -47,7 +47,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
         collections: rows.map((r) => ({
           channelId: r.channelId,
           timeSlotId: r.timeSlotId || null,
-          amountPaise: r.amountPaise,
+          amountPaise: r.amountPaise === "" ? "0" : r.amountPaise,
           reference: r.reference,
         })),
       })).data;
@@ -116,9 +116,9 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
                     type="number"
                     step="0.01"
                     disabled={disabled}
-                    value={paiseToRupees(r.amountPaise || "0")}
+                    value={r.amountPaise === "" ? "" : paiseToRupees(r.amountPaise)}
                     onChange={(e) =>
-                      setRows(rs => rs.map((x, i) => i === idx ? { ...x, amountPaise: rupeesToPaise(e.target.value || "0") } : x))
+                      setRows(rs => rs.map((x, i) => i === idx ? { ...x, amountPaise: e.target.value === "" ? "" : rupeesToPaise(e.target.value) } : x))
                     }
                     className="max-w-[140px]"
                   />
