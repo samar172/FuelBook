@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { formatINR, formatLitres } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Lock, Send, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { Lock, LockOpen, Send, AlertTriangle, FileSpreadsheet } from "lucide-react";
 
 import { NozzleReadingsTab } from "@/components/shift/NozzleReadingsTab";
 import { EmployeesTab } from "@/components/shift/EmployeesTab";
@@ -41,6 +41,15 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
     mutationFn: async () => (await api.post(`/api/shifts/${id}/lock`)).data,
     onSuccess: () => {
       toast.success("Shift locked. Customer balances updated.");
+      qc.invalidateQueries({ queryKey: ["shift", id] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+  });
+
+  const unlock = useMutation({
+    mutationFn: async () => (await api.post(`/api/shifts/${id}/unlock`)).data,
+    onSuccess: () => {
+      toast.success("Shift unlocked — back to Submitted, editable again.");
       qc.invalidateQueries({ queryKey: ["shift", id] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
@@ -101,6 +110,25 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
             <Button size="sm" variant="outline" onClick={() => lock.mutate()} disabled={lock.isPending}>
               <Lock className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Lock</span>
               <span className="sm:hidden">Lock</span>
+            </Button>
+          )}
+          {isLocked && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Unlock this shift? It goes back to Submitted and becomes editable again. Credit customer balances posted at lock time will be reversed and re-applied when it's locked again.",
+                  )
+                ) {
+                  unlock.mutate();
+                }
+              }}
+              disabled={unlock.isPending}
+            >
+              <LockOpen className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Unlock</span>
+              <span className="sm:hidden">Unlock</span>
             </Button>
           )}
         </div>

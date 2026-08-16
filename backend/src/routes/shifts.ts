@@ -230,6 +230,47 @@ router.post('/:id/lock', requirePermission('canLockShift'), async (req, res, nex
   }
 });
 
+// UNLOCK (owner / canLockShift) — reverses the credit-balance postings applied at
+// lock time, then drops back to SUBMITTED so it goes through normal editing +
+// submit + lock again. Without reversing those postings, re-locking would
+// double-apply every credit sale/outstanding receipt on this shift.
+router.post('/:id/unlock', requirePermission('canLockShift'), async (req, res, next) => {
+  try {
+    const before = await prisma.shiftReport.findUniqueOrThrow({ where: { id: req.params.id } });
+    if (before.status !== ShiftStatus.LOCKED) {
+      throw new AppError(400, 'Shift is not locked');
+    }
+    const shift = await prisma.$transaction(async (tx) => {
+      const sales = await tx.creditSale.findMany({ where: { shiftReportId: req.params.id } });
+      const receipts = await tx.outstandingReceipt.findMany({
+        where: { shiftReportId: req.params.id, customerId: { not: null } },
+      });
+      for (const cs of sales) {
+        await tx.creditCustomer.update({
+          where: { id: cs.customerId },
+          data: { currentBalancePaise: { decrement: cs.amountCreditPaise } },
+        });
+      }
+      for (const r of receipts) {
+        if (r.customerId) {
+          await tx.creditCustomer.update({
+            where: { id: r.customerId },
+            data: { currentBalancePaise: { increment: r.amountPaise } },
+          });
+        }
+      }
+      return tx.shiftReport.update({
+        where: { id: req.params.id },
+        data: { status: ShiftStatus.SUBMITTED, lockedAt: null },
+      });
+    });
+    await logAudit(req.user!.userId, 'shift.unlock', 'ShiftReport', shift.id, before, shift);
+    res.json(shift);
+  } catch (e) {
+    next(e);
+  }
+});
+
 // ----- Nozzle readings bulk upsert -----
 router.put(
   '/:id/nozzle-readings',
