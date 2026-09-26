@@ -4,14 +4,50 @@ import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
+import { cn, formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
 import { AlertTriangle, CheckCircle } from "lucide-react";
 
+type ReconRow = {
+  employeeId: string;
+  employeeName: string;
+  nozzleCodes: string[];
+  salesQuantityMl: string;
+  salesValuePaise: string;
+  creditIssuedPaise: string;
+  nonCashCollectedPaise: string;
+  expectedCashPaise: string;
+  settledCashPaise: string;
+  differencePaise: string;
+  droppedMidShiftPaise: string;
+  handoverRecorded: boolean;
+};
+
+type ReconResponse = {
+  rows: ReconRow[];
+  unattributedSalesPaise: string;
+  totals: {
+    salesValuePaise: string;
+    creditIssuedPaise: string;
+    nonCashCollectedPaise: string;
+    expectedCashPaise: string;
+    settledCashPaise: string;
+    differencePaise: string;
+    droppedMidShiftPaise: string;
+    awaitingHandover: number;
+    dropCount: number;
+  };
+};
+
 export function ReconciliationTab({ shift }: { shift: any }) {
-  const { data: rates } = useQuery({
-    queryKey: ["fuel-rates"],
-    queryFn: async () => (await api.get("/api/setup/fuel-rates")).data,
+  // The same figures the Cash Handover tab works from, so the two can never
+  // disagree: sales per attendant, what they gave on credit or took digitally,
+  // the cash that leaves them owing, and what has actually been settled.
+  const { data: recon } = useQuery<ReconResponse>({
+    queryKey: ["shift-cash-recon", shift.id],
+    queryFn: async () => (await api.get(`/api/shifts/${shift.id}/cash-reconciliation`)).data,
   });
+  const settlementRows = recon?.rows ?? [];
+  const st = recon?.totals;
   const cashIn = BigInt(shift.totalSalesPaise) - BigInt(shift.totalCreditIssuedPaise);
   const expectedCollections = cashIn + BigInt(shift.totalOutstandingReceivedPaise);
   const collected = BigInt(shift.totalCollectionsPaise);
@@ -36,40 +72,9 @@ export function ReconciliationTab({ shift }: { shift: any }) {
   }
   const fuels = Array.from(new Set([...Object.keys(meterByFuel), ...Object.keys(stockByFuel)]));
 
-  // Employee summary — litres/value attributed via nozzle assignments, same
-  // "litres × current rate" convention as the employee ledger endpoint.
-  const readingByNozzle: Record<string, any> = {};
-  for (const r of shift.nozzleReadings) readingByNozzle[r.nozzleId] = r;
-  const currentRates: Record<string, any> = rates?.current || {};
-
-  const employeeTotals = new Map<
-    string,
-    { name: string; nozzles: Set<string>; saleMl: number; valuePaise: number }
-  >();
-  for (const a of shift.employeeAssignments || []) {
-    const reading = readingByNozzle[a.nozzleId];
-    const saleMl = reading
-      ? Math.max(0, Number(reading.closingReadingMl) - Number(reading.openingReadingMl) - Number(reading.testingMl))
-      : 0;
-    const ratePaise = Number(currentRates[a.nozzle.fuelType]?.ratePaise || 0);
-    const valuePaise = (saleMl * ratePaise) / 1000;
-    const existing = employeeTotals.get(a.employeeId);
-    if (existing) {
-      existing.nozzles.add(a.nozzle.code);
-      existing.saleMl += saleMl;
-      existing.valuePaise += valuePaise;
-    } else {
-      employeeTotals.set(a.employeeId, {
-        name: a.employee.name,
-        nozzles: new Set([a.nozzle.code]),
-        saleMl,
-        valuePaise,
-      });
-    }
-  }
-  const employeeRows = Array.from(employeeTotals.values());
-  const employeeTotalMl = employeeRows.reduce((acc, r) => acc + r.saleMl, 0);
-  const employeeTotalValuePaise = employeeRows.reduce((acc, r) => acc + r.valuePaise, 0);
+  // Per-attendant sales and settlement come from /cash-reconciliation (see the
+  // query above) rather than being recomputed here, so this tab and the Cash
+  // Handover tab can never show different numbers for the same shift.
 
   return (
     <div className="space-y-4">
@@ -121,11 +126,11 @@ export function ReconciliationTab({ shift }: { shift: any }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Employee Summary</CardTitle>
+          <CardTitle>Employee Sales vs Cash Settled</CardTitle>
           <CardDescription>
-            Who worked which nozzle(s) this shift, and how much of today&apos;s sales they&apos;re
-            responsible for — credit sales, collections and expenses aren&apos;t tied to a specific
-            employee, so only fuel sold via their assigned nozzles is shown here.
+            What each attendant sold, and how much of it has reached the office. Cash due is
+            their fuel sales less the credit they gave and the card/UPI they took — the rest is
+            cash they owe. Settled counts mid-shift drops and their end-of-shift hand-over.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -135,36 +140,109 @@ export function ReconciliationTab({ shift }: { shift: any }) {
                 <TableHead>Employee</TableHead>
                 <TableHead>Nozzles</TableHead>
                 <TableHead className="text-right">Litres</TableHead>
-                <TableHead className="text-right">Value</TableHead>
+                <TableHead className="text-right">Fuel sold</TableHead>
+                <TableHead className="text-right">Credit given</TableHead>
+                <TableHead className="text-right">Digital taken</TableHead>
+                <TableHead className="text-right">Cash due</TableHead>
+                <TableHead className="text-right">Settled</TableHead>
+                <TableHead className="text-right">Difference</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employeeRows.map((r, idx) => (
-                <TableRow key={idx}>
-                  <TableCell className="font-medium">{r.name}</TableCell>
-                  <TableCell className="font-mono">{Array.from(r.nozzles).join(", ")}</TableCell>
-                  <TableCell className="text-right">{formatLitres(r.saleMl)}</TableCell>
-                  <TableCell className="text-right">{formatINR(r.valuePaise)}</TableCell>
-                </TableRow>
-              ))}
-              {employeeRows.length === 0 && (
+              {settlementRows.map((r) => {
+                const diff = BigInt(r.differencePaise);
+                const short = diff < 0n;
+                return (
+                  <TableRow key={r.employeeId}>
+                    <TableCell className="font-medium">{r.employeeName}</TableCell>
+                    <TableCell className="font-mono text-xs">{r.nozzleCodes.join(", ") || "—"}</TableCell>
+                    <TableCell className="text-right">{formatLitres(r.salesQuantityMl)}</TableCell>
+                    <TableCell className="text-right">{formatINR(r.salesValuePaise)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatINR(r.creditIssuedPaise)}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatINR(r.nonCashCollectedPaise)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatINR(r.expectedCashPaise)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatINR(r.settledCashPaise)}
+                      {!r.handoverRecorded && (
+                        <div className="text-[11px] text-muted-foreground">hand-over not recorded</div>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right font-semibold",
+                        diff === 0n ? "text-green-700" : short ? "text-red-700" : "text-amber-700"
+                      )}
+                    >
+                      {diff === 0n ? "settled" : formatINR(diff)}
+                      {short && (
+                        <div className="text-[11px] font-normal text-muted-foreground">
+                          still to come in
+                        </div>
+                      )}
+                      {diff > 0n && (
+                        <div className="text-[11px] font-normal text-muted-foreground">excess</div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {settlementRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
                     No employees assigned to this shift yet — use the Employees tab.
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
-            {employeeRows.length > 0 && (
+            {settlementRows.length > 0 && st && (
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={2} className="font-bold">Total</TableCell>
-                  <TableCell className="text-right font-bold">{formatLitres(employeeTotalMl)}</TableCell>
-                  <TableCell className="text-right font-bold">{formatINR(employeeTotalValuePaise)}</TableCell>
+                  <TableCell colSpan={3} className="font-bold">Total</TableCell>
+                  <TableCell className="text-right font-bold">{formatINR(st.salesValuePaise)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatINR(st.creditIssuedPaise)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatINR(st.nonCashCollectedPaise)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatINR(st.expectedCashPaise)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatINR(st.settledCashPaise)}</TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right font-bold",
+                      BigInt(st.differencePaise) === 0n
+                        ? "text-green-700"
+                        : BigInt(st.differencePaise) < 0n
+                          ? "text-red-700"
+                          : "text-amber-700"
+                    )}
+                  >
+                    {BigInt(st.differencePaise) === 0n ? "settled" : formatINR(st.differencePaise)}
+                  </TableCell>
                 </TableRow>
               </TableFooter>
             )}
           </Table>
+
+          {st && BigInt(st.differencePaise) < 0n && (
+            <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              {formatINR(-BigInt(st.differencePaise))} of this shift&apos;s sales has not been
+              settled yet
+              {st.awaitingHandover > 0
+                ? ` — ${st.awaitingHandover} attendant(s) have no hand-over recorded.`
+                : "."}{" "}
+              Record it on the <span className="font-medium">Cash Handover</span> tab. A shortfall
+              left at lock time becomes money that attendant owes.
+            </p>
+          )}
+          {recon && BigInt(recon.unattributedSalesPaise) > 0n && (
+            <p className="mt-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+              {formatINR(recon.unattributedSalesPaise)} was dispensed on nozzles with nobody
+              assigned, so it is not anyone&apos;s responsibility. Assign them on the Employees tab.
+            </p>
+          )}
         </CardContent>
       </Card>
 

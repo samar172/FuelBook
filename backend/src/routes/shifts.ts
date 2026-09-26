@@ -704,10 +704,20 @@ router.get('/:id/cash-reconciliation', async (req, res, next) => {
       const received = h?.receivedCashPaise ?? null;
       const myDrops = dropsByEmp.get(e.employeeId) ?? [];
       const droppedMidShiftPaise = myDrops.reduce((sum, d) => sum + d.amountPaise, 0n);
+      // What has actually reached the office from this person: the recorded
+      // hand-over when there is one (it is entered as the full amount, drops
+      // included), otherwise whatever they dropped during the shift.
+      const settledCashPaise = received !== null ? received : droppedMidShiftPaise;
       return {
         ...e,
         handoverId: h?.id ?? null,
+        handoverRecorded: Boolean(h),
         receivedCashPaise: received,
+        settledCashPaise,
+        // Cash they still owe against what they sold. Negative = short.
+        // Unlike variancePaise this is never null: before a hand-over is
+        // recorded the difference is the whole amount due, not zero.
+        differencePaise: settledCashPaise - e.expectedCashPaise,
         variancePaise: received === null ? null : received - e.expectedCashPaise,
         notes: h?.notes ?? null,
         // What they already handed in during the shift, with the time of each drop.
@@ -747,6 +757,14 @@ router.get('/:id/cash-reconciliation', async (req, res, next) => {
         variancePaise: rows.reduce((s, r) => s + (r.variancePaise ?? 0n), 0n),
         droppedMidShiftPaise: rows.reduce((s, r) => s + r.droppedMidShiftPaise, 0n),
         dropCount: drops.length,
+        // Sales value dispensed by the people on this shift, and how much of it
+        // has actually been settled.
+        salesValuePaise: rows.reduce((s, r) => s + r.salesValuePaise, 0n),
+        creditIssuedPaise: rows.reduce((s, r) => s + r.creditIssuedPaise, 0n),
+        nonCashCollectedPaise: rows.reduce((s, r) => s + r.nonCashCollectedPaise, 0n),
+        settledCashPaise: rows.reduce((s, r) => s + r.settledCashPaise, 0n),
+        differencePaise: rows.reduce((s, r) => s + r.differencePaise, 0n),
+        awaitingHandover: rows.filter((r) => !r.handoverRecorded).length,
       },
     });
   } catch (e) {
