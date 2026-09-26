@@ -330,6 +330,16 @@ export const paymentChannelSchema = z.object({
 export const paymentTimeSlotSchema = z.object({
   name: z.string().min(1),
   sortOrder: z.number().int().default(0),
+  // null / omitted = the slot applies to both day and night shifts.
+  shiftType: shiftTypeEnum.nullable().optional(),
+});
+
+// Explicit allow-list: a PATCH must not be able to move a slot to another pump.
+export const updatePaymentTimeSlotSchema = z.object({
+  name: z.string().min(1).optional(),
+  sortOrder: z.number().int().optional(),
+  shiftType: shiftTypeEnum.nullable().optional(),
+  isActive: z.boolean().optional(),
 });
 
 // ===== EMPLOYEES =====
@@ -409,4 +419,17 @@ export const manualJournalSchema = z.object({
       })
     )
     .min(2, 'a journal entry needs at least two lines'),
+});
+
+// ===== MID-SHIFT CASH DROP =====
+// An attendant handing cash to the cashier or the office safe partway through a
+// shift. The exact time matters — the owner wants to see when each drop happened.
+export const cashDropSchema = z.object({
+  employeeId: z.string().min(1),
+  amountPaise: bigIntStr,
+  toLocation: z.enum(['CASHIER', 'OFFICE_SAFE']).default('CASHIER'),
+  toEmployeeId: z.string().min(1).optional().nullable(),
+  occurredAt: z.string().datetime().optional(),
+  purpose: z.string().max(200).optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
 });

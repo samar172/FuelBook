@@ -37,12 +37,30 @@ export async function findPreviousShift(
   });
 }
 
+/**
+ * The last shift of the SAME type, which is where the roster comes from: who worked
+ * which nozzle on the previous day shift is a far better guess for this day shift
+ * than whoever worked last night.
+ */
+export async function findLastShiftOfSameType(
+  pumpId: string,
+  reportDate: Date,
+  shiftType: ShiftType
+) {
+  return prisma.shiftReport.findFirst({
+    where: { pumpId, shiftType, reportDate: { lt: reportDate } },
+    orderBy: { reportDate: 'desc' },
+    include: { employeeAssignments: true },
+  });
+}
+
 export interface CarryForwardData {
   openingCashPaise: bigint;
   nozzleOpenings: Map<string, bigint>; // nozzleId -> opening reading
   tankOpenings: Map<string, bigint>; // tankId -> opening stock
   expenseOpenings: Map<string, bigint>; // categoryId -> opening balance
   customerBalances: Map<string, bigint>; // customerId -> balance
+  nozzleStaffing: Map<string, string>; // nozzleId -> employeeId, from the last shift of this type
 }
 
 export async function buildCarryForward(
@@ -58,6 +76,7 @@ export async function buildCarryForward(
     tankOpenings: new Map(),
     expenseOpenings: new Map(),
     customerBalances: new Map(),
+    nozzleStaffing: new Map(),
   };
 
   if (prev) {
@@ -71,6 +90,29 @@ export async function buildCarryForward(
     for (const e of prev.expenseEntries) {
       // closing = opening + dayExpense
       data.expenseOpenings.set(e.categoryId, e.openingBalancePaise + e.dayExpensePaise);
+    }
+  }
+
+  // Roster: reuse who manned which nozzle on the last shift of this same type, so
+  // the usual crew is pre-filled instead of re-entered every shift. Only nozzles
+  // that are still active are carried.
+  const sameType = await findLastShiftOfSameType(pumpId, reportDate, shiftType);
+  if (sameType) {
+    const activeNozzles = await prisma.nozzle.findMany({
+      where: { pumpId, isActive: true },
+      select: { id: true },
+    });
+    const activeIds = new Set(activeNozzles.map((n) => n.id));
+    const activeEmployees = await prisma.employee.findMany({
+      where: { pumpId, isActive: true },
+      select: { id: true },
+    });
+    const employeeIds = new Set(activeEmployees.map((e) => e.id));
+    for (const a of sameType.employeeAssignments) {
+      // Skip anyone who has since left, or a nozzle that has been retired.
+      if (activeIds.has(a.nozzleId) && employeeIds.has(a.employeeId)) {
+        data.nozzleStaffing.set(a.nozzleId, a.employeeId);
+      }
     }
   }
 
@@ -113,6 +155,19 @@ export async function initializeShiftChildren(
           testingMl: 0n,
         };
       }),
+    });
+  }
+
+  // Roster carried from the last shift of this type. The unique key is
+  // (shiftReportId, nozzleId), so one attendant per nozzle.
+  if (carry.nozzleStaffing.size > 0) {
+    await tx.shiftEmployeeAssignment.createMany({
+      data: [...carry.nozzleStaffing.entries()].map(([nozzleId, employeeId]) => ({
+        shiftReportId,
+        nozzleId,
+        employeeId,
+      })),
+      skipDuplicates: true,
     });
   }
 

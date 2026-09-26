@@ -13,6 +13,7 @@ import {
   employeeAssignmentsBulkSchema,
   cashHandoversBulkSchema,
   shiftCashierSchema,
+  cashDropSchema,
 } from '../schemas';
 import { buildCarryForward, initializeShiftChildren } from '../services/carryForward';
 import { recomputeShift } from '../services/shiftCalc';
@@ -125,8 +126,10 @@ router.post('/', requirePermission('canCreateShift'), async (req, res, next) => 
 // GET ONE — full with all children
 router.get('/:id', async (req, res, next) => {
   try {
-    const shift = await prisma.shiftReport.findUniqueOrThrow({
-      where: { id: req.params.id },
+    // Scoped to the caller's pump: a shift id from another pump must not resolve.
+    const pumpId = requirePump(req);
+    const shift = await prisma.shiftReport.findFirst({
+      where: { id: req.params.id, pumpId },
       include: {
         nozzleReadings: { include: { nozzle: true } },
         stockEntries: { include: { tank: true } },
@@ -136,8 +139,20 @@ router.get('/:id', async (req, res, next) => {
         expenseEntries: { include: { category: true } },
         creditSales: { include: { customer: true } },
         employeeAssignments: { include: { employee: true, nozzle: true } },
+        cashHandovers: { include: { employee: { select: { id: true, name: true } } } },
+        // Mid-shift cash drops, oldest first, so the screen can show when each
+        // hand-in happened.
+        cashMovements: {
+          include: {
+            fromEmployee: { select: { id: true, name: true } },
+            toEmployee: { select: { id: true, name: true } },
+          },
+          orderBy: { occurredAt: 'asc' },
+        },
+        cashierEmployee: { select: { id: true, name: true } },
       },
     });
+    if (!shift) throw new AppError(404, 'Shift not found');
     res.json(shift);
   } catch (e) {
     next(e);
@@ -637,17 +652,59 @@ router.get('/:id/cash-reconciliation', async (req, res, next) => {
     });
     const byEmp = new Map(handovers.map((h) => [h.employeeId, h]));
 
+    // Cash dropped to the office partway through the shift, newest last. These are
+    // real CashMovement rows, so the cash position already knows about them.
+    const drops = await prisma.cashMovement.findMany({
+      where: {
+        shiftReportId: shift.id,
+        fromLocation: 'ATTENDANT',
+        toLocation: { in: ['CASHIER', 'OFFICE_SAFE'] },
+      },
+      include: {
+        fromEmployee: { select: { id: true, name: true } },
+        toEmployee: { select: { id: true, name: true } },
+      },
+      orderBy: { occurredAt: 'asc' },
+    });
+    const dropsByEmp = new Map<string, typeof drops>();
+    for (const d of drops) {
+      if (!d.fromEmployeeId) continue;
+      const list = dropsByEmp.get(d.fromEmployeeId) ?? [];
+      list.push(d);
+      dropsByEmp.set(d.fromEmployeeId, list);
+    }
+
     const rows = expectations.map((e) => {
       const h = byEmp.get(e.employeeId);
       const received = h?.receivedCashPaise ?? null;
+      const myDrops = dropsByEmp.get(e.employeeId) ?? [];
+      const droppedMidShiftPaise = myDrops.reduce((sum, d) => sum + d.amountPaise, 0n);
       return {
         ...e,
         handoverId: h?.id ?? null,
         receivedCashPaise: received,
         variancePaise: received === null ? null : received - e.expectedCashPaise,
         notes: h?.notes ?? null,
-        // Helpful default for the form: the cash they already recorded.
-        suggestedReceivedPaise: e.cashCollectedPaise,
+        // What they already handed in during the shift, with the time of each drop.
+        droppedMidShiftPaise,
+        drops: myDrops.map((d) => ({
+          id: d.id,
+          amountPaise: d.amountPaise,
+          occurredAt: d.occurredAt,
+          toLocation: d.toLocation,
+          toEmployee: d.toEmployee,
+          purpose: d.purpose,
+          notes: d.notes,
+        })),
+        // Still to hand over at the end of the shift, if the drops fall short.
+        remainingToHandOverPaise:
+          e.expectedCashPaise - droppedMidShiftPaise > 0n
+            ? e.expectedCashPaise - droppedMidShiftPaise
+            : 0n,
+        // Default for the form: what they have already handed in beats the raw
+        // cash-collection figure, since the drops are the actual money received.
+        suggestedReceivedPaise:
+          droppedMidShiftPaise > 0n ? droppedMidShiftPaise : e.cashCollectedPaise,
       };
     });
 
@@ -663,6 +720,8 @@ router.get('/:id/cash-reconciliation', async (req, res, next) => {
         expectedCashPaise: rows.reduce((s, r) => s + r.expectedCashPaise, 0n),
         receivedCashPaise: rows.reduce((s, r) => s + (r.receivedCashPaise ?? 0n), 0n),
         variancePaise: rows.reduce((s, r) => s + (r.variancePaise ?? 0n), 0n),
+        droppedMidShiftPaise: rows.reduce((s, r) => s + r.droppedMidShiftPaise, 0n),
+        dropCount: drops.length,
       },
     });
   } catch (e) {
@@ -725,6 +784,111 @@ router.put('/:id/cash-handovers', requirePermission('canEditCollections'), async
     next(e);
   }
 });
+
+// ----- Mid-shift cash drops: staff handing cash in before the shift ends -----
+// Recorded as a CashMovement so the custody trail and the cash position pick them
+// up with no extra bookkeeping. Allowed while the shift is still editable.
+router.post('/:id/cash-drops', requirePermission('canEditCollections'), async (req, res, next) => {
+  try {
+    const shift = await ensureEditable(req.params.id);
+    const data = cashDropSchema.parse(req.body);
+    if (data.amountPaise <= 0n) throw new AppError(400, 'A cash drop must be more than zero');
+
+    const attendant = await prisma.employee.findFirst({
+      where: { id: data.employeeId, pumpId: shift.pumpId },
+      select: { id: true, name: true },
+    });
+    if (!attendant) throw new AppError(400, 'Employee does not belong to this pump');
+
+    // A drop to the cashier names who took it; the safe is a place, not a person.
+    let toEmployeeId: string | null = null;
+    if (data.toLocation === 'CASHIER') {
+      toEmployeeId = data.toEmployeeId || shift.cashierEmployeeId || null;
+      if (!toEmployeeId) {
+        throw new AppError(400, 'Say which cashier took the cash, or set the shift cashier first');
+      }
+      const cashier = await prisma.employee.findFirst({
+        where: { id: toEmployeeId, pumpId: shift.pumpId },
+      });
+      if (!cashier) throw new AppError(400, 'Cashier does not belong to this pump');
+      if (toEmployeeId === attendant.id) {
+        throw new AppError(400, 'An attendant cannot hand cash to themselves');
+      }
+    }
+
+    const occurredAt = data.occurredAt ? new Date(data.occurredAt) : new Date();
+    const movement = await prisma.cashMovement.create({
+      data: {
+        pumpId: shift.pumpId,
+        shiftReportId: shift.id,
+        fromLocation: 'ATTENDANT',
+        fromEmployeeId: attendant.id,
+        toLocation: data.toLocation,
+        toEmployeeId,
+        amountPaise: data.amountPaise,
+        occurredAt,
+        purpose: data.purpose ?? 'Mid-shift cash drop',
+        notes: data.notes ?? null,
+        recordedById: req.user!.userId,
+      },
+      include: {
+        fromEmployee: { select: { id: true, name: true } },
+        toEmployee: { select: { id: true, name: true } },
+      },
+    });
+    await logAudit(req.user!.userId, 'shift.cashDrop', 'CashMovement', movement.id, null, movement);
+    res.status(201).json(movement);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/:id/cash-drops', async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const shift = await prisma.shiftReport.findFirst({
+      where: { id: req.params.id, pumpId },
+      select: { id: true },
+    });
+    if (!shift) throw new AppError(404, 'Shift not found');
+    const drops = await prisma.cashMovement.findMany({
+      where: { shiftReportId: shift.id, fromLocation: 'ATTENDANT' },
+      include: {
+        fromEmployee: { select: { id: true, name: true, code: true } },
+        toEmployee: { select: { id: true, name: true } },
+      },
+      orderBy: { occurredAt: 'asc' },
+    });
+    res.json({
+      drops,
+      totalPaise: drops.reduce((s, d) => s + d.amountPaise, 0n),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete(
+  '/:id/cash-drops/:movementId',
+  requirePermission('canEditCollections'),
+  async (req, res, next) => {
+    try {
+      const shift = await ensureEditable(req.params.id);
+      const movement = await prisma.cashMovement.findFirst({
+        where: { id: req.params.movementId, shiftReportId: shift.id },
+      });
+      if (!movement) throw new AppError(404, 'Cash drop not found');
+      if (movement.journalEntryId) {
+        throw new AppError(409, 'This drop is already posted to the books and cannot be removed');
+      }
+      await prisma.cashMovement.delete({ where: { id: movement.id } });
+      await logAudit(req.user!.userId, 'shift.cashDrop.delete', 'CashMovement', movement.id, movement, null);
+      res.json({ deleted: true, id: movement.id });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
 
 // Pooled-cashier mode: who is handing over the shift's cash.
 router.put('/:id/cashier', requirePermission('canEditCollections'), async (req, res, next) => {

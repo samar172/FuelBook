@@ -11,6 +11,7 @@ import {
   expenseCategorySchema,
   paymentChannelSchema,
   paymentTimeSlotSchema,
+  updatePaymentTimeSlotSchema,
   createPumpSchema,
   updatePumpSchema,
 } from '../schemas';
@@ -18,7 +19,7 @@ import { litresToMl } from '../lib/money';
 import { AppError } from '../middleware/error';
 import { ensureChartOfAccounts } from '../services/ledger';
 import { signToken } from '../lib/jwt';
-import { Role } from '@prisma/client';
+import { Role, ShiftType } from '@prisma/client';
 
 const router = Router();
 router.use(requireAuth);
@@ -373,8 +374,19 @@ router.delete('/payment-channels/:id', requirePermission('canManagePump'), async
 router.get('/payment-time-slots', async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
+    // ?shiftType=DAY|NIGHT returns only the slots that belong to that shift, plus
+    // any untagged slot (which applies to both). Without it, every slot is returned.
+    const shiftTypeRaw = String(req.query.shiftType || '').toUpperCase();
+    if (shiftTypeRaw && shiftTypeRaw !== 'DAY' && shiftTypeRaw !== 'NIGHT') {
+      throw new AppError(400, 'shiftType must be DAY or NIGHT');
+    }
     const slots = await prisma.paymentTimeSlot.findMany({
-      where: { pumpId },
+      where: {
+        pumpId,
+        ...(shiftTypeRaw
+          ? { OR: [{ shiftType: shiftTypeRaw as ShiftType }, { shiftType: null }] }
+          : {}),
+      },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
     res.json(slots);
@@ -396,7 +408,13 @@ router.post('/payment-time-slots', requirePermission('canManagePump'), async (re
 
 router.patch('/payment-time-slots/:id', requirePermission('canManagePump'), async (req, res, next) => {
   try {
-    const slot = await prisma.paymentTimeSlot.update({ where: { id: req.params.id }, data: req.body });
+    const pumpId = requirePump(req);
+    const existing = await prisma.paymentTimeSlot.findFirst({
+      where: { id: req.params.id, pumpId },
+    });
+    if (!existing) throw new AppError(404, 'Time slot not found');
+    const data = updatePaymentTimeSlotSchema.parse(req.body);
+    const slot = await prisma.paymentTimeSlot.update({ where: { id: existing.id }, data });
     res.json(slot);
   } catch (e) {
     next(e);

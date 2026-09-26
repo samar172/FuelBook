@@ -377,12 +377,15 @@ model PaymentChannel {
 }
 
 model PaymentTimeSlot {
-  id        String  @id @default(cuid())
+  id        String     @id @default(cuid())
   pumpId    String
-  pump      Pump    @relation(fields: [pumpId], references: [id], onDelete: Cascade)
-  name      String // "Before 12", "After 12", "Morning", "Full Shift"
-  isActive  Boolean @default(true)
-  sortOrder Int     @default(0)
+  pump      Pump       @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name      String // "Before 12", "After 12", "6 Am - 6 PM"
+  // Which shift this slot belongs to. A night slot has no business appearing on a
+  // day shift. null means it applies to both, which is how existing slots behave.
+  shiftType ShiftType?
+  isActive  Boolean    @default(true)
+  sortOrder Int        @default(0)
 
   collections  PaymentModeCollection[]
   journalLines JournalLine[]
