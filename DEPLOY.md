@@ -373,7 +373,36 @@ Frontend-only change? Just `cd frontend && npx vercel --prod --yes`.
 
 ---
 
-## 12. Quick reference
+## 12. What the app now covers
+
+Deployed 2026-09-26. Each section is a page in the sidebar, backed by its own API prefix.
+
+| Section | Route | API | What it does |
+|---|---|---|---|
+| Books (Ledger) | `/books` | `/api/ledger` | Double-entry ledger: trial balance, P&L, balance sheet, journal, per-account statements, who-owes-what. Entries post when a shift is LOCKED and reverse on unlock. |
+| Cash & Bank | `/cash` | `/api/cash-bank` | Cash custody trail (attendant → cashier → safe → owner → bank), cash position, note counts, deposits, card/UPI settlement, bank-statement matching. |
+| Wet Stock & Testing | `/wet-stock` | `/api/wet-stock` | Tank dip charts, dip/density/temperature log, W&M nozzle tests, book-vs-dip variance, tanker decantation and transit-loss claims. |
+| Statements & Cheques | `/receivables` | `/api/credit-lifecycle` | Customer statements with due dates, ageing by due date, cheque register with bounce handling, payment reminder text. |
+| Lubes & Non-Fuel | `/products` | `/api/products` | Lubricant/AdBlue/service catalogue, GST, weighted-average cost, stock and margin reports. |
+| Price Revisions | `/pricing` | `/api/pricing` | Daily rate revisions with stock revaluation and margin per litre. |
+| Compliance & Staff | `/compliance` | `/api/compliance` | Licence expiry calendar (PESO, W&M stamping, fire/pollution NOC…), attendance register, staff advances. |
+
+### Two things to know about the accounting
+
+1. **The ledger starts from the next locked shift.** Shifts locked before this deploy are
+   not back-posted. Post opening balances (cash in hand, what customers already owe, fuel in
+   the tanks) as a manual entry from **Books → New Entry** if you want the balance sheet to
+   reflect them.
+2. **Some activity posts on demand, not instantly.** Bank deposits, staff advances and
+   cash moved to the bank are recorded by their own screens and turned into journal entries
+   by `POST /api/ledger/post-pending` (owner only; `GET /api/ledger/pending` shows what is
+   waiting). It is idempotent, so running it twice is harmless. Price revaluation is
+   deliberately never posted — a selling-price change is not a realised gain until the fuel
+   is sold.
+
+---
+
+## 13. Quick reference
 
 | Item                | Value                                             |
 |---------------------|---------------------------------------------------|
