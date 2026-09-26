@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient, FuelType, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { ensureChartOfAccounts } from '../src/services/ledger';
 
 const prisma = new PrismaClient();
 
@@ -205,13 +206,27 @@ async function main() {
       id: 'seed-vijay',
       pumpId: pump.id,
       name: 'Vijay Singh',
+      code: 'CUST-001',
+      contactPerson: 'Vijay Singh',
       phone: '9876543210',
-      vehicleNo: 'RJ14-XX-1234',
+      city: 'Jaipur',
+      state: 'Rajasthan',
+      paymentTermsDays: 15,
       creditLimitPaise: RUPEES(50000),
       currentBalancePaise: 0n,
+      vehicles: {
+        create: [
+          { vehicleNo: 'RJ14-XX-1234', type: 'TRUCK', fuelType: 'HSD', isPrimary: true },
+          { vehicleNo: 'RJ14-XX-5678', type: 'TRACTOR', fuelType: 'HSD' },
+        ],
+      },
     },
   });
   console.log('[seed] sample credit customer: Vijay Singh');
+
+  // Chart of accounts for the double-entry ledger
+  const accounts = await ensureChartOfAccounts(prisma, pump.id);
+  console.log('[seed] ledger accounts:', Object.keys(accounts).length);
 
   console.log('[seed] done.');
 }

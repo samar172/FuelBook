@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/db';
 import { requireAuth } from '../middleware/auth';
 import { AppError } from '../middleware/error';
-import { FuelType } from '@prisma/client';
+import { FuelType, ShiftStatus, ShiftType } from '@prisma/client';
 
 const router = Router();
 router.use(requireAuth);
@@ -194,20 +194,121 @@ router.get('/sales-trend', async (req, res, next) => {
   }
 });
 
+// ===================== REPORT FILTERS =====================
+// All report filters are OPTIONAL and purely additive: with none supplied the
+// endpoints behave exactly as before. Unknown enum values are rejected with a
+// 400 so a typo in the query string never reaches Prisma.
+
+const SHIFT_TYPES: ShiftType[] = ['DAY', 'NIGHT'];
+const SHIFT_STATUSES: ShiftStatus[] = ['DRAFT', 'SUBMITTED', 'LOCKED'];
+const FUEL_TYPES: FuelType[] = ['HSD', 'MS', 'MS_POWER', 'CNG'];
+const AGING_BUCKETS = ['d0_30', 'd31_60', 'd61_90', 'd90_plus'] as const;
+type AgingBucket = (typeof AGING_BUCKETS)[number];
+
+// A single query param -> trimmed string, or undefined when absent/blank.
+const str = (v: unknown): string | undefined => {
+  if (v === undefined || v === null) return undefined;
+  const s = String(Array.isArray(v) ? v[v.length - 1] : v).trim();
+  return s === '' ? undefined : s;
+};
+
+const oneOf = <T extends string>(v: unknown, allowed: readonly T[], field: string): T | undefined => {
+  const s = str(v);
+  if (s === undefined) return undefined;
+  if (!(allowed as readonly string[]).includes(s)) {
+    throw new AppError(400, `Invalid ${field}: ${s}. Expected one of ${allowed.join(', ')}`);
+  }
+  return s as T;
+};
+
+// Repeatable (?fuelType=MS&fuelType=HSD) or CSV (?fuelType=MS,HSD).
+const manyOf = <T extends string>(v: unknown, allowed: readonly T[], field: string): T[] | undefined => {
+  if (v === undefined || v === null) return undefined;
+  const parts = (Array.isArray(v) ? v : [v])
+    .flatMap((x) => String(x).split(','))
+    .map((x) => x.trim())
+    .filter((x) => x !== '');
+  if (parts.length === 0) return undefined;
+  for (const p of parts) {
+    if (!(allowed as readonly string[]).includes(p)) {
+      throw new AppError(400, `Invalid ${field}: ${p}. Expected one of ${allowed.join(', ')}`);
+    }
+  }
+  return Array.from(new Set(parts)) as T[];
+};
+
+const bigIntParam = (v: unknown, field: string): bigint | undefined => {
+  const s = str(v);
+  if (s === undefined) return undefined;
+  if (!/^-?\d+$/.test(s)) throw new AppError(400, `Invalid ${field}: ${s}. Expected an integer`);
+  return BigInt(s);
+};
+
+type ReportFilters = {
+  shiftType?: ShiftType;
+  status?: ShiftStatus;
+  fuelType?: FuelType[];
+  employeeId?: string;
+  nozzleId?: string;
+  channelId?: string;
+  tankId?: string;
+  categoryId?: string;
+};
+
+function parseReportFilters(req: any): ReportFilters {
+  return {
+    shiftType: oneOf(req.query.shiftType, SHIFT_TYPES, 'shiftType'),
+    status: oneOf(req.query.status, SHIFT_STATUSES, 'status'),
+    fuelType: manyOf(req.query.fuelType, FUEL_TYPES, 'fuelType'),
+    employeeId: str(req.query.employeeId),
+    nozzleId: str(req.query.nozzleId),
+    channelId: str(req.query.channelId),
+    tankId: str(req.query.tankId),
+    categoryId: str(req.query.categoryId),
+  };
+}
+
+// Only the keys that were actually supplied — echoed back to the UI as `appliedFilters`.
+const compactFilters = (f: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(f).filter(([, v]) => v !== undefined));
+
 // Date-range aggregates — drives the /reports page
 router.get('/range', async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const { from, to } = parseRange(req);
+    const f = parseReportFilters(req);
+
+    // Filters that narrow WHICH sales count. When any of these is set the
+    // denormalized ShiftReport.totalSalesPaise (which covers every fuel, nozzle
+    // and attendant) is wrong, so sales MUST be recomputed from nozzleReadings.
+    const narrowsSales = Boolean(f.fuelType || f.employeeId || f.nozzleId || f.tankId);
+    const narrowsCollections = Boolean(f.channelId || f.employeeId);
+    const narrowsExpenses = Boolean(f.categoryId || f.employeeId);
+    const narrowsCredit = Boolean(f.fuelType || f.employeeId);
 
     const shifts = await prisma.shiftReport.findMany({
-      where: { pumpId, reportDate: { gte: from, lte: to } },
+      where: {
+        pumpId,
+        reportDate: { gte: from, lte: to },
+        ...(f.shiftType ? { shiftType: f.shiftType } : {}),
+        ...(f.status ? { status: f.status } : {}),
+      },
       orderBy: { reportDate: 'asc' },
       include: {
-        nozzleReadings: true,
+        nozzleReadings: { include: { nozzle: { select: { id: true, code: true, tankId: true } } } },
         paymentCollections: { include: { channel: true } },
+        expenseEntries: true,
+        creditSales: true,
+        employeeAssignments: true,
       },
     });
+
+    const employees = await prisma.employee.findMany({
+      where: { pumpId },
+      select: { id: true, name: true },
+    });
+    const employeeNames = new Map(employees.map((e) => [e.id, e.name]));
 
     const rates = await prisma.fuelRate.findMany({
       where: { pumpId },
@@ -252,43 +353,142 @@ router.get('/range', async (req, res, next) => {
       CNG: { qtyMl: 0n, amtPaise: 0n },
     };
     const channelMap: Record<string, { channelId: string; name: string; amountPaise: bigint }> = {};
+    const byShiftType: Record<ShiftType, { shifts: number; quantityMl: bigint; amountPaise: bigint }> = {
+      DAY: { shifts: 0, quantityMl: 0n, amountPaise: 0n },
+      NIGHT: { shifts: 0, quantityMl: 0n, amountPaise: 0n },
+    };
+    const byNozzle: Record<
+      string,
+      { nozzleId: string; code: string; fuelType: FuelType; quantityMl: bigint; amountPaise: bigint }
+    > = {};
+    const byEmployee: Record<string, { employeeId: string; name: string; quantityMl: bigint; amountPaise: bigint }> =
+      {};
 
     for (const s of shifts) {
       const key = s.reportDate.toISOString().slice(0, 10);
       const row = byDate[key];
-      if (row) {
-        row.salesPaise += s.totalSalesPaise;
-        row.creditIssuedPaise += s.totalCreditIssuedPaise;
-        row.outstandingReceivedPaise += s.totalOutstandingReceivedPaise;
-        row.collectionsPaise += s.totalCollectionsPaise;
-        row.expensesPaise += s.totalExpensesPaise;
-        row.shifts += 1;
-      }
-      salesPaise += s.totalSalesPaise;
-      creditIssuedPaise += s.totalCreditIssuedPaise;
-      outstandingReceivedPaise += s.totalOutstandingReceivedPaise;
-      collectionsPaise += s.totalCollectionsPaise;
-      expensesPaise += s.totalExpensesPaise;
-      if (s.discrepancyFlag) discrepancyShifts += 1;
 
+      // Nozzles this attendant actually manned in this shift.
+      const assignedNozzles = new Set(
+        s.employeeAssignments.filter((a) => a.employeeId === f.employeeId).map((a) => a.nozzleId),
+      );
+
+      const keepReading = (r: (typeof s.nozzleReadings)[number]) => {
+        if (f.fuelType && !f.fuelType.includes(r.fuelType)) return false;
+        if (f.nozzleId && r.nozzleId !== f.nozzleId) return false;
+        if (f.tankId && r.nozzle.tankId !== f.tankId) return false;
+        if (f.employeeId && !assignedNozzles.has(r.nozzleId)) return false;
+        return true;
+      };
+
+      let shiftSalesPaise = 0n;
+      let shiftQtyMl = 0n;
       for (const r of s.nozzleReadings) {
+        if (!keepReading(r)) continue;
         const sold = r.closingReadingMl - r.openingReadingMl - r.testingMl;
         const qty = sold > 0n ? sold : 0n;
         const rate = ratePerFuel[r.fuelType] ?? 0n;
+        const amt = (qty * rate) / 1000n;
+
         fuelMix[r.fuelType].qtyMl += qty;
-        fuelMix[r.fuelType].amtPaise += (qty * rate) / 1000n;
+        fuelMix[r.fuelType].amtPaise += amt;
+        shiftSalesPaise += amt;
+        shiftQtyMl += qty;
+
+        const nk = r.nozzleId;
+        if (!byNozzle[nk]) {
+          byNozzle[nk] = {
+            nozzleId: nk,
+            code: r.nozzle.code,
+            fuelType: r.fuelType,
+            quantityMl: 0n,
+            amountPaise: 0n,
+          };
+        }
+        byNozzle[nk].quantityMl += qty;
+        byNozzle[nk].amountPaise += amt;
+
+        // Attribute to whoever was on this nozzle; split evenly when several were.
+        const manned = s.employeeAssignments.filter((a) => a.nozzleId === r.nozzleId);
+        if (manned.length > 0) {
+          const shareQty = qty / BigInt(manned.length);
+          const shareAmt = amt / BigInt(manned.length);
+          for (const a of manned) {
+            if (!byEmployee[a.employeeId]) {
+              byEmployee[a.employeeId] = {
+                employeeId: a.employeeId,
+                name: employeeNames.get(a.employeeId) || 'Unknown',
+                quantityMl: 0n,
+                amountPaise: 0n,
+              };
+            }
+            byEmployee[a.employeeId].quantityMl += shareQty;
+            byEmployee[a.employeeId].amountPaise += shareAmt;
+          }
+        }
       }
 
+      // Collections — filtered by channel and/or by who took the money.
+      let shiftCollectionsPaise = 0n;
       for (const pc of s.paymentCollections) {
+        if (f.channelId && pc.channelId !== f.channelId) continue;
+        if (f.employeeId && pc.employeeId !== f.employeeId) continue;
+        shiftCollectionsPaise += pc.amountPaise;
         const k = pc.channelId;
         if (!channelMap[k]) channelMap[k] = { channelId: k, name: pc.channel.name, amountPaise: 0n };
         channelMap[k].amountPaise += pc.amountPaise;
       }
+
+      // Expenses — filtered by category and/or who paid out of pocket.
+      let shiftExpensesPaise = 0n;
+      for (const ee of s.expenseEntries) {
+        if (f.categoryId && ee.categoryId !== f.categoryId) continue;
+        if (f.employeeId && ee.paidByEmployeeId !== f.employeeId) continue;
+        shiftExpensesPaise += ee.dayExpensePaise;
+      }
+
+      // Credit issued — filtered by fuel and/or the attendant who sold it.
+      let shiftCreditPaise = 0n;
+      for (const cs of s.creditSales) {
+        if (f.fuelType && !f.fuelType.includes(cs.fuelType)) continue;
+        if (f.employeeId && cs.employeeId !== f.employeeId) continue;
+        shiftCreditPaise += cs.amountCreditPaise;
+      }
+
+      const sales = narrowsSales ? shiftSalesPaise : s.totalSalesPaise;
+      const collections = narrowsCollections ? shiftCollectionsPaise : s.totalCollectionsPaise;
+      const expenses = narrowsExpenses ? shiftExpensesPaise : s.totalExpensesPaise;
+      const credit = narrowsCredit ? shiftCreditPaise : s.totalCreditIssuedPaise;
+      // Outstanding received has no dimension to narrow on, so it always uses the total.
+      const outstanding = s.totalOutstandingReceivedPaise;
+
+      if (row) {
+        row.salesPaise += sales;
+        row.creditIssuedPaise += credit;
+        row.outstandingReceivedPaise += outstanding;
+        row.collectionsPaise += collections;
+        row.expensesPaise += expenses;
+        row.shifts += 1;
+      }
+      salesPaise += sales;
+      creditIssuedPaise += credit;
+      outstandingReceivedPaise += outstanding;
+      collectionsPaise += collections;
+      expensesPaise += expenses;
+      if (s.discrepancyFlag) discrepancyShifts += 1;
+
+      byShiftType[s.shiftType].shifts += 1;
+      byShiftType[s.shiftType].quantityMl += shiftQtyMl;
+      byShiftType[s.shiftType].amountPaise += narrowsSales ? shiftSalesPaise : s.totalSalesPaise;
     }
+
+    const descByAmount = <T extends { amountPaise: bigint }>(a: T, b: T) =>
+      a.amountPaise > b.amountPaise ? -1 : a.amountPaise < b.amountPaise ? 1 : 0;
 
     res.json({
       from: from.toISOString().slice(0, 10),
       to: to.toISOString().slice(0, 10),
+      appliedFilters: compactFilters({ ...f, recomputedSalesFromReadings: narrowsSales || undefined }),
       totals: {
         salesPaise,
         creditIssuedPaise,
@@ -301,9 +501,13 @@ router.get('/range', async (req, res, next) => {
       },
       byDate: Object.entries(byDate).map(([date, v]) => ({ date, ...v })),
       fuelMix,
-      collectionsByChannel: Object.values(channelMap).sort((a, b) =>
-        a.amountPaise > b.amountPaise ? -1 : 1,
-      ),
+      collectionsByChannel: Object.values(channelMap).sort(descByAmount),
+      byShiftType: (Object.keys(byShiftType) as ShiftType[]).map((k) => ({
+        shiftType: k,
+        ...byShiftType[k],
+      })),
+      byNozzle: Object.values(byNozzle).sort(descByAmount),
+      byEmployee: Object.values(byEmployee).sort(descByAmount),
     });
   } catch (e) {
     next(e);
@@ -315,10 +519,21 @@ router.get('/expense-breakdown', async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const { from, to } = parseRange(req);
+    const shiftType = oneOf(req.query.shiftType, SHIFT_TYPES, 'shiftType');
+    const status = oneOf(req.query.status, SHIFT_STATUSES, 'status');
+    const categoryId = str(req.query.categoryId);
+    const employeeId = str(req.query.employeeId);
 
     const entries = await prisma.expenseEntry.findMany({
       where: {
-        shiftReport: { pumpId, reportDate: { gte: from, lte: to } },
+        shiftReport: {
+          pumpId,
+          reportDate: { gte: from, lte: to },
+          ...(shiftType ? { shiftType } : {}),
+          ...(status ? { status } : {}),
+        },
+        ...(categoryId ? { categoryId } : {}),
+        ...(employeeId ? { paidByEmployeeId: employeeId } : {}),
       },
       include: { category: true },
     });
@@ -340,6 +555,7 @@ router.get('/expense-breakdown', async (req, res, next) => {
     res.json({
       from: from.toISOString().slice(0, 10),
       to: to.toISOString().slice(0, 10),
+      appliedFilters: compactFilters({ shiftType, status, categoryId, employeeId }),
       totalPaise: total,
       byCategory: Object.values(byCategory).sort((a, b) =>
         a.amountPaise > b.amountPaise ? -1 : 1,
@@ -354,9 +570,31 @@ router.get('/expense-breakdown', async (req, res, next) => {
 router.get('/customer-aging', async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
+    const bucketFilter = oneOf<AgingBucket>(req.query.bucket, AGING_BUCKETS, 'bucket');
+    const minBalancePaise = bigIntParam(req.query.minBalancePaise, 'minBalancePaise');
+    const q = str(req.query.q);
+
     const customers = await prisma.creditCustomer.findMany({
-      where: { pumpId, isActive: true, currentBalancePaise: { gt: 0n } },
+      where: {
+        pumpId,
+        isActive: true,
+        currentBalancePaise: { gt: 0n },
+        // Free-text search over the customer and any of their vehicle numbers.
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: 'insensitive' as const } },
+                { code: { contains: q, mode: 'insensitive' as const } },
+                { vehicles: { some: { vehicleNo: { contains: q, mode: 'insensitive' as const } } } },
+              ],
+            }
+          : {}),
+      },
       include: {
+        vehicles: {
+          where: { isActive: true },
+          orderBy: [{ isPrimary: 'desc' }, { vehicleNo: 'asc' }],
+        },
         // Only count LOCKED shifts — that's when customer balances actually change.
         creditSales: {
           where: { shiftReport: { status: 'LOCKED' } },
@@ -376,9 +614,12 @@ router.get('/customer-aging', async (req, res, next) => {
     const rows: Array<{
       customerId: string;
       name: string;
-      vehicleNo: string | null;
+      code: string | null;
+      vehicleNo: string | null; // primary vehicle, for display
+      vehicleCount: number;
       phone: string | null;
       balancePaise: bigint;
+      creditLimitPaise: bigint;
       oldestUnpaidAt: string | null;
       ageDays: number;
       bucket: keyof typeof buckets;
@@ -404,16 +645,17 @@ router.get('/customer-aging', async (req, res, next) => {
       // What's left becomes the aging
       let oldestUnpaidAt: Date | null = null;
       let custBalance = 0n;
+      const custBuckets = { d0_30: 0n, d31_60: 0n, d61_90: 0n, d90_plus: 0n };
       for (const slice of open) {
         custBalance += slice.remaining;
         if (!oldestUnpaidAt || slice.date < oldestUnpaidAt) oldestUnpaidAt = slice.date;
         const ageDays = Math.floor(
           (today.getTime() - slice.date.getTime()) / (1000 * 60 * 60 * 24),
         );
-        if (ageDays <= 30) buckets.d0_30 += slice.remaining;
-        else if (ageDays <= 60) buckets.d31_60 += slice.remaining;
-        else if (ageDays <= 90) buckets.d61_90 += slice.remaining;
-        else buckets.d90_plus += slice.remaining;
+        if (ageDays <= 30) custBuckets.d0_30 += slice.remaining;
+        else if (ageDays <= 60) custBuckets.d31_60 += slice.remaining;
+        else if (ageDays <= 90) custBuckets.d61_90 += slice.remaining;
+        else custBuckets.d90_plus += slice.remaining;
       }
 
       // Surface what we computed; if FIFO ended up clean but balance!=0, fall back to currentBalance
@@ -430,12 +672,26 @@ router.get('/customer-aging', async (req, res, next) => {
               ? 'd61_90'
               : 'd90_plus';
 
+      if (minBalancePaise !== undefined && balancePaise < minBalancePaise) continue;
+
+      // Bucket totals reflect the search + minimum-balance filters but NOT the
+      // bucket filter itself, so the four bucket cards stay comparable.
+      buckets.d0_30 += custBuckets.d0_30;
+      buckets.d31_60 += custBuckets.d31_60;
+      buckets.d61_90 += custBuckets.d61_90;
+      buckets.d90_plus += custBuckets.d90_plus;
+
+      if (bucketFilter && bucket !== bucketFilter) continue;
+
       rows.push({
         customerId: c.id,
         name: c.name,
-        vehicleNo: c.vehicleNo,
+        code: c.code,
+        vehicleNo: c.vehicles[0]?.vehicleNo ?? null,
+        vehicleCount: c.vehicles.length,
         phone: c.phone,
         balancePaise,
+        creditLimitPaise: c.creditLimitPaise,
         oldestUnpaidAt: oldestUnpaidAt ? oldestUnpaidAt.toISOString() : null,
         ageDays,
         bucket,
@@ -446,6 +702,7 @@ router.get('/customer-aging', async (req, res, next) => {
 
     res.json({
       buckets,
+      appliedFilters: compactFilters({ bucket: bucketFilter, minBalancePaise, q }),
       totalPaise: rows.reduce((s, r) => s + r.balancePaise, 0n),
       customers: rows,
     });
@@ -466,12 +723,23 @@ router.get('/top-credit-customers', async (req, res, next) => {
       select: {
         id: true,
         name: true,
-        vehicleNo: true,
         currentBalancePaise: true,
         creditLimitPaise: true,
+        vehicles: {
+          where: { isActive: true },
+          orderBy: [{ isPrimary: 'desc' }, { vehicleNo: 'asc' }],
+          select: { vehicleNo: true },
+        },
       },
     });
-    res.json(customers);
+    // Flatten to the single vehicle the widget shows, plus a count for "+2 more".
+    res.json(
+      customers.map(({ vehicles, ...c }) => ({
+        ...c,
+        vehicleNo: vehicles[0]?.vehicleNo ?? null,
+        vehicleCount: vehicles.length,
+      })),
+    );
   } catch (e) {
     next(e);
   }

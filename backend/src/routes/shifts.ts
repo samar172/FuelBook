@@ -11,9 +11,13 @@ import {
   expenseEntriesBulkSchema,
   creditSaleSchema,
   employeeAssignmentsBulkSchema,
+  cashHandoversBulkSchema,
+  shiftCashierSchema,
 } from '../schemas';
 import { buildCarryForward, initializeShiftChildren } from '../services/carryForward';
 import { recomputeShift } from '../services/shiftCalc';
+import { computeEmployeeExpectations, syncHandoverExpectations } from '../services/ledger';
+import { postShiftJournal, reverseShiftJournal } from '../services/ledgerPosting';
 import { logAudit } from '../services/audit';
 import { ShiftStatus } from '@prisma/client';
 import { AppError } from '../middleware/error';
@@ -218,10 +222,17 @@ router.post('/:id/lock', requirePermission('canLockShift'), async (req, res, nex
           });
         }
       }
-      return tx.shiftReport.update({
+      const locked = await tx.shiftReport.update({
         where: { id: req.params.id },
         data: { status: ShiftStatus.LOCKED, lockedAt: new Date() },
       });
+      // Refresh expected-vs-received figures, then write the double-entry journal.
+      // Both happen inside the lock transaction, so the books can never drift
+      // out of step with the shift's status.
+      await syncHandoverExpectations(tx, locked.id);
+      await postShiftJournal(tx, locked.id, req.user!.userId);
+      // Re-read so the response carries ledgerPostedAt, which posting just set.
+      return tx.shiftReport.findUniqueOrThrow({ where: { id: locked.id } });
     });
     await logAudit(req.user!.userId, 'shift.lock', 'ShiftReport', shift.id, before, shift);
     res.json(shift);
@@ -259,6 +270,8 @@ router.post('/:id/unlock', requirePermission('canLockShift'), async (req, res, n
           });
         }
       }
+      // Mirror-image entries undo the journal posted at lock; nothing is deleted.
+      await reverseShiftJournal(tx, req.params.id, req.user!.userId, 'shift unlocked');
       return tx.shiftReport.update({
         where: { id: req.params.id },
         data: { status: ShiftStatus.SUBMITTED, lockedAt: null },
@@ -427,6 +440,7 @@ router.put(
               timeSlotId: c.timeSlotId || null,
               amountPaise: c.amountPaise,
               reference: c.reference,
+              employeeId: c.employeeId || null,
             })),
           });
         }
@@ -497,6 +511,7 @@ router.put('/:id/expense-entries', requirePermission('canEditExpenses'), async (
             openingBalancePaise: e.openingBalancePaise,
             dayExpensePaise: e.dayExpensePaise,
             notes: e.notes,
+            paidByEmployeeId: e.paidByEmployeeId || null,
           })),
         });
       }
@@ -521,6 +536,31 @@ router.post('/:id/credit-sales', requirePermission('canEditCreditSales'), async 
     if (data.amountPaidPaise + data.amountCreditPaise !== data.totalAmountPaise) {
       throw new AppError(400, 'amountPaid + amountCredit must equal totalAmount');
     }
+
+    // The customer must belong to this pump, and a named vehicle must belong to
+    // that customer — otherwise a sale could be booked against someone else's.
+    const customer = await prisma.creditCustomer.findFirst({
+      where: { id: data.customerId, pumpId: shift.pumpId },
+    });
+    if (!customer) throw new AppError(404, 'Customer not found');
+
+    if (data.employeeId) {
+      const emp = await prisma.employee.findFirst({
+        where: { id: data.employeeId, pumpId: shift.pumpId },
+      });
+      if (!emp) throw new AppError(400, 'Employee does not belong to this pump');
+    }
+
+    let vehicleNo = data.vehicleNo?.trim().toUpperCase() || null;
+    if (data.vehicleId) {
+      const vehicle = await prisma.vehicle.findFirst({
+        where: { id: data.vehicleId, customerId: customer.id },
+      });
+      if (!vehicle) throw new AppError(400, 'Vehicle does not belong to this customer');
+      // Keep vehicleNo as the human-readable record of what was fuelled.
+      vehicleNo = vehicle.vehicleNo;
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const sale = await tx.creditSale.create({
         data: {
@@ -533,7 +573,9 @@ router.post('/:id/credit-sales', requirePermission('canEditCreditSales'), async 
           amountPaidPaise: data.amountPaidPaise,
           amountCreditPaise: data.amountCreditPaise,
           paidViaChannelId: data.paidViaChannelId || null,
-          vehicleNo: data.vehicleNo,
+          vehicleId: data.vehicleId || null,
+          employeeId: data.employeeId || null,
+          vehicleNo,
           reference: data.reference,
         },
       });
@@ -566,6 +608,140 @@ router.delete('/:id/credit-sales/:saleId', requirePermission('canEditCreditSales
       await recomputeShift(tx, shift.id, threshold);
     });
     res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ----- Cash reconciliation: what each person owed vs handed over -----
+router.get('/:id/cash-reconciliation', async (req, res, next) => {
+  try {
+    const shift = await prisma.shiftReport.findUniqueOrThrow({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        pumpId: true,
+        status: true,
+        cashierEmployeeId: true,
+        ledgerPostedAt: true,
+        pump: { select: { cashHandoverMode: true } },
+      },
+    });
+    const { mode, expectations, unattributedSalesPaise } = await computeEmployeeExpectations(
+      prisma,
+      shift.id,
+    );
+    const handovers = await prisma.employeeCashHandover.findMany({
+      where: { shiftReportId: shift.id },
+      include: { employee: { select: { id: true, name: true, code: true, designation: true } } },
+    });
+    const byEmp = new Map(handovers.map((h) => [h.employeeId, h]));
+
+    const rows = expectations.map((e) => {
+      const h = byEmp.get(e.employeeId);
+      const received = h?.receivedCashPaise ?? null;
+      return {
+        ...e,
+        handoverId: h?.id ?? null,
+        receivedCashPaise: received,
+        variancePaise: received === null ? null : received - e.expectedCashPaise,
+        notes: h?.notes ?? null,
+        // Helpful default for the form: the cash they already recorded.
+        suggestedReceivedPaise: e.cashCollectedPaise,
+      };
+    });
+
+    res.json({
+      shiftId: shift.id,
+      status: shift.status,
+      mode,
+      cashierEmployeeId: shift.cashierEmployeeId,
+      ledgerPostedAt: shift.ledgerPostedAt,
+      unattributedSalesPaise,
+      rows,
+      totals: {
+        expectedCashPaise: rows.reduce((s, r) => s + r.expectedCashPaise, 0n),
+        receivedCashPaise: rows.reduce((s, r) => s + (r.receivedCashPaise ?? 0n), 0n),
+        variancePaise: rows.reduce((s, r) => s + (r.variancePaise ?? 0n), 0n),
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Record what each person actually handed over. Expected + variance are derived
+// server-side so the two can never disagree.
+router.put('/:id/cash-handovers', requirePermission('canEditCollections'), async (req, res, next) => {
+  try {
+    const shift = await ensureEditable(req.params.id);
+    const { handovers } = cashHandoversBulkSchema.parse(req.body);
+
+    const employeeIds = handovers.map((h) => h.employeeId);
+    if (employeeIds.length > 0) {
+      const valid = await prisma.employee.count({
+        where: { id: { in: employeeIds }, pumpId: shift.pumpId },
+      });
+      if (valid !== new Set(employeeIds).size) {
+        throw new AppError(400, 'One or more employees do not belong to this pump');
+      }
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const { expectations } = await computeEmployeeExpectations(tx, shift.id);
+      const expectedByEmp = new Map(expectations.map((e) => [e.employeeId, e.expectedCashPaise]));
+
+      await tx.employeeCashHandover.deleteMany({
+        where: { shiftReportId: shift.id, employeeId: { notIn: employeeIds.length ? employeeIds : ['-'] } },
+      });
+      for (const h of handovers) {
+        const expected = expectedByEmp.get(h.employeeId) ?? 0n;
+        const variance = h.receivedCashPaise - expected;
+        await tx.employeeCashHandover.upsert({
+          where: { shiftReportId_employeeId: { shiftReportId: shift.id, employeeId: h.employeeId } },
+          create: {
+            shiftReportId: shift.id,
+            employeeId: h.employeeId,
+            expectedCashPaise: expected,
+            receivedCashPaise: h.receivedCashPaise,
+            variancePaise: variance,
+            notes: h.notes ?? null,
+          },
+          update: {
+            expectedCashPaise: expected,
+            receivedCashPaise: h.receivedCashPaise,
+            variancePaise: variance,
+            notes: h.notes ?? null,
+          },
+        });
+      }
+      return tx.employeeCashHandover.findMany({
+        where: { shiftReportId: shift.id },
+        include: { employee: { select: { id: true, name: true } } },
+      });
+    });
+    res.json(result);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Pooled-cashier mode: who is handing over the shift's cash.
+router.put('/:id/cashier', requirePermission('canEditCollections'), async (req, res, next) => {
+  try {
+    const shift = await ensureEditable(req.params.id);
+    const { cashierEmployeeId } = shiftCashierSchema.parse(req.body);
+    if (cashierEmployeeId) {
+      const emp = await prisma.employee.findFirst({
+        where: { id: cashierEmployeeId, pumpId: shift.pumpId },
+      });
+      if (!emp) throw new AppError(400, 'Employee does not belong to this pump');
+    }
+    const updated = await prisma.shiftReport.update({
+      where: { id: shift.id },
+      data: { cashierEmployeeId },
+    });
+    res.json(updated);
   } catch (e) {
     next(e);
   }

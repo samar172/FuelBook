@@ -17,6 +17,13 @@ import dashboardRoutes from './routes/dashboard';
 import tankerRoutes from './routes/tankerReceipts';
 import exportRoutes from './routes/exports';
 import employeeRoutes from './routes/employees';
+import ledgerRoutes from './routes/ledger';
+import wetStockRoutes from './routes/wetstock';
+import pricingRoutes from './routes/pricing';
+import creditLifecycleRoutes from './routes/creditLifecycle';
+import productRoutes from './routes/products';
+import cashBankRoutes from './routes/cashbank';
+import complianceRoutes from './routes/compliance';
 
 const app = express();
 
@@ -75,6 +82,13 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/tanker-receipts', tankerRoutes);
 app.use('/api/exports', exportRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/ledger', ledgerRoutes);
+app.use('/api/wet-stock', wetStockRoutes);
+app.use('/api/pricing', pricingRoutes);
+app.use('/api/credit-lifecycle', creditLifecycleRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/cash-bank', cashBankRoutes);
+app.use('/api/compliance', complianceRoutes);
 
 app.use(appErrorHandler);
 app.use(errorHandler);

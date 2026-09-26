@@ -31,6 +31,11 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { formatLitres, FUEL_LABELS } from "@/lib/utils";
+import {
+  CASH_MODE_HELP,
+  CASH_MODE_LABELS,
+  CashHandoverMode,
+} from "@/lib/books";
 import { toast } from "sonner";
 import { Pencil, Plus, Power } from "lucide-react";
 
@@ -79,9 +84,22 @@ function PumpInfoSection() {
     queryKey: ["pump"],
     queryFn: async () => (await api.get("/api/setup/pump")).data,
   });
-  const [form, setForm] = useState({ name: "", address: "", city: "", state: "" });
+  const [form, setForm] = useState<{
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    cashHandoverMode: CashHandoverMode;
+  }>({ name: "", address: "", city: "", state: "", cashHandoverMode: "PER_ATTENDANT" });
   useEffect(() => {
-    if (pump) setForm({ name: pump.name, address: pump.address, city: pump.city, state: pump.state });
+    if (pump)
+      setForm({
+        name: pump.name,
+        address: pump.address,
+        city: pump.city,
+        state: pump.state,
+        cashHandoverMode: pump.cashHandoverMode ?? "PER_ATTENDANT",
+      });
   }, [pump]);
 
   const save = useMutation({
@@ -129,6 +147,41 @@ function PumpInfoSection() {
               onChange={(e) => setForm({ ...form, city: e.target.value })}
             />
           </Field>
+        </div>
+
+        <div className="mt-6 max-w-2xl">
+          <h3 className="text-sm font-semibold">How shift cash is handed over</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            This decides who is held accountable for a cash shortage at the end of a shift, and
+            how the Cash Handover tab on each shift report is laid out.
+          </p>
+          <div className="mt-2 space-y-2">
+            {(["PER_ATTENDANT", "POOLED_CASHIER"] as CashHandoverMode[]).map((mode) => (
+              <label
+                key={mode}
+                className={
+                  "flex cursor-pointer items-start gap-3 rounded-md border p-3 " +
+                  (form.cashHandoverMode === mode
+                    ? "border-primary bg-slate-50"
+                    : "hover:bg-slate-50")
+                }
+              >
+                <input
+                  type="radio"
+                  name="cashHandoverMode"
+                  className="mt-1"
+                  checked={form.cashHandoverMode === mode}
+                  onChange={() => setForm({ ...form, cashHandoverMode: mode })}
+                />
+                <span>
+                  <span className="block text-sm font-medium">{CASH_MODE_LABELS[mode]}</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    {CASH_MODE_HELP[mode]}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
         <div className="mt-4">
           <Button onClick={() => save.mutate()} disabled={save.isPending}>

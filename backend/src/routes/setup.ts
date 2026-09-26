@@ -16,6 +16,7 @@ import {
 } from '../schemas';
 import { litresToMl } from '../lib/money';
 import { AppError } from '../middleware/error';
+import { ensureChartOfAccounts } from '../services/ledger';
 import { signToken } from '../lib/jwt';
 import { Role } from '@prisma/client';
 
@@ -56,6 +57,10 @@ router.post('/pumps', requireRole(Role.OWNER), async (req, res, next) => {
         state: data.state,
       },
     });
+
+    // Give the new pump its chart of accounts up front, so the ledger works from
+    // the first shift. (It is also created lazily, for pumps made before this.)
+    await prisma.$transaction((tx) => ensureChartOfAccounts(tx, pump.id));
 
     // Auto-activate the owner's first pump so subsequent pump-scoped
     // requests (dashboard, shifts, etc.) have something to resolve to.

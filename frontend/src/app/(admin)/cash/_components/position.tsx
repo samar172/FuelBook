@@ -1,0 +1,305 @@
+"use client";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Info, Plus, RefreshCw } from "lucide-react";
+import { api, can } from "@/lib/api";
+import { apiError } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { formatINR } from "@/lib/utils";
+import { MovementDialog, type MovementDefaults } from "./movements";
+import {
+  EmptyState,
+  LOCATION_LABELS,
+  LOCATION_SHORT,
+  Loading,
+  Money,
+  StatTile,
+  bigOf,
+  todayStr,
+} from "./shared";
+
+type Holder = {
+  location: string;
+  employeeId: string | null;
+  employeeName: string | null;
+  employeeActive: boolean | null;
+  inPaise: string;
+  outPaise: string;
+  balancePaise: string;
+};
+
+type Position = {
+  asOf: string;
+  cashOnHandPaise: string;
+  inBankPaise: string;
+  paidToVendorsPaise: string;
+  totalAccountedPaise: string;
+  withAttendantsPaise: string;
+  byLocation: {
+    location: string;
+    isTerminal: boolean;
+    balancePaise: string;
+    inPaise: string;
+    outPaise: string;
+    holders: Holder[];
+  }[];
+  custodians: {
+    employeeId: string;
+    employeeName: string | null;
+    balancePaise: string;
+    byLocation: { location: string; balancePaise: string }[];
+  }[];
+  negatives: {
+    location: string;
+    employeeId: string | null;
+    employeeName: string | null;
+    balancePaise: string;
+    reason: string;
+  }[];
+  hasNegative: boolean;
+  rules: string[];
+};
+
+export function PositionSection() {
+  const qc = useQueryClient();
+  const [asOf, setAsOf] = useState(todayStr());
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [defaults, setDefaults] = useState<MovementDefaults | undefined>();
+  const [showRules, setShowRules] = useState(false);
+
+  const positionQ = useQuery<Position>({
+    queryKey: ["cash-position", asOf],
+    queryFn: async () => (await api.get(`/api/cash-bank/position?asOf=${asOf}`)).data,
+  });
+
+  const editable = can("canEditCollections");
+  const openMovement = (d?: MovementDefaults) => {
+    setDefaults(d);
+    setDialogOpen(true);
+  };
+
+  const p = positionQ.data;
+
+  return (
+    <div className="space-y-4">
+      <MovementDialog open={dialogOpen} onOpenChange={setDialogOpen} defaults={defaults} />
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle>Where is the cash right now?</CardTitle>
+              <CardDescription>
+                Every rupee the pump has taken in, traced to the person or place holding it.
+              </CardDescription>
+            </div>
+            <div className="flex items-end gap-2">
+              <div>
+                <Label className="text-xs">As of</Label>
+                <Input
+                  type="date"
+                  value={asOf}
+                  max={todayStr()}
+                  onChange={(e) => setAsOf(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Refresh"
+                onClick={() => qc.invalidateQueries({ queryKey: ["cash-position"] })}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              {editable ? (
+                <Button onClick={() => openMovement()}>
+                  <Plus className="h-4 w-4 mr-1" /> Record movement
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {positionQ.isLoading ? (
+            <Loading label="Working out the cash position…" />
+          ) : positionQ.error ? (
+            <EmptyState
+              title="Could not work out the cash position"
+              hint={apiError(positionQ.error)}
+            />
+          ) : !p ? (
+            <EmptyState title="Nothing to show yet" />
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatTile
+                  label="Cash in hands"
+                  value={formatINR(p.cashOnHandPaise)}
+                  hint="Attendants, cashier, safe and owner"
+                  tone={bigOf(p.cashOnHandPaise) < 0n ? "danger" : "default"}
+                />
+                <StatTile
+                  label="Still with attendants"
+                  value={formatINR(p.withAttendantsPaise)}
+                  hint="Not yet handed to the cashier"
+                  tone={bigOf(p.withAttendantsPaise) > 0n ? "warn" : "default"}
+                />
+                <StatTile
+                  label="Banked"
+                  value={formatINR(p.inBankPaise)}
+                  hint="Deposited, as recorded here"
+                />
+                <StatTile
+                  label="Paid out to vendors"
+                  value={formatINR(p.paidToVendorsPaise)}
+                  hint="Cash that left for expenses"
+                />
+              </div>
+
+              {p.hasNegative ? (
+                <div className="rounded-md border border-destructive bg-destructive/5 p-3">
+                  <p className="text-sm font-semibold text-destructive flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" /> The records do not add up
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A negative holding is impossible in real life: more cash was recorded leaving
+                    than ever arrived. Something was recorded twice, or something that happened was
+                    never recorded.
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {p.negatives.map((n, i) => (
+                      <li key={i} className="text-sm flex justify-between gap-3">
+                        <span>
+                          {LOCATION_SHORT[n.location] ?? n.location}
+                          {n.employeeName ? ` · ${n.employeeName}` : ""}
+                        </span>
+                        <Money paise={n.balancePaise} emphasise />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {/* Per location, with the people holding cash inside it. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {p.byLocation.map((loc) => (
+                  <div key={loc.location} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold">
+                          {LOCATION_LABELS[loc.location] ?? loc.location}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          in {formatINR(loc.inPaise)} · out {formatINR(loc.outPaise)}
+                          {loc.isTerminal ? " · not cash in hand" : ""}
+                        </p>
+                      </div>
+                      <span className="text-lg font-bold">
+                        <Money paise={loc.balancePaise} emphasise />
+                      </span>
+                    </div>
+
+                    {loc.holders.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mt-2">Nothing here.</p>
+                    ) : (
+                      <ul className="mt-2 divide-y">
+                        {loc.holders.map((h) => (
+                          <li
+                            key={`${h.location}-${h.employeeId ?? "place"}`}
+                            className="py-1.5 flex items-center justify-between gap-2 text-sm"
+                          >
+                            <span className="min-w-0 truncate">
+                              {h.employeeName ?? "Unattributed"}
+                              {h.employeeActive === false ? (
+                                <Badge variant="secondary" className="ml-1">
+                                  left
+                                </Badge>
+                              ) : null}
+                            </span>
+                            <span className="flex items-center gap-2 shrink-0">
+                              <Money paise={h.balancePaise} emphasise />
+                              {editable && !loc.isTerminal && bigOf(h.balancePaise) > 0n ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    openMovement({
+                                      fromLocation: h.location,
+                                      fromEmployeeId: h.employeeId,
+                                    })
+                                  }
+                                >
+                                  Move
+                                </Button>
+                              ) : null}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Per person, across locations. */}
+              <div className="rounded-md border p-3">
+                <p className="font-semibold">Who is holding cash</p>
+                {p.custodians.length === 0 ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Nobody is holding cash against their name yet.
+                  </p>
+                ) : (
+                  <ul className="mt-2 divide-y">
+                    {p.custodians.map((c) => (
+                      <li key={c.employeeId} className="py-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {c.employeeName ?? c.employeeId}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {c.byLocation
+                              .map(
+                                (l) =>
+                                  `${LOCATION_SHORT[l.location] ?? l.location} ${formatINR(l.balancePaise)}`,
+                              )
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <span className="font-semibold shrink-0">
+                          <Money paise={c.balancePaise} emphasise />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground inline-flex items-center gap-1 underline"
+                  onClick={() => setShowRules((v) => !v)}
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  {showRules ? "Hide" : "How is this worked out?"}
+                </button>
+                {showRules ? (
+                  <ul className="mt-2 list-disc pl-5 space-y-1 text-xs text-muted-foreground">
+                    {p.rules.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

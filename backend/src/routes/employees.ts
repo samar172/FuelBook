@@ -16,11 +16,26 @@ const requirePump = (req: any) => {
 router.get('/', async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
+    // Default stays active-only so existing shift dropdowns are unaffected.
+    const includeInactive = String(req.query.includeInactive || '') === 'true';
     const employees = await prisma.employee.findMany({
-      where: { pumpId, isActive: true },
-      orderBy: { name: 'asc' },
+      where: { pumpId, ...(includeInactive ? {} : { isActive: true }) },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     });
     res.json(employees);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const employee = await prisma.employee.findFirst({
+      where: { id: req.params.id, pumpId },
+    });
+    if (!employee) throw new AppError(404, 'Employee not found');
+    res.json(employee);
   } catch (e) {
     next(e);
   }
@@ -62,6 +77,21 @@ router.post('/:id/deactivate', requirePermission('canManageEmployees'), async (r
     const employee = await prisma.employee.update({
       where: { id: existing.id },
       data: { isActive: false },
+    });
+    res.json(employee);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/:id/reactivate', requirePermission('canManageEmployees'), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const existing = await prisma.employee.findFirst({ where: { id: req.params.id, pumpId } });
+    if (!existing) throw new AppError(404, 'Employee not found');
+    const employee = await prisma.employee.update({
+      where: { id: existing.id },
+      data: { isActive: true, exitDate: null },
     });
     res.json(employee);
   } catch (e) {

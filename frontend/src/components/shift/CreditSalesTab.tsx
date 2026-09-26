@@ -10,8 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatINR, formatLitres, FUEL_LABELS, litresToMl, paiseToRupees, rupeesToPaise } from "@/lib/utils";
+import { apiError, primaryVehicle, vehicleSummary, type CreditCustomer } from "@/lib/types";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
+
+const OTHER_VEHICLE = "__other__";
 
 export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: boolean }) {
   const qc = useQueryClient();
@@ -78,7 +81,7 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
             {(shift.creditSales || []).map((s: any) => (
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{s.customer?.name}</TableCell>
-                <TableCell>{s.vehicleNo || "-"}</TableCell>
+                <TableCell className="font-mono uppercase">{s.vehicle?.vehicleNo || s.vehicleNo || "-"}</TableCell>
                 <TableCell>{FUEL_LABELS[s.fuelType] || s.fuelType}</TableCell>
                 <TableCell>{formatLitres(s.quantityMl)}</TableCell>
                 <TableCell>{formatINR(s.totalAmountPaise)}</TableCell>
@@ -122,7 +125,7 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
 }
 
 function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: () => void }) {
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [] } = useQuery<CreditCustomer[]>({
     queryKey: ["credit-customers"],
     queryFn: async () => (await api.get("/api/credit/customers")).data,
   });
@@ -140,6 +143,8 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
   const [litres, setLitres] = useState("");
   const [rateRupees, setRateRupees] = useState("");
   const [paidRupees, setPaidRupees] = useState("0");
+  // "" = nothing picked yet, OTHER_VEHICLE = free-text for an unregistered vehicle.
+  const [vehicleId, setVehicleId] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
   const [paidViaChannelId, setPaidViaChannelId] = useState<string | undefined>();
 
@@ -153,6 +158,18 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
   const total = (parseFloat(litres || "0") * parseFloat(rateRupees || "0")).toFixed(2);
   const credit = (parseFloat(total) - parseFloat(paidRupees || "0")).toFixed(2);
 
+  const selectedCustomer = customers.find((c) => c.id === customerId);
+  const customerVehicles = (selectedCustomer?.vehicles || []).filter((v) => v.isActive);
+
+  const pickCustomer = (id: string) => {
+    setCustomerId(id);
+    // Vehicles belong to a customer, so any earlier pick no longer applies.
+    const next = customers.find((c) => c.id === id);
+    const primary = primaryVehicle(next?.vehicles);
+    setVehicleId(primary ? primary.id : "");
+    setVehicleNo("");
+  };
+
   const submit = useMutation({
     mutationFn: async () => {
       return (await api.post(`/api/shifts/${shiftId}/credit-sales`, {
@@ -164,28 +181,32 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
         amountPaidPaise: rupeesToPaise(paidRupees),
         amountCreditPaise: rupeesToPaise(credit),
         paidViaChannelId: paidViaChannelId || null,
-        vehicleNo,
+        vehicleId: vehicleId && vehicleId !== OTHER_VEHICLE ? vehicleId : null,
+        vehicleNo: vehicleId === OTHER_VEHICLE ? vehicleNo.trim().toUpperCase() : undefined,
       })).data;
     },
     onSuccess: () => {
       toast.success("Credit sale recorded");
       onSuccess();
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e) => toast.error(apiError(e)),
   });
 
   return (
     <div className="space-y-3">
       <div>
         <Label>Customer</Label>
-        <Select value={customerId} onValueChange={setCustomerId}>
+        <Select value={customerId} onValueChange={pickCustomer}>
           <SelectTrigger><SelectValue placeholder="Pick customer" /></SelectTrigger>
           <SelectContent>
-            {customers.filter((c: any) => c.isActive).map((c: any) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name} {c.vehicleNo ? `(${c.vehicleNo})` : ""} — owes {formatINR(c.currentBalancePaise)}
-              </SelectItem>
-            ))}
+            {customers.filter((c) => c.isActive).map((c) => {
+              const summary = vehicleSummary(c.vehicles);
+              return (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} {summary ? `(${summary})` : ""} — owes {formatINR(c.currentBalancePaise)}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </div>
@@ -203,10 +224,37 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
           </Select>
         </div>
         <div>
-          <Label>Vehicle no</Label>
-          <Input value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />
+          <Label>Vehicle</Label>
+          <Select value={vehicleId} onValueChange={setVehicleId} disabled={!customerId}>
+            <SelectTrigger>
+              <SelectValue placeholder={customerId ? "Pick vehicle" : "Pick a customer first"} />
+            </SelectTrigger>
+            <SelectContent>
+              {customerVehicles.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  {v.vehicleNo}
+                  {v.isPrimary ? " (primary)" : ""}
+                </SelectItem>
+              ))}
+              <SelectItem value={OTHER_VEHICLE}>Other / not registered</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
+      {vehicleId === OTHER_VEHICLE && (
+        <div>
+          <Label>Vehicle no</Label>
+          <Input
+            value={vehicleNo}
+            onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
+            className="uppercase font-mono"
+            placeholder="MH12AB1234"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Recorded on this sale only. Register it on the customer to reuse it.
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <Label>Quantity (L)</Label>

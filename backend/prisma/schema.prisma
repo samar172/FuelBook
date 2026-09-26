@@ -36,6 +36,9 @@ model Pump {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  // How end-of-shift cash accountability works at this pump
+  cashHandoverMode CashHandoverMode @default(PER_ATTENDANT)
+
   // Reconciliation thresholds (per pump, configurable)
   discrepancyMlThreshold    BigInt @default(500)
   discrepancyPaiseThreshold BigInt @default(5000)
@@ -51,8 +54,50 @@ model Pump {
   paymentChannels   PaymentChannel[]
   tankerReceipts    TankerReceipt[]
   employees         Employee[]
+  ledgerAccounts    LedgerAccount[]
+  journalEntries    JournalEntry[]
+  priceRevisions    PriceRevision[]
+  products          Product[]
+  bankAccounts      BankAccount[]
+  cashDeposits      CashDeposit[]
+  cashMovements     CashMovement[]
+  settlementBatches SettlementBatch[]
+  licences          Licence[]
 
   @@unique([businessId, code])
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+// Where a journal entry came from. Shift postings are machine-generated on lock;
+// MANUAL is an owner's adjustment (capital, drawings, writing off staff dues).
+enum JournalSource {
+  SHIFT_LOCK
+  REVERSAL
+  MANUAL
+  OPENING_BALANCE
+}
+
+// How cash reaches the office at the end of a shift.
+enum CashHandoverMode {
+  PER_ATTENDANT // every attendant hands over their own cash and is accountable
+  POOLED_CASHIER // attendants pass cash to one shift cashier who hands over the total
+}
+
+enum VehicleType {
+  TRUCK
+  BUS
+  CAR
+  TRACTOR
+  TWO_WHEELER
+  GENSET
+  OTHER
 }
 
 enum FuelType {
@@ -63,18 +108,22 @@ enum FuelType {
 }
 
 model Tank {
-  id          String   @id @default(cuid())
-  pumpId      String
-  pump        Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
-  name        String
-  fuelType    FuelType
-  capacityMl  BigInt
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  pumpId     String
+  pump       Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  name       String
+  fuelType   FuelType
+  capacityMl BigInt
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
   nozzles        Nozzle[]
   stockEntries   StockEntry[]
   tankerReceipts TankerReceipt[]
+  journalLines   JournalLine[]
+  inventoryState TankInventoryState?
+  dipChart       TankDipChartPoint[]
+  dipReadings    TankDipReading[]
 
   @@unique([pumpId, name])
 }
@@ -90,8 +139,9 @@ model Nozzle {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  readings    NozzleReading[]
-  assignments ShiftEmployeeAssignment[]
+  readings     NozzleReading[]
+  assignments  ShiftEmployeeAssignment[]
+  measureTests MeasureTest[]
 
   @@unique([pumpId, code])
 }
@@ -140,24 +190,24 @@ model UserPermission {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  canCreateShift          Boolean @default(true)
-  canEditNozzleReadings   Boolean @default(true)
-  canEditStock            Boolean @default(true)
-  canEditTankerReceipts   Boolean @default(true)
-  canEditCollections      Boolean @default(true)
-  canEditOutstanding      Boolean @default(true)
-  canEditExpenses         Boolean @default(true)
-  canEditCreditSales      Boolean @default(true)
-  canSubmitShift          Boolean @default(true)
-  canLockShift            Boolean @default(false)
-  canEditFuelRates        Boolean @default(false)
-  canManageCreditCustomers Boolean @default(false)
+  canCreateShift             Boolean @default(true)
+  canEditNozzleReadings      Boolean @default(true)
+  canEditStock               Boolean @default(true)
+  canEditTankerReceipts      Boolean @default(true)
+  canEditCollections         Boolean @default(true)
+  canEditOutstanding         Boolean @default(true)
+  canEditExpenses            Boolean @default(true)
+  canEditCreditSales         Boolean @default(true)
+  canSubmitShift             Boolean @default(true)
+  canLockShift               Boolean @default(false)
+  canEditFuelRates           Boolean @default(false)
+  canManageCreditCustomers   Boolean @default(false)
   canManageExpenseCategories Boolean @default(false)
-  canManageUsers          Boolean @default(false)
-  canManagePump           Boolean @default(false)
-  canViewReports          Boolean @default(true)
-  canExportReports        Boolean @default(false)
-  canManageEmployees      Boolean @default(false)
+  canManageUsers             Boolean @default(false)
+  canManagePump              Boolean @default(false)
+  canViewReports             Boolean @default(true)
+  canExportReports           Boolean @default(false)
+  canManageEmployees         Boolean @default(false)
 }
 
 // ===================== SHIFT REPORT =====================
@@ -185,13 +235,13 @@ model ShiftReport {
   openingCashPaise BigInt @default(0)
 
   // Computed totals (denormalized — recomputed on every save)
-  totalSalesPaise        BigInt @default(0) // Sum of fuel sales (qty x rate)
-  totalCreditIssuedPaise BigInt @default(0) // Credit portion of credit sales
+  totalSalesPaise               BigInt @default(0) // Sum of fuel sales (qty x rate)
+  totalCreditIssuedPaise        BigInt @default(0) // Credit portion of credit sales
   totalCashFromCreditSalesPaise BigInt @default(0) // Cash portion of credit sales (eg Vijay's 5000)
   totalOutstandingReceivedPaise BigInt @default(0) // Past credit collected today
-  totalCollectionsPaise  BigInt @default(0) // Sum of PaymentModeCollection rows
-  totalExpensesPaise     BigInt @default(0)
-  closingCashPaise       BigInt @default(0)
+  totalCollectionsPaise         BigInt @default(0) // Sum of PaymentModeCollection rows
+  totalExpensesPaise            BigInt @default(0)
+  closingCashPaise              BigInt @default(0)
 
   // Reconciliation: meter method vs stock method
   totalSaleMlByMeter BigInt  @default(0)
@@ -210,6 +260,13 @@ model ShiftReport {
   lockedAt    DateTime?
   createdById String
 
+  // Pooled-cashier mode: who handed the shift's cash to the office.
+  cashierEmployeeId String?
+  cashierEmployee   Employee? @relation("ShiftCashier", fields: [cashierEmployeeId], references: [id])
+
+  // Set when the double-entry journal for this shift was posted (at lock).
+  ledgerPostedAt DateTime?
+
   nozzleReadings      NozzleReading[]
   stockEntries        StockEntry[]
   tankerReceipts      TankerReceipt[]
@@ -218,6 +275,15 @@ model ShiftReport {
   expenseEntries      ExpenseEntry[]
   creditSales         CreditSale[]
   employeeAssignments ShiftEmployeeAssignment[]
+  cashHandovers       EmployeeCashHandover[]
+  journalEntries      JournalEntry[]
+  dipReadings         TankDipReading[]
+  measureTests        MeasureTest[]
+  cashCount           CashDenominationCount?
+  productMovements    ProductMovement[]
+  cashDeposits        CashDeposit[]
+  cashMovements       CashMovement[]
+  attendances         Attendance[]
 
   @@unique([pumpId, reportDate, shiftType])
   @@index([pumpId, reportDate])
@@ -255,20 +321,37 @@ model StockEntry {
 }
 
 model TankerReceipt {
-  id            String      @id @default(cuid())
-  pumpId        String
-  pump          Pump        @relation(fields: [pumpId], references: [id])
-  shiftReportId String?
-  shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])
-  tankId        String
-  tank          Tank        @relation(fields: [tankId], references: [id])
-  receivedMl    BigInt
-  ratePaise     BigInt?
+  id             String       @id @default(cuid())
+  pumpId         String
+  pump           Pump         @relation(fields: [pumpId], references: [id])
+  shiftReportId  String?
+  shiftReport    ShiftReport? @relation(fields: [shiftReportId], references: [id])
+  tankId         String
+  tank           Tank         @relation(fields: [tankId], references: [id])
+  receivedMl     BigInt
+  ratePaise      BigInt?
   totalCostPaise BigInt?
-  billNo        String?
-  vendorName    String?
-  receivedAt    DateTime    @default(now())
-  notes         String?
+  billNo         String?
+  vendorName     String?
+  receivedAt     DateTime     @default(now())
+  notes          String?
+
+  // ---- Decantation record (what the tanker actually delivered) ----
+  // Pumps compare the OMC invoice quantity against the tank dip before and after
+  // decanting; a shortfall is a transit loss the dealer can claim from the OMC.
+  invoiceQtyMl     BigInt? // quantity on the OMC invoice
+  dipBeforeMm      Int? // tank dip before decanting
+  dipAfterMm       Int? // tank dip after decanting
+  receivedByDipMl  BigInt? // volume implied by the dip difference
+  transitLossMl    BigInt? // invoice qty - dip-measured qty
+  densityAtLoading Int? // kg/m3 printed on the invoice
+  densityAtReceipt Int? // kg/m3 measured at the pump
+  temperatureC     Int? // observed temperature, whole degrees
+  sealIntact       Boolean? // were the tanker seals intact on arrival
+  decantedAt       DateTime?
+  decantedById     String?
+  claimRaised      Boolean   @default(false)
+  claimAmountPaise BigInt?
 
   @@index([pumpId, receivedAt])
 }
@@ -281,12 +364,14 @@ model PaymentChannel {
   id        String  @id @default(cuid())
   pumpId    String
   pump      Pump    @relation(fields: [pumpId], references: [id], onDelete: Cascade)
-  name      String  // "HDFC POS", "Paytm", "PhonePe", "DT Plus", "HP Pay", "SBI Bank Deposit", "Cash"
-  kind      String  // "CASH" | "CARD" | "UPI" | "BANK_DEPOSIT" | "WALLET" | "OTHER"
+  name      String // "HDFC POS", "Paytm", "PhonePe", "DT Plus", "HP Pay", "SBI Bank Deposit", "Cash"
+  kind      String // "CASH" | "CARD" | "UPI" | "BANK_DEPOSIT" | "WALLET" | "OTHER"
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  collections PaymentModeCollection[]
+  collections       PaymentModeCollection[]
+  journalLines      JournalLine[]
+  settlementBatches SettlementBatch[]
 
   @@unique([pumpId, name])
 }
@@ -295,49 +380,102 @@ model PaymentTimeSlot {
   id        String  @id @default(cuid())
   pumpId    String
   pump      Pump    @relation(fields: [pumpId], references: [id], onDelete: Cascade)
-  name      String  // "Before 12", "After 12", "Morning", "Full Shift"
+  name      String // "Before 12", "After 12", "Morning", "Full Shift"
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  collections PaymentModeCollection[]
+  collections  PaymentModeCollection[]
+  journalLines JournalLine[]
 
   @@unique([pumpId, name])
 }
 
 model PaymentModeCollection {
-  id            String      @id @default(cuid())
+  id            String           @id @default(cuid())
   shiftReportId String
-  shiftReport   ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  shiftReport   ShiftReport      @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
   channelId     String
-  channel       PaymentChannel @relation(fields: [channelId], references: [id])
+  channel       PaymentChannel   @relation(fields: [channelId], references: [id])
   timeSlotId    String?
   timeSlot      PaymentTimeSlot? @relation(fields: [timeSlotId], references: [id])
   amountPaise   BigInt
   reference     String?
+  // Which attendant took this money (card swipe / UPI / cash counted in).
+  employeeId    String?
+  employee      Employee?        @relation(fields: [employeeId], references: [id])
 
   @@index([shiftReportId, channelId])
+  @@index([employeeId])
 }
 
 // ===================== CREDIT CUSTOMERS =====================
 
 model CreditCustomer {
-  id                  String   @id @default(cuid())
-  pumpId              String
-  pump                Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
-  name                String
-  phone               String?
-  vehicleNo           String?
-  creditLimitPaise    BigInt   @default(0)
-  currentBalancePaise BigInt   @default(0)
-  isActive            Boolean  @default(true)
-  notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
 
+  // Identity
+  code          String? // pump's own customer/account code
+  name          String
+  contactPerson String?
+  phone         String?
+  altPhone      String?
+  email         String?
+
+  // Billing address + tax
+  addressLine String?
+  city        String?
+  state       String?
+  pincode     String?
+  gstin       String?
+
+  // Credit terms
+  creditLimitPaise    BigInt @default(0)
+  currentBalancePaise BigInt @default(0)
+  paymentTermsDays    Int    @default(0) // 0 = due immediately
+
+  isActive  Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A customer can run any number of vehicles (Vehicle is the source of truth —
+  // there is deliberately no denormalised vehicleNo column here).
+  vehicles            Vehicle[]
   creditSales         CreditSale[]
   outstandingReceipts OutstandingReceipt[]
+  journalLines        JournalLine[]
+  statements          CustomerStatement[]
+  paymentInstruments  PaymentInstrument[]
 
+  @@unique([pumpId, code])
   @@index([pumpId, isActive])
+  @@index([pumpId, name])
+}
+
+// One vehicle belonging to a credit customer.
+model Vehicle {
+  id         String         @id @default(cuid())
+  customerId String
+  customer   CreditCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  vehicleNo  String // registration number, stored uppercase
+  type       VehicleType @default(OTHER)
+  makeModel  String?
+  fuelType   FuelType? // usual fuel, for defaulting a credit sale
+  capacityMl BigInt? // tank size, optional
+  isPrimary  Boolean     @default(false)
+  isActive   Boolean     @default(true)
+  notes      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  creditSales CreditSale[]
+
+  @@unique([customerId, vehicleNo])
+  @@index([customerId, isActive])
+  @@index([vehicleNo])
 }
 
 // A credit sale during the shift — supports SPLIT PAYMENT
@@ -356,28 +494,37 @@ model CreditSale {
   ratePaise         BigInt
   totalAmountPaise  BigInt
   amountPaidPaise   BigInt         @default(0) // partial cash paid at sale time
-  amountCreditPaise BigInt                       // remainder added to customer's balance
-  paidViaChannelId  String?                       // which channel for the paid portion (CASH/CARD/UPI)
+  amountCreditPaise BigInt // remainder added to customer's balance
+  paidViaChannelId  String? // which channel for the paid portion (CASH/CARD/UPI)
+  // Which attendant booked this credit sale — it reduces the cash they owe.
+  employeeId        String?
+  employee          Employee?      @relation(fields: [employeeId], references: [id])
+  // Prefer vehicleId (a registered vehicle); vehicleNo stays for one-off/unregistered
+  // vehicles and as a historical record of what was typed at sale time.
+  vehicleId         String?
+  vehicle           Vehicle?       @relation(fields: [vehicleId], references: [id])
   vehicleNo         String?
   reference         String?
   saleAt            DateTime       @default(now())
 
   @@index([shiftReportId])
   @@index([customerId])
+  @@index([vehicleId])
 }
 
 // Outstanding (past credit) collected during this shift
 model OutstandingReceipt {
-  id              String          @id @default(cuid())
+  id              String             @id @default(cuid())
   shiftReportId   String
-  shiftReport     ShiftReport     @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  shiftReport     ShiftReport        @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
   customerId      String?
-  customer        CreditCustomer? @relation(fields: [customerId], references: [id])
+  customer        CreditCustomer?    @relation(fields: [customerId], references: [id])
   customerNameRaw String
   amountPaise     BigInt
-  channelId       String?         // optional: which channel — to also reflect in collections
+  channelId       String? // optional: which channel — to also reflect in collections
   reference       String?
-  receivedAt      DateTime        @default(now())
+  receivedAt      DateTime           @default(now())
+  instrument      PaymentInstrument?
 
   @@index([shiftReportId])
   @@index([customerId])
@@ -395,7 +542,8 @@ model ExpenseCategory {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
 
-  entries ExpenseEntry[]
+  entries      ExpenseEntry[]
+  journalLines JournalLine[]
 
   @@unique([pumpId, name])
 }
@@ -411,6 +559,9 @@ model ExpenseEntry {
   openingBalancePaise BigInt          @default(0)
   dayExpensePaise     BigInt
   notes               String?
+  // Paid out of an attendant's cash — reduces what they must hand over.
+  paidByEmployeeId    String?
+  paidByEmployee      Employee?       @relation(fields: [paidByEmployeeId], references: [id])
 
   @@index([shiftReportId, categoryId])
 }
@@ -420,18 +571,183 @@ model ExpenseEntry {
 // they're assigned to nozzles per shift so fuel volume/value can be attributed to them.
 
 model Employee {
-  id        String   @id @default(cuid())
-  pumpId    String
-  pump      Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
-  name      String
-  phone     String?
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  // Identity + contact
+  code        String? // staff/token number
+  name        String
+  designation String? // e.g. Nozzle Attendant, Cashier, Supervisor
+  phone       String?
+  altPhone    String?
+  dateOfBirth DateTime?
+
+  // Address
+  addressLine String?
+  city        String?
+  state       String?
+  pincode     String?
+
+  // Employment dates
+  joiningDate DateTime?
+  exitDate    DateTime?
+
+  // Who to call if something happens on shift
+  emergencyContactName  String?
+  emergencyContactPhone String?
+
+  // Deliberately NOT stored here: Aadhaar/PAN, bank details, salary.
   isActive  Boolean  @default(true)
+  notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignments ShiftEmployeeAssignment[]
+  assignments     ShiftEmployeeAssignment[]
+  cashHandovers   EmployeeCashHandover[]
+  creditSales     CreditSale[]
+  collections     PaymentModeCollection[]
+  expensesPaid    ExpenseEntry[]
+  shiftsAsCashier ShiftReport[]             @relation("ShiftCashier")
+  journalLines    JournalLine[]
+  attendances     Attendance[]
+  advances        EmployeeAdvance[]
+  cashDeposits    CashDeposit[]
+  measureTests    MeasureTest[]
+  dipReadings     TankDipReading[]
+  cashOut         CashMovement[]            @relation("CashFrom")
+  cashIn          CashMovement[]            @relation("CashTo")
 
+  @@unique([pumpId, code])
   @@index([pumpId, isActive])
+}
+
+// ===================== DOUBLE-ENTRY LEDGER =====================
+
+// Chart of accounts. Deliberately a small set of CONTROL accounts: per-customer,
+// per-employee, per-channel and per-tank detail lives on JournalLine, so adding a
+// customer never adds an account.
+model LedgerAccount {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  code        String // stable machine code, e.g. "1000"
+  name        String
+  type        AccountType
+  description String?
+  isSystem    Boolean     @default(true) // created by the chart-of-accounts bootstrap
+  isActive    Boolean     @default(true)
+  sortOrder   Int         @default(0)
+
+  lines JournalLine[]
+
+  @@unique([pumpId, code])
+  @@index([pumpId, type])
+}
+
+// One balanced journal entry: the sum of debits equals the sum of credits,
+// enforced when posting.
+model JournalEntry {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  entryDate DateTime      @db.Date
+  narration String
+  source    JournalSource
+
+  // The shift this entry was generated from, when machine-generated.
+  shiftReportId String?
+  shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])
+
+  // Corrections are made by posting a mirror-image entry, never by editing.
+  reversalOfId String?       @unique
+  reversalOf   JournalEntry? @relation("EntryReversal", fields: [reversalOfId], references: [id])
+  reversedBy   JournalEntry? @relation("EntryReversal")
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  lines JournalLine[]
+
+  @@index([pumpId, entryDate])
+  @@index([shiftReportId])
+  @@index([pumpId, source])
+}
+
+// A single debit or credit. Exactly one of debitPaise/creditPaise is non-zero.
+// The optional subject columns are what make per-customer / per-employee /
+// per-channel balances possible without exploding the chart of accounts.
+model JournalLine {
+  id      String       @id @default(cuid())
+  entryId String
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   LedgerAccount @relation(fields: [accountId], references: [id])
+
+  debitPaise  BigInt @default(0)
+  creditPaise BigInt @default(0)
+
+  // Subsidiary dimensions
+  customerId        String?
+  customer          CreditCustomer?  @relation(fields: [customerId], references: [id])
+  employeeId        String?
+  employee          Employee?        @relation(fields: [employeeId], references: [id])
+  channelId         String?
+  channel           PaymentChannel?  @relation(fields: [channelId], references: [id])
+  expenseCategoryId String?
+  expenseCategory   ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
+  tankId            String?
+  tank              Tank?            @relation(fields: [tankId], references: [id])
+  fuelType          FuelType?
+  quantityMl        BigInt? // for inventory / cost-of-goods lines
+
+  memo              String?
+  paymentTimeSlot   PaymentTimeSlot? @relation(fields: [paymentTimeSlotId], references: [id])
+  paymentTimeSlotId String?
+
+  @@index([entryId])
+  @@index([accountId])
+  @@index([customerId])
+  @@index([employeeId])
+  @@index([channelId])
+  @@index([tankId])
+}
+
+// Per-shift cash accountability for one person: what they owed vs what they gave.
+// In POOLED_CASHIER mode there is a single row, for the shift cashier.
+model EmployeeCashHandover {
+  id            String      @id @default(cuid())
+  shiftReportId String
+  shiftReport   ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  employeeId    String
+  employee      Employee    @relation(fields: [employeeId], references: [id])
+
+  // Derived at save time from their nozzle sales, credit sales, non-cash
+  // collections and any expenses they paid out of hand.
+  expectedCashPaise BigInt @default(0)
+  receivedCashPaise BigInt @default(0)
+  // received - expected: negative = short (recoverable), positive = excess.
+  variancePaise     BigInt @default(0)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shiftReportId, employeeId])
+  @@index([employeeId])
+}
+
+// Running weighted-average cost basis per tank, so cost-of-goods on a sale is a
+// real number rather than a guess. Updated transactionally when postings happen.
+model TankInventoryState {
+  tankId     String   @id
+  tank       Tank     @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  quantityMl BigInt   @default(0)
+  valuePaise BigInt   @default(0)
+  updatedAt  DateTime @updatedAt
 }
 
 model ShiftEmployeeAssignment {
@@ -465,4 +781,569 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// ===================== WET STOCK & STATUTORY LOGS =====================
+
+// Tank calibration chart: the dip-to-volume table supplied with the tank. Stock
+// measured by dipstick is only as good as this chart, so it is stored per tank.
+model TankDipChartPoint {
+  id       String @id @default(cuid())
+  tankId   String
+  tank     Tank   @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  dipMm    Int // dip depth in millimetres
+  volumeMl BigInt // volume at that dip
+
+  @@unique([tankId, dipMm])
+  @@index([tankId])
+}
+
+// Per-shift physical measurement of a tank: dip, density and temperature — the
+// readings an inspector asks for, and the basis of wet-stock variance.
+model TankDipReading {
+  id            String      @id @default(cuid())
+  shiftReportId String
+  shiftReport   ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  tankId        String
+  tank          Tank        @relation(fields: [tankId], references: [id])
+
+  dipMm             Int
+  volumeFromChartMl BigInt? // interpolated from the tank's dip chart
+  densityKgM3       Int?
+  temperatureC      Int?
+  densityAt15CKgM3  Int? // density corrected to 15 C, as OMC records expect
+  observedAt        DateTime  @default(now())
+  recordedById      String?
+  recordedBy        Employee? @relation(fields: [recordedById], references: [id])
+  notes             String?
+
+  @@unique([shiftReportId, tankId])
+  @@index([tankId])
+}
+
+// Weights & Measures test on a nozzle: deliver into a calibrated measure and
+// record the error. Tolerance on a 5-litre measure is +/- 25 ml.
+model MeasureTest {
+  id            String      @id @default(cuid())
+  shiftReportId String
+  shiftReport   ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+  nozzleId      String
+  nozzle        Nozzle      @relation(fields: [nozzleId], references: [id])
+
+  measureMl       BigInt    @default(5000)
+  deliveredMl     BigInt
+  varianceMl      BigInt // delivered - measure; negative means short delivery
+  withinTolerance Boolean   @default(true)
+  testedAt        DateTime  @default(now())
+  testedById      String?
+  testedBy        Employee? @relation(fields: [testedById], references: [id])
+  notes           String?
+
+  @@index([shiftReportId])
+  @@index([nozzleId])
+}
+
+// ===================== PRICE REVISION =====================
+
+// OMC prices move daily. Fuel already in the tank is then worth more or less than
+// it cost, which is a real gain or loss for the dealer.
+model PriceRevision {
+  id       String   @id @default(cuid())
+  pumpId   String
+  pump     Pump     @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  fuelType FuelType
+
+  oldRatePaise BigInt
+  newRatePaise BigInt
+  effectiveAt  DateTime
+
+  stockAtRevisionMl  BigInt @default(0)
+  stockGainLossPaise BigInt @default(0)
+
+  journalEntryId String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  @@index([pumpId, fuelType, effectiveAt])
+}
+
+// ===================== CREDIT CUSTOMER LIFECYCLE =====================
+
+enum StatementStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+// A periodic bill for a credit customer — what a fleet owner is sent and pays.
+model CustomerStatement {
+  id         String         @id @default(cuid())
+  customerId String
+  customer   CreditCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  statementNo String
+  periodFrom  DateTime @db.Date
+  periodTo    DateTime @db.Date
+  dueDate     DateTime @db.Date
+
+  openingBalancePaise BigInt @default(0)
+  salesPaise          BigInt @default(0)
+  receiptsPaise       BigInt @default(0)
+  closingBalancePaise BigInt @default(0)
+
+  status      StatementStatus @default(DRAFT)
+  sentAt      DateTime?
+  sentVia     String? // WhatsApp / email / printed
+  notes       String?
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([customerId, statementNo])
+  @@index([customerId, periodTo])
+  @@index([status])
+}
+
+enum InstrumentKind {
+  CASH
+  CHEQUE
+  RTGS
+  NEFT
+  IMPS
+  UPI
+  CARD
+  OTHER
+}
+
+enum InstrumentStatus {
+  PENDING
+  CLEARED
+  BOUNCED
+  CANCELLED
+}
+
+// How a customer paid, and whether the money actually arrived. Cheques bounce,
+// and a bounce has to put the balance back on the customer.
+model PaymentInstrument {
+  id         String         @id @default(cuid())
+  customerId String
+  customer   CreditCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  kind        InstrumentKind
+  amountPaise BigInt
+  receivedOn  DateTime       @db.Date
+
+  chequeNo   String?
+  chequeDate DateTime? @db.Date
+  bankName   String?
+  utrNo      String? // for RTGS / NEFT / IMPS
+
+  status            InstrumentStatus @default(PENDING)
+  clearedOn         DateTime?        @db.Date
+  bouncedOn         DateTime?        @db.Date
+  bounceReason      String?
+  bounceChargePaise BigInt?
+
+  outstandingReceiptId String?             @unique
+  outstandingReceipt   OutstandingReceipt? @relation(fields: [outstandingReceiptId], references: [id])
+
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([customerId, status])
+  @@index([status, chequeDate])
+}
+
+// ===================== NON-FUEL RETAIL (LUBES, ADBLUE, SERVICES) =====================
+
+enum ProductCategory {
+  LUBRICANT
+  ADBLUE
+  ACCESSORY
+  SERVICE
+  OTHER
+}
+
+enum ProductUnit {
+  LITRE
+  PIECE
+  KG
+  SERVICE
+}
+
+// Lubricants and other non-fuel lines. Unlike fuel these fall under GST, so the
+// tax rate and HSN code belong here.
+model Product {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  sku        String
+  name       String
+  category   ProductCategory @default(LUBRICANT)
+  unit       ProductUnit     @default(PIECE)
+  packSizeMl BigInt? // e.g. a 1 L or 500 ml pack
+
+  purchasePricePaise BigInt  @default(0)
+  sellingPricePaise  BigInt  @default(0)
+  gstRateBp          Int     @default(1800) // basis points; 1800 = 18%
+  hsnCode            String?
+
+  reorderLevelQty Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  movements ProductMovement[]
+  state     ProductStockState?
+
+  @@unique([pumpId, sku])
+  @@index([pumpId, category])
+}
+
+// Whether a movement adds stock or takes it away. PURCHASE is always IN and SALE
+// always OUT, but ADJUSTMENT and RETURN go either way, so the direction is its own
+// column rather than something encoded in free text.
+enum StockDirection {
+  IN
+  OUT
+}
+
+enum ProductMovementKind {
+  PURCHASE
+  SALE
+  ADJUSTMENT
+  RETURN
+}
+
+// Every movement of a non-fuel product, so stock and margin are derivable.
+model ProductMovement {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  shiftReportId String?
+  shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])
+
+  kind           ProductMovementKind
+  direction      StockDirection      @default(IN)
+  quantity       Int // always a positive magnitude; `direction` carries the sign
+  unitPricePaise BigInt
+  totalPaise     BigInt
+  gstPaise       BigInt              @default(0)
+  customerId     String? // a sale may be on credit
+  reference      String?
+  occurredAt     DateTime            @default(now())
+  recordedById   String
+  notes          String?
+
+  @@index([productId, occurredAt])
+  @@index([shiftReportId])
+}
+
+// Running stock and cost basis per product, kept in step with movements.
+model ProductStockState {
+  productId  String   @id
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity   Int      @default(0)
+  valuePaise BigInt   @default(0)
+  updatedAt  DateTime @updatedAt
+}
+
+// ===================== CASH CUSTODY, BANK & SETTLEMENT =====================
+
+// Where cash can sit. Every rupee is in exactly one of these places at any time.
+enum CashLocation {
+  ATTENDANT // still with the person who took it
+  CASHIER // handed to the shift cashier
+  OFFICE_SAFE // locked in the office
+  OWNER // taken by the owner
+  BANK // deposited
+  VENDOR // paid out to a supplier
+  OTHER
+}
+
+// The custody trail: who gave how much to whom, and where it went next. This is
+// what answers "the cashier took the cash — then what?".
+model CashMovement {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  shiftReportId String?
+  shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])
+
+  fromLocation   CashLocation
+  fromEmployeeId String?
+  fromEmployee   Employee?    @relation("CashFrom", fields: [fromEmployeeId], references: [id])
+
+  toLocation   CashLocation
+  toEmployeeId String?
+  toEmployee   Employee?    @relation("CashTo", fields: [toEmployeeId], references: [id])
+
+  amountPaise BigInt
+  occurredAt  DateTime @default(now())
+
+  // Set when this movement was a bank deposit, linking to the slip.
+  cashDepositId String?      @unique
+  cashDeposit   CashDeposit? @relation(fields: [cashDepositId], references: [id])
+
+  purpose        String?
+  reference      String?
+  journalEntryId String?
+  recordedById   String
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([pumpId, occurredAt])
+  @@index([fromEmployeeId])
+  @@index([toEmployeeId])
+}
+
+// The physical note-by-note count at shift end, to catch a miscount before the
+// cash leaves the premises.
+model CashDenominationCount {
+  id            String      @id @default(cuid())
+  shiftReportId String      @unique
+  shiftReport   ShiftReport @relation(fields: [shiftReportId], references: [id], onDelete: Cascade)
+
+  note500 Int @default(0)
+  note200 Int @default(0)
+  note100 Int @default(0)
+  note50  Int @default(0)
+  note20  Int @default(0)
+  note10  Int @default(0)
+  coin20  Int @default(0)
+  coin10  Int @default(0)
+  coin5   Int @default(0)
+  coin2   Int @default(0)
+  coin1   Int @default(0)
+
+  countedTotalPaise BigInt   @default(0)
+  countedById       String?
+  countedAt         DateTime @default(now())
+  notes             String?
+}
+
+model BankAccount {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  bankName            String
+  accountNoLast4      String // only the last four digits are stored
+  ifsc                String?
+  nickname            String?
+  openingBalancePaise BigInt   @default(0)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  deposits     CashDeposit[]
+  settlements  SettlementBatch[]
+  transactions BankTransaction[]
+
+  @@index([pumpId, isActive])
+}
+
+enum DepositStatus {
+  PENDING
+  CLEARED
+  DISPUTED
+}
+
+// Cash physically taken to the bank.
+model CashDeposit {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
+
+  shiftReportId String?
+  shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])
+
+  amountPaise BigInt
+  depositedOn DateTime @db.Date
+  slipNo      String?
+
+  depositedByEmployeeId String?
+  depositedByEmployee   Employee? @relation(fields: [depositedByEmployeeId], references: [id])
+
+  status         DepositStatus @default(PENDING)
+  journalEntryId String?
+  notes          String?
+  createdById    String
+  createdAt      DateTime      @default(now())
+
+  movement CashMovement?
+
+  @@index([pumpId, depositedOn])
+  @@index([bankAccountId, status])
+}
+
+enum SettlementStatus {
+  EXPECTED
+  SETTLED
+  SHORT
+  DISPUTED
+}
+
+// Card / UPI money taken on a day against what the aggregator actually credited
+// (usually T+1, net of MDR). This is where digital money quietly goes missing.
+model SettlementBatch {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  channelId String
+  channel   PaymentChannel @relation(fields: [channelId], references: [id])
+
+  businessDate    DateTime @db.Date // the day the money was taken
+  expectedPaise   BigInt   @default(0) // per the pump's own collections
+  settledPaise    BigInt   @default(0) // what the bank actually credited
+  mdrPaise        BigInt   @default(0) // fee deducted
+  differencePaise BigInt   @default(0) // settled + mdr - expected
+
+  settledOn     DateTime?    @db.Date
+  bankAccountId String?
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id])
+
+  status    SettlementStatus @default(EXPECTED)
+  reference String?
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([channelId, businessDate])
+  @@index([pumpId, businessDate])
+  @@index([status])
+}
+
+enum TxnDirection {
+  CREDIT
+  DEBIT
+}
+
+// Lines imported from a bank statement, for matching against deposits and
+// settlements.
+model BankTransaction {
+  id            String      @id @default(cuid())
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  txnDate      DateTime     @db.Date
+  description  String
+  amountPaise  BigInt
+  direction    TxnDirection
+  balancePaise BigInt?
+  reference    String?
+
+  importBatch String? // which upload this line came from
+  matchedKind String? // "CASH_DEPOSIT" | "SETTLEMENT" | "OTHER"
+  matchedId   String?
+  isMatched   Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([bankAccountId, txnDate])
+  @@index([isMatched])
+}
+
+// ===================== COMPLIANCE & STAFF OPERATIONS =====================
+
+enum LicenceKind {
+  PESO_EXPLOSIVE
+  WEIGHTS_MEASURES_STAMPING
+  FIRE_NOC
+  POLLUTION_NOC
+  TRADE_LICENCE
+  SHOP_ESTABLISHMENT
+  GST_REGISTRATION
+  VAT_REGISTRATION
+  INSURANCE
+  DEALERSHIP_AGREEMENT
+  OTHER
+}
+
+// Licences and certificates with expiry dates. A lapsed PESO licence or an
+// unstamped dispensing unit can shut a pump down, so they need a countdown.
+model Licence {
+  id     String @id @default(cuid())
+  pumpId String
+  pump   Pump   @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+
+  kind               LicenceKind
+  label              String? // e.g. which nozzle or vehicle it covers
+  number             String?
+  issuedBy           String?
+  issuedOn           DateTime?   @db.Date
+  expiresOn          DateTime    @db.Date
+  reminderDaysBefore Int         @default(30)
+
+  documentRef String? // where the paper copy lives
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([pumpId, expiresOn])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LEAVE
+  WEEKLY_OFF
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  attendanceDate  DateTime         @db.Date
+  shiftType       ShiftType?
+  status          AttendanceStatus @default(PRESENT)
+  overtimeMinutes Int              @default(0)
+
+  shiftReportId String?
+  shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, attendanceDate, shiftType])
+  @@index([attendanceDate])
+}
+
+enum AdvanceKind {
+  ADVANCE
+  REPAYMENT
+}
+
+// Money lent to staff and paid back. Separate from cash shortages, which live on
+// the Staff Receivable ledger account.
+model EmployeeAdvance {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  kind        AdvanceKind
+  amountPaise BigInt
+  occurredOn  DateTime    @db.Date
+  reference   String?
+  notes       String?
+
+  journalEntryId String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  @@index([employeeId, occurredOn])
 }

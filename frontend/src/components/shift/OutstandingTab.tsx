@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/utils";
+import { vehicleSummary, type CreditCustomer } from "@/lib/types";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -21,7 +22,7 @@ type Row = {
 
 export function OutstandingTab({ shift, disabled }: { shift: any; disabled: boolean }) {
   const qc = useQueryClient();
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [] } = useQuery<CreditCustomer[]>({
     queryKey: ["credit-customers"],
     queryFn: async () => (await api.get("/api/credit/customers")).data,
   });
@@ -92,7 +93,7 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
                         rs.map((x, i) => {
                           if (i !== idx) return x;
                           if (v === "raw") return { ...x, customerId: null };
-                          const cust = customers.find((c: any) => c.id === v);
+                          const cust = customers.find((c) => c.id === v);
                           return { ...x, customerId: v, customerNameRaw: cust?.name || x.customerNameRaw };
                         })
                       )
@@ -102,11 +103,14 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
                     <SelectTrigger className="min-w-[180px]"><SelectValue placeholder="Customer" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="raw">— Walk-in / unlisted —</SelectItem>
-                      {customers.filter((c: any) => c.isActive).map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} {c.vehicleNo ? `(${c.vehicleNo})` : ""}
-                        </SelectItem>
-                      ))}
+                      {customers.filter((c) => c.isActive).map((c) => {
+                        const summary = vehicleSummary(c.vehicles);
+                        return (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name} {summary ? `(${summary})` : ""}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   {!r.customerId && (

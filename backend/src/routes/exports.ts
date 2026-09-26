@@ -36,7 +36,19 @@ router.get('/shifts/:id.xlsx', async (req, res, next) => {
         stockEntries: { include: { tank: true } },
         paymentCollections: { include: { channel: true, timeSlot: true } },
         outstandingReceipts: { include: { customer: true } },
-        creditSales: { include: { customer: true } },
+        creditSales: {
+          include: {
+            vehicle: true,
+            customer: {
+              include: {
+                vehicles: {
+                  where: { isActive: true },
+                  orderBy: [{ isPrimary: 'desc' }, { vehicleNo: 'asc' }],
+                },
+              },
+            },
+          },
+        },
         expenseEntries: { include: { category: true } },
         tankerReceipts: { include: { tank: true } },
       },
@@ -158,7 +170,8 @@ router.get('/shifts/:id.xlsx', async (req, res, next) => {
       colHeader(['Customer', 'Vehicle', 'Fuel', 'Qty (L)', 'Total (₹)', 'Paid Now (₹)', 'Credit (₹)']);
       for (const cs of shift.creditSales) {
         ws.getCell(row, 1).value = cs.customer.name;
-        ws.getCell(row, 2).value = cs.vehicleNo || cs.customer.vehicleNo || '';
+        ws.getCell(row, 2).value =
+          cs.vehicleNo || cs.vehicle?.vehicleNo || cs.customer.vehicles[0]?.vehicleNo || '';
         ws.getCell(row, 3).value = FUEL_LABELS[cs.fuelType];
         ws.getCell(row, 4).value = mlToLitres(cs.quantityMl);
         ws.getCell(row, 5).value = paiseToRupees(cs.totalAmountPaise);

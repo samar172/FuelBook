@@ -8,6 +8,31 @@ export const bigIntStr = z
 
 export const bigIntStrOptional = bigIntStr.optional();
 
+// Accepts "YYYY-MM-DD" or a full ISO timestamp; null clears the value.
+export const dateStrNullable = z
+  .union([z.string(), z.null()])
+  .transform((v) => {
+    if (v === null || v.trim() === '') return null;
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T00:00:00Z' : v);
+    if (Number.isNaN(d.getTime())) throw new Error('invalid date');
+    return d;
+  })
+  .optional();
+
+// Free-text profile field: trims, and treats "" as "not set" so clearing a form
+// field in the UI nulls the column instead of storing an empty string.
+const textNullable = (max = 200) =>
+  z
+    .union([z.string().max(max), z.null()])
+    .transform((v) => {
+      if (v === null) return null;
+      const t = v.trim();
+      return t === '' ? null : t;
+    })
+    .optional();
+
+export const optionalText = textNullable;
+
 export const fuelTypeEnum = z.enum(['HSD', 'MS', 'MS_POWER', 'CNG']);
 export const shiftTypeEnum = z.enum(['DAY', 'NIGHT']);
 export const roleEnum = z.enum(['OWNER', 'MANAGER', 'STAFF']);
@@ -45,6 +70,7 @@ export const updatePumpSchema = z.object({
   state: z.string().min(1).optional(),
   discrepancyMlThreshold: bigIntStrOptional,
   discrepancyPaiseThreshold: bigIntStrOptional,
+  cashHandoverMode: z.enum(['PER_ATTENDANT', 'POOLED_CASHIER']).optional(),
 });
 
 export const createTankSchema = z.object({
@@ -150,6 +176,8 @@ export const paymentCollectionsBulkSchema = z.object({
       timeSlotId: z.string().optional().nullable(),
       amountPaise: bigIntStr,
       reference: z.string().optional(),
+      // Which attendant took this money — drives per-person cash accountability.
+      employeeId: z.string().optional().nullable(),
     })
   ),
 });
@@ -175,6 +203,8 @@ export const expenseEntriesBulkSchema = z.object({
       openingBalancePaise: bigIntStr.default(0n),
       dayExpensePaise: bigIntStr,
       notes: z.string().optional(),
+      // Paid out of an attendant's cash, so it reduces what they hand over.
+      paidByEmployeeId: z.string().optional().nullable(),
     })
   ),
 });
@@ -188,17 +218,99 @@ export const creditSaleSchema = z.object({
   amountPaidPaise: bigIntStr.default(0n),
   amountCreditPaise: bigIntStr,
   paidViaChannelId: z.string().optional().nullable(),
+  // Prefer a registered vehicle; vehicleNo remains for one-off vehicles.
+  vehicleId: z.string().optional().nullable(),
+  // Which attendant booked it — reduces the cash they owe for the shift.
+  employeeId: z.string().optional().nullable(),
   vehicleNo: z.string().optional(),
   reference: z.string().optional(),
 });
 
 // ===== CREDIT CUSTOMER =====
+const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+const customerProfileFields = {
+  code: textNullable(30),
+  contactPerson: textNullable(100),
+  phone: textNullable(15),
+  altPhone: textNullable(15),
+  // Trim first, then validate — a pasted address often carries stray whitespace.
+  email: z
+    .union([z.string().max(122), z.null()])
+    .transform((v) => (v === null ? null : v.trim().toLowerCase()))
+    .refine((v) => v === null || v === '' || z.string().email().safeParse(v).success, 'invalid email')
+    .transform((v) => (v === '' ? null : v))
+    .optional(),
+  addressLine: textNullable(300),
+  city: textNullable(80),
+  state: textNullable(80),
+  pincode: z
+    .union([z.string().regex(/^\d{6}$/, 'pincode must be 6 digits'), z.literal(''), z.null()])
+    .transform((v) => (v === null || v === '' ? null : v))
+    .optional(),
+  gstin: z
+    .union([z.string(), z.null()])
+    .transform((v) => (v === null || v.trim() === '' ? null : v.trim().toUpperCase()))
+    .refine((v) => v === null || v === undefined || gstinRegex.test(v), 'invalid GSTIN')
+    .optional(),
+  paymentTermsDays: z.number().int().min(0).max(365).optional(),
+  notes: textNullable(1000),
+};
+
 export const createCreditCustomerSchema = z.object({
-  name: z.string().min(1),
-  phone: z.string().optional(),
-  vehicleNo: z.string().optional(),
+  name: z.string().min(1).max(150),
   creditLimitPaise: bigIntStr.default(0n),
-  notes: z.string().optional(),
+  // Convenience: a first vehicle can be registered along with the customer.
+  vehicleNo: textNullable(20),
+  ...customerProfileFields,
+});
+
+// Explicit allow-list — a PATCH must never be able to set pumpId or move money
+// (currentBalancePaise is derived from locked shifts, not client input).
+export const updateCreditCustomerSchema = z.object({
+  name: z.string().min(1).max(150).optional(),
+  creditLimitPaise: bigIntStrOptional,
+  isActive: z.boolean().optional(),
+  ...customerProfileFields,
+});
+
+// ===== VEHICLE =====
+export const vehicleTypeEnum = z.enum([
+  'TRUCK',
+  'BUS',
+  'CAR',
+  'TRACTOR',
+  'TWO_WHEELER',
+  'GENSET',
+  'OTHER',
+]);
+
+// Registration numbers are stored uppercase with inner spaces/dashes kept as typed.
+const vehicleNoField = z
+  .string()
+  .min(4, 'vehicle number too short')
+  .max(20)
+  .transform((v) => v.trim().toUpperCase());
+
+export const createVehicleSchema = z.object({
+  vehicleNo: vehicleNoField,
+  type: vehicleTypeEnum.default('OTHER'),
+  makeModel: textNullable(100),
+  fuelType: fuelTypeEnum.nullable().optional(),
+  capacityMl: bigIntStrOptional,
+  isPrimary: z.boolean().default(false),
+  notes: textNullable(500),
+});
+
+export const updateVehicleSchema = z.object({
+  vehicleNo: vehicleNoField.optional(),
+  type: vehicleTypeEnum.optional(),
+  makeModel: textNullable(100),
+  fuelType: fuelTypeEnum.nullable().optional(),
+  capacityMl: bigIntStrOptional,
+  isPrimary: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  notes: textNullable(500),
 });
 
 // ===== EXPENSE CATEGORY =====
@@ -221,14 +333,35 @@ export const paymentTimeSlotSchema = z.object({
 });
 
 // ===== EMPLOYEES =====
+const employeeProfileFields = {
+  code: textNullable(30),
+  designation: textNullable(80),
+  phone: textNullable(15),
+  altPhone: textNullable(15),
+  dateOfBirth: dateStrNullable,
+  addressLine: textNullable(300),
+  city: textNullable(80),
+  state: textNullable(80),
+  pincode: z
+    .union([z.string().regex(/^\d{6}$/, 'pincode must be 6 digits'), z.literal(''), z.null()])
+    .transform((v) => (v === null || v === '' ? null : v))
+    .optional(),
+  joiningDate: dateStrNullable,
+  exitDate: dateStrNullable,
+  emergencyContactName: textNullable(100),
+  emergencyContactPhone: textNullable(15),
+  notes: textNullable(1000),
+};
+
 export const createEmployeeSchema = z.object({
-  name: z.string().min(1),
-  phone: z.string().optional(),
+  name: z.string().min(1).max(150),
+  ...employeeProfileFields,
 });
 
 export const updateEmployeeSchema = z.object({
-  name: z.string().min(1).optional(),
-  phone: z.string().optional(),
+  name: z.string().min(1).max(150).optional(),
+  isActive: z.boolean().optional(),
+  ...employeeProfileFields,
 });
 
 export const employeeAssignmentsBulkSchema = z.object({
@@ -238,4 +371,42 @@ export const employeeAssignmentsBulkSchema = z.object({
       employeeId: z.string().min(1),
     })
   ),
+});
+
+// ===== CASH HANDOVER (employee cash accountability) =====
+export const cashHandoversBulkSchema = z.object({
+  handovers: z.array(
+    z.object({
+      employeeId: z.string().min(1),
+      receivedCashPaise: bigIntStr,
+      notes: z.string().max(500).optional().nullable(),
+    })
+  ),
+});
+
+export const shiftCashierSchema = z.object({
+  cashierEmployeeId: z.string().min(1).nullable(),
+});
+
+// ===== LEDGER =====
+// A manual entry must carry at least two lines and balance; each line is either a
+// debit or a credit, never both.
+export const manualJournalSchema = z.object({
+  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD'),
+  narration: z.string().min(3).max(300),
+  lines: z
+    .array(
+      z.object({
+        code: z.string().min(1),
+        debitPaise: bigIntStr.default(0n),
+        creditPaise: bigIntStr.default(0n),
+        customerId: z.string().optional().nullable(),
+        employeeId: z.string().optional().nullable(),
+        channelId: z.string().optional().nullable(),
+        expenseCategoryId: z.string().optional().nullable(),
+        tankId: z.string().optional().nullable(),
+        memo: z.string().max(200).optional().nullable(),
+      })
+    )
+    .min(2, 'a journal entry needs at least two lines'),
 });

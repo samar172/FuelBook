@@ -1,0 +1,861 @@
+"use client";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Link2, Plus, Unlink } from "lucide-react";
+import { api } from "@/lib/api";
+import { apiError } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatINR, rupeesToPaise } from "@/lib/utils";
+import {
+  EmptyState,
+  Loading,
+  Money,
+  StatTile,
+  daysAgoStr,
+  isOwner,
+  parseCsv,
+  toIsoDate,
+  toPaise,
+  todayStr,
+} from "./shared";
+import { accountLabel, useBankAccounts, type BankAccountRow } from "./deposits";
+import type { SettlementRow } from "./settlements";
+
+const NONE = "__none__";
+const ALL = "__all__";
+
+// ===================== BANK ACCOUNTS =====================
+
+export function BankAccountsSection() {
+  const qc = useQueryClient();
+  const owner = isOwner();
+  const accountsQ = useBankAccounts();
+  const accounts = accountsQ.data ?? [];
+  const [open, setOpen] = useState(false);
+
+  const [bankName, setBankName] = useState("");
+  const [last4, setLast4] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [opening, setOpening] = useState("");
+
+  const create = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post("/api/cash-bank/bank-accounts", {
+          bankName: bankName.trim(),
+          accountNoLast4: last4.trim(),
+          ifsc: ifsc.trim() || null,
+          nickname: nickname.trim() || null,
+          openingBalancePaise: rupeesToPaise(opening || "0"),
+        })
+      ).data,
+    onSuccess: () => {
+      toast.success("Bank account added");
+      setOpen(false);
+      setBankName("");
+      setLast4("");
+      setIfsc("");
+      setNickname("");
+      setOpening("");
+      qc.invalidateQueries({ queryKey: ["cash-bank-accounts"] });
+    },
+    onError: (e) => toast.error(apiError(e, "Could not add the account")),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle>Bank accounts</CardTitle>
+            <CardDescription>
+              Only the last four digits are ever stored. The balance is the opening balance plus
+              every imported credit, less every debit.
+            </CardDescription>
+          </div>
+          {owner ? (
+            <Button onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Add account
+            </Button>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {accountsQ.isLoading ? (
+          <Loading />
+        ) : accountsQ.error ? (
+          <EmptyState title="Could not load bank accounts" hint={apiError(accountsQ.error)} />
+        ) : accounts.length === 0 ? (
+          <EmptyState
+            title="No bank accounts yet"
+            hint={
+              owner
+                ? "Add the account the pump banks into — deposits and settlements hang off it."
+                : "Ask the owner to add the pump's bank account."
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {accounts.map((a) => (
+              <div key={a.id} className="rounded-md border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{a.nickname || a.bankName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {a.bankName} · account ending {a.accountNoLast4}
+                      {a.ifsc ? ` · ${a.ifsc}` : ""}
+                    </p>
+                  </div>
+                  {!a.isActive ? <Badge variant="secondary">inactive</Badge> : null}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Balance</p>
+                    <p className="font-semibold">
+                      <Money paise={a.currentBalancePaise} emphasise />
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Deposits recorded</p>
+                    <p className="font-semibold tabular-nums">
+                      {formatINR(a.depositsPaise)}{" "}
+                      <span className="text-xs text-muted-foreground">({a.depositCount})</span>
+                    </p>
+                  </div>
+                  <div className="col-span-2 text-xs text-muted-foreground">
+                    Opening {formatINR(a.openingBalancePaise)} · credits{" "}
+                    {formatINR(a.creditsPaise)} · debits {formatINR(a.debitsPaise)} ·{" "}
+                    {a.transactionCount} statement lines · {formatINR(a.depositsPendingPaise)} of
+                    deposits still pending
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a bank account</DialogTitle>
+            <DialogDescription>
+              Enter only the last four digits of the account number — the full number is never
+              stored.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Bank name</Label>
+              <Input value={bankName} onChange={(e) => setBankName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Last 4 digits</Label>
+                <Input
+                  value={last4}
+                  inputMode="numeric"
+                  maxLength={4}
+                  onChange={(e) => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">IFSC (optional)</Label>
+                <Input value={ifsc} onChange={(e) => setIfsc(e.target.value.toUpperCase())} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Nickname (optional)</Label>
+                <Input value={nickname} onChange={(e) => setNickname(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Opening balance (₹)</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={opening}
+                  onChange={(e) => setOpening(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => create.mutate()}
+                disabled={!bankName.trim() || last4.length !== 4 || create.isPending}
+              >
+                {create.isPending ? "Saving…" : "Add account"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+// ===================== CSV IMPORT =====================
+
+type ParsedRow = {
+  txnDate: string;
+  description: string;
+  amountPaise: string;
+  direction: "CREDIT" | "DEBIT";
+  balancePaise?: string;
+  reference?: string | null;
+};
+
+const findHeader = (headers: string[], names: string[]) =>
+  headers.findIndex((h) => names.some((n) => h.includes(n)));
+
+// The pasted statement is parsed here in the browser. Nothing is fetched from a
+// bank, and the parsed rows are posted to the API as plain numbers.
+function mapStatement(text: string): { rows: ParsedRow[]; errors: string[]; headers: string[] } {
+  const table = parseCsv(text);
+  const errors: string[] = [];
+  if (table.length === 0) return { rows: [], errors: ["Nothing to parse"], headers: [] };
+
+  const headers = table[0].map((h) => h.trim().toLowerCase());
+  const iDate = findHeader(headers, ["date"]);
+  const iDesc = findHeader(headers, ["description", "narration", "particular", "detail", "remark"]);
+  const iDebit = findHeader(headers, ["debit", "withdraw"]);
+  const iCredit = findHeader(headers, ["credit", "deposit"]);
+  const iAmount = findHeader(headers, ["amount"]);
+  const iType = findHeader(headers, ["dr/cr", "cr/dr", "type"]);
+  const iBalance = findHeader(headers, ["balance"]);
+  const iRef = findHeader(headers, ["ref", "chq", "cheque", "utr"]);
+
+  if (iDate < 0) errors.push("No date column found — the first row must be a header row");
+  if (iDesc < 0) errors.push("No description/narration column found");
+  if (iDebit < 0 && iCredit < 0 && iAmount < 0) {
+    errors.push("No debit/credit or amount column found");
+  }
+  if (errors.length > 0) return { rows: [], errors, headers };
+
+  const rows: ParsedRow[] = [];
+  for (let r = 1; r < table.length; r++) {
+    const cells = table[r];
+    const at = (i: number) => (i >= 0 ? (cells[i] ?? "").trim() : "");
+    const date = toIsoDate(at(iDate));
+    if (!date) {
+      // A totals or footer line, not a transaction.
+      if (at(iDate)) errors.push(`Row ${r + 1}: could not read the date "${at(iDate)}" — skipped`);
+      continue;
+    }
+    const debit = iDebit >= 0 ? toPaise(at(iDebit)) : null;
+    const credit = iCredit >= 0 ? toPaise(at(iCredit)) : null;
+    let direction: "CREDIT" | "DEBIT" | null = null;
+    let amountPaise: string | null = null;
+
+    if (credit && BigInt(credit) > 0n) {
+      direction = "CREDIT";
+      amountPaise = credit;
+    } else if (debit && BigInt(debit) > 0n) {
+      direction = "DEBIT";
+      amountPaise = debit;
+    } else if (iAmount >= 0) {
+      const amt = toPaise(at(iAmount));
+      if (amt) {
+        const signed = BigInt(amt);
+        const typeCell = at(iType).toLowerCase();
+        if (typeCell.startsWith("cr") || typeCell.includes("credit")) direction = "CREDIT";
+        else if (typeCell.startsWith("dr") || typeCell.includes("debit")) direction = "DEBIT";
+        else direction = signed < 0n ? "DEBIT" : "CREDIT";
+        amountPaise = (signed < 0n ? -signed : signed).toString();
+      }
+    }
+
+    if (!direction || !amountPaise || BigInt(amountPaise) === 0n) {
+      errors.push(`Row ${r + 1}: no amount — skipped`);
+      continue;
+    }
+    const balance = iBalance >= 0 ? toPaise(at(iBalance)) : null;
+    rows.push({
+      txnDate: date,
+      description: at(iDesc) || "(no description)",
+      amountPaise,
+      direction,
+      ...(balance ? { balancePaise: balance } : {}),
+      reference: at(iRef) || null,
+    });
+  }
+  if (rows.length === 0) errors.push("No usable transaction rows were found");
+  return { rows, errors, headers };
+}
+
+function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
+  const qc = useQueryClient();
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [text, setText] = useState("");
+  const [batchLabel, setBatchLabel] = useState("");
+
+  const parsed = useMemo(() => (text.trim() ? mapStatement(text) : null), [text]);
+
+  const doImport = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post(`/api/cash-bank/bank-accounts/${bankAccountId}/transactions/import`, {
+          importBatch: batchLabel.trim() || `pasted ${todayStr()}`,
+          rows: parsed?.rows ?? [],
+        })
+      ).data,
+    onSuccess: (d: { imported: number; skipped: number; received: number }) => {
+      toast.success(
+        `Imported ${d.imported} of ${d.received} lines${d.skipped ? ` · ${d.skipped} already present` : ""}`,
+      );
+      setText("");
+      qc.invalidateQueries({ queryKey: ["cash-bank-transactions"] });
+      qc.invalidateQueries({ queryKey: ["cash-bank-accounts"] });
+      qc.invalidateQueries({ queryKey: ["cash-reconciliation"] });
+    },
+    onError: (e) => toast.error(apiError(e, "Import failed")),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle>Import a bank statement</CardTitle>
+        <CardDescription>
+          Paste the CSV your bank gives you. It is parsed here on your phone or computer — nothing
+          is sent anywhere except to FuelBook. Lines already imported are skipped.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {accounts.length === 0 ? (
+          <EmptyState title="Add a bank account first" />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Into account</Label>
+                <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pick an account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {accountLabel(a)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Label for this import</Label>
+                <Input
+                  value={batchLabel}
+                  onChange={(e) => setBatchLabel(e.target.value)}
+                  placeholder="e.g. April statement"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Paste CSV (first row must be the header)</Label>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={6}
+                spellCheck={false}
+                placeholder="Date,Narration,Debit,Credit,Balance&#10;01/04/2026,CASH DEP 4412,,50000.00,182340.55"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+              />
+            </div>
+
+            {parsed ? (
+              <div className="space-y-2">
+                {parsed.errors.length > 0 ? (
+                  <ul className="text-xs text-amber-600 list-disc pl-5 space-y-0.5">
+                    {parsed.errors.slice(0, 8).map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                    {parsed.errors.length > 8 ? (
+                      <li>…and {parsed.errors.length - 8} more</li>
+                    ) : null}
+                  </ul>
+                ) : null}
+
+                {parsed.rows.length > 0 ? (
+                  <>
+                    <p className="text-sm font-medium">
+                      {parsed.rows.length} line{parsed.rows.length === 1 ? "" : "s"} ready
+                    </p>
+                    <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Dr/Cr</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {parsed.rows.slice(0, 50).map((r, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="whitespace-nowrap">{r.txnDate}</TableCell>
+                              <TableCell className="max-w-[18rem] truncate">
+                                {r.description}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {formatINR(r.amountPaise)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={r.direction === "CREDIT" ? "default" : "secondary"}>
+                                  {r.direction}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {parsed.rows.length > 50 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Showing the first 50 of {parsed.rows.length}.
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => doImport.mutate()}
+                    disabled={!bankAccountId || parsed.rows.length === 0 || doImport.isPending}
+                  >
+                    {doImport.isPending ? "Importing…" : `Import ${parsed.rows.length} lines`}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ===================== MATCHING =====================
+
+type TxnRow = {
+  id: string;
+  txnDate: string;
+  description: string;
+  amountPaise: string;
+  direction: "CREDIT" | "DEBIT";
+  balancePaise: string | null;
+  reference: string | null;
+  importBatch: string | null;
+  isMatched: boolean;
+  matchedKind: string | null;
+  matchedId: string | null;
+  bankAccount: { id: string; bankName: string; accountNoLast4: string; nickname: string | null };
+};
+
+function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
+  const qc = useQueryClient();
+  const owner = isOwner();
+  const [bankAccountId, setBankAccountId] = useState(ALL);
+  const [from, setFrom] = useState(daysAgoStr(60));
+  const [to, setTo] = useState(todayStr());
+  const [matched, setMatched] = useState("unmatched");
+  const [matching, setMatching] = useState<TxnRow | null>(null);
+
+  const qs = useMemo(() => {
+    const p = new URLSearchParams({ from, to, matched });
+    if (bankAccountId !== ALL) p.set("bankAccountId", bankAccountId);
+    return p.toString();
+  }, [from, to, matched, bankAccountId]);
+
+  const txnsQ = useQuery<{ transactions: TxnRow[]; count: number; unmatchedCount: number }>({
+    queryKey: ["cash-bank-transactions", qs],
+    queryFn: async () => (await api.get(`/api/cash-bank/transactions?${qs}`)).data,
+  });
+
+  const summaryQs = useMemo(() => {
+    const p = new URLSearchParams({ from, to });
+    if (bankAccountId !== ALL) p.set("bankAccountId", bankAccountId);
+    return p.toString();
+  }, [from, to, bankAccountId]);
+
+  const summaryQ = useQuery<{
+    credits: { matched: { count: number; amountPaise: string }; unmatched: { count: number; amountPaise: string } };
+    debits: { matched: { count: number; amountPaise: string }; unmatched: { count: number; amountPaise: string } };
+    matchedCount: number;
+    unmatchedCount: number;
+    unmatchedCreditPaise: string;
+    unmatchedDebitPaise: string;
+    openDepositsPaise: string;
+    openSettlementsExpectedPaise: string;
+  }>({
+    queryKey: ["cash-reconciliation", summaryQs],
+    queryFn: async () => (await api.get(`/api/cash-bank/reconciliation-summary?${summaryQs}`)).data,
+  });
+
+  const unmatch = useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post(`/api/cash-bank/transactions/${id}/unmatch`)).data,
+    onSuccess: () => {
+      toast.success("Match removed");
+      qc.invalidateQueries({ queryKey: ["cash-bank-transactions"] });
+      qc.invalidateQueries({ queryKey: ["cash-reconciliation"] });
+    },
+    onError: (e) => toast.error(apiError(e, "Could not unmatch")),
+  });
+
+  const rows = txnsQ.data?.transactions ?? [];
+  const s = summaryQ.data;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle>Match the statement</CardTitle>
+        <CardDescription>
+          Tie each bank line to the deposit slip or settlement it belongs to. What stays unmatched is
+          what nobody can explain.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {matching ? (
+          <MatchDialog
+            txn={matching}
+            from={from}
+            to={to}
+            onClose={() => setMatching(null)}
+          />
+        ) : null}
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div>
+            <Label className="text-xs">Account</Label>
+            <Select value={bankAccountId} onValueChange={setBankAccountId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All accounts</SelectItem>
+                {accounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {accountLabel(a)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">From</Label>
+            <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">To</Label>
+            <Input
+              type="date"
+              value={to}
+              min={from}
+              max={todayStr()}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Show</Label>
+            <Select value={matched} onValueChange={setMatched}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unmatched">Unmatched only</SelectItem>
+                <SelectItem value="matched">Matched only</SelectItem>
+                <SelectItem value="all">Everything</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {s ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile label="Matched lines" value={s.matchedCount} tone="good" />
+            <StatTile
+              label="Unmatched lines"
+              value={s.unmatchedCount}
+              hint={`in ${formatINR(s.unmatchedCreditPaise)} · out ${formatINR(s.unmatchedDebitPaise)}`}
+              tone={s.unmatchedCount > 0 ? "warn" : "good"}
+            />
+            <StatTile
+              label="Deposits not cleared"
+              value={formatINR(s.openDepositsPaise)}
+              hint="Slips the bank has not confirmed"
+            />
+            <StatTile
+              label="Settlements awaiting"
+              value={formatINR(s.openSettlementsExpectedPaise)}
+              hint="Card/UPI money not yet credited"
+            />
+          </div>
+        ) : null}
+
+        {txnsQ.isLoading ? (
+          <Loading />
+        ) : txnsQ.error ? (
+          <EmptyState title="Could not load statement lines" hint={apiError(txnsQ.error)} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            title={matched === "unmatched" ? "Nothing unmatched" : "No statement lines here"}
+            hint={
+              matched === "unmatched"
+                ? "Every imported line in this range is accounted for."
+                : "Import a statement above to start matching."
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Dr/Cr</TableHead>
+                  <TableHead>Matched to</TableHead>
+                  {owner ? <TableHead /> : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="whitespace-nowrap">{t.txnDate.slice(0, 10)}</TableCell>
+                    <TableCell className="max-w-[16rem] truncate" title={t.description}>
+                      {t.description}
+                      {t.reference ? (
+                        <span className="block text-xs text-muted-foreground">{t.reference}</span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(t.amountPaise)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={t.direction === "CREDIT" ? "default" : "secondary"}>
+                        {t.direction}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {t.isMatched ? (t.matchedKind ?? "matched") : "—"}
+                    </TableCell>
+                    {owner ? (
+                      <TableCell className="whitespace-nowrap">
+                        {t.isMatched ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => unmatch.mutate(t.id)}
+                            disabled={unmatch.isPending}
+                          >
+                            <Unlink className="h-4 w-4 mr-1" /> Unmatch
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => setMatching(t)}>
+                            <Link2 className="h-4 w-4 mr-1" /> Match
+                          </Button>
+                        )}
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type DepositOption = {
+  id: string;
+  amountPaise: string;
+  depositedOn: string;
+  slipNo: string | null;
+  status: string;
+};
+
+function MatchDialog({
+  txn,
+  from,
+  to,
+  onClose,
+}: {
+  txn: TxnRow;
+  from: string;
+  to: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [kind, setKind] = useState<"CASH_DEPOSIT" | "SETTLEMENT" | "OTHER">("CASH_DEPOSIT");
+  const [targetId, setTargetId] = useState(NONE);
+
+  const depositsQ = useQuery<{ deposits: DepositOption[] }>({
+    queryKey: ["cash-deposits", `from=${from}&to=${to}`],
+    queryFn: async () => (await api.get(`/api/cash-bank/deposits?from=${from}&to=${to}`)).data,
+  });
+  const settlementsQ = useQuery<{ batches: SettlementRow[] }>({
+    queryKey: ["cash-settlements", `from=${from}&to=${to}`],
+    queryFn: async () => (await api.get(`/api/cash-bank/settlements?from=${from}&to=${to}`)).data,
+  });
+
+  const match = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post(`/api/cash-bank/transactions/${txn.id}/match`, {
+          kind,
+          ...(kind === "OTHER" ? {} : { id: targetId === NONE ? undefined : targetId }),
+        })
+      ).data as { warnings: string[] },
+    onSuccess: (d) => {
+      if (d.warnings?.length) d.warnings.forEach((w) => toast.warning(w));
+      else toast.success("Matched");
+      qc.invalidateQueries({ queryKey: ["cash-bank-transactions"] });
+      qc.invalidateQueries({ queryKey: ["cash-reconciliation"] });
+      onClose();
+    },
+    onError: (e) => toast.error(apiError(e, "Could not match this line")),
+  });
+
+  const deposits = depositsQ.data?.deposits ?? [];
+  const settlements = settlementsQ.data?.batches ?? [];
+  const blocked = kind !== "OTHER" && targetId === NONE;
+
+  return (
+    <Dialog open onOpenChange={(v) => (!v ? onClose() : undefined)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Match this bank line</DialogTitle>
+          <DialogDescription>
+            {txn.txnDate.slice(0, 10)} · {txn.direction} · {formatINR(txn.amountPaise)} ·{" "}
+            {txn.description}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">This line is</Label>
+            <Select value={kind} onValueChange={(v) => { setKind(v as typeof kind); setTargetId(NONE); }}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CASH_DEPOSIT">A cash deposit we made</SelectItem>
+                <SelectItem value="SETTLEMENT">A card/UPI settlement</SelectItem>
+                <SelectItem value="OTHER">Something else (just mark it seen)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {kind === "CASH_DEPOSIT" ? (
+            deposits.length === 0 ? (
+              <EmptyState title="No deposits in this range to match against" />
+            ) : (
+              <div>
+                <Label className="text-xs">Deposit slip</Label>
+                <Select value={targetId} onValueChange={setTargetId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pick a deposit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Pick a deposit…</SelectItem>
+                    {deposits.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.depositedOn.slice(0, 10)} · {formatINR(d.amountPaise)}
+                        {d.slipNo ? ` · ${d.slipNo}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )
+          ) : null}
+
+          {kind === "SETTLEMENT" ? (
+            settlements.length === 0 ? (
+              <EmptyState title="No settlement batches in this range to match against" />
+            ) : (
+              <div>
+                <Label className="text-xs">Settlement batch</Label>
+                <Select value={targetId} onValueChange={setTargetId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pick a batch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Pick a batch…</SelectItem>
+                    {settlements.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.businessDate.slice(0, 10)} · {b.channel.name} ·{" "}
+                        {formatINR(b.settledPaise !== "0" ? b.settledPaise : b.expectedPaise)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            If the amounts differ the match is still recorded, with a warning — a part-payment or a
+            netted-off fee is usually the reason, and it needs a human to look.
+          </p>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={() => match.mutate()} disabled={blocked || match.isPending}>
+              {match.isPending ? "Matching…" : "Match"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function BankSection() {
+  const accountsQ = useBankAccounts();
+  const accounts = accountsQ.data ?? [];
+  return (
+    <div className="space-y-4">
+      <BankAccountsSection />
+      {isOwner() ? <ImportSection accounts={accounts} /> : null}
+      <MatchingSection accounts={accounts} />
+    </div>
+  );
+}

@@ -18,6 +18,7 @@ import { OutstandingTab } from "@/components/shift/OutstandingTab";
 import { ExpensesTab } from "@/components/shift/ExpensesTab";
 import { CreditSalesTab } from "@/components/shift/CreditSalesTab";
 import { ReconciliationTab } from "@/components/shift/ReconciliationTab";
+import { CashReconciliationTab } from "@/components/shift/CashReconciliationTab";
 
 export default function ShiftEntryPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -145,6 +146,7 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
           <TabsTrigger value="credit-sales">Credit Sales</TabsTrigger>
           <TabsTrigger value="outstanding">Outstanding Received</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="cash-handover">Cash Handover</TabsTrigger>
           <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
         </TabsList>
 
@@ -168,6 +170,9 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
         </TabsContent>
         <TabsContent value="expenses">
           <ExpensesTab shift={shift} disabled={isLocked} />
+        </TabsContent>
+        <TabsContent value="cash-handover">
+          <CashReconciliationTab shift={shift} disabled={isLocked} />
         </TabsContent>
         <TabsContent value="reconciliation">
           <ReconciliationTab shift={shift} />

@@ -299,8 +299,10 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       {c.vehicleNo && (
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-xs text-muted-foreground uppercase">
                           {c.vehicleNo}
+                          {Number(c.vehicleCount || 0) > 1 &&
+                            ` +${Number(c.vehicleCount) - 1}`}
                         </div>
                       )}
                       {Number(c.creditLimitPaise) > 0 && (
