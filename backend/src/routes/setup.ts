@@ -430,4 +430,265 @@ router.delete('/payment-time-slots/:id', requirePermission('canManagePump'), asy
   }
 });
 
+// ===== ONBOARDING =====
+// Drives the "Getting started" guide: every step reports whether it is actually
+// done, derived from the pump's own data rather than a checkbox someone ticked.
+// Order matters — it is the sequence a new dealer should work through.
+router.get('/onboarding', async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+
+    const [
+      pump,
+      tanks,
+      nozzles,
+      rates,
+      channels,
+      timeSlots,
+      categories,
+      employees,
+      customers,
+      dipPoints,
+      bankAccounts,
+      licences,
+      shifts,
+      lockedShifts,
+      journalEntries,
+      openingEntries,
+      products,
+    ] = await Promise.all([
+      prisma.pump.findUniqueOrThrow({ where: { id: pumpId } }),
+      prisma.tank.findMany({ where: { pumpId, isActive: true }, select: { id: true, fuelType: true, name: true } }),
+      prisma.nozzle.findMany({ where: { pumpId, isActive: true }, select: { id: true, tankId: true, fuelType: true } }),
+      prisma.fuelRate.findMany({ where: { pumpId }, orderBy: { effectiveFrom: 'desc' } }),
+      prisma.paymentChannel.findMany({ where: { pumpId, isActive: true }, select: { id: true, kind: true } }),
+      prisma.paymentTimeSlot.findMany({ where: { pumpId, isActive: true }, select: { id: true, shiftType: true } }),
+      prisma.expenseCategory.count({ where: { pumpId, isActive: true } }),
+      prisma.employee.count({ where: { pumpId, isActive: true } }),
+      prisma.creditCustomer.count({ where: { pumpId, isActive: true } }),
+      prisma.tankDipChartPoint.groupBy({ by: ['tankId'], where: { tank: { pumpId } }, _count: true }),
+      prisma.bankAccount.count({ where: { pumpId, isActive: true } }),
+      prisma.licence.count({ where: { pumpId, isActive: true } }),
+      prisma.shiftReport.count({ where: { pumpId } }),
+      prisma.shiftReport.count({ where: { pumpId, status: 'LOCKED' } }),
+      prisma.journalEntry.count({ where: { pumpId } }),
+      prisma.journalEntry.count({ where: { pumpId, source: 'MANUAL' } }),
+      prisma.product.count({ where: { pumpId, isActive: true } }),
+    ]);
+
+    // A fuel is "in use" once a tank holds it; every such fuel needs a price.
+    const fuelsInUse = [...new Set(tanks.map((t) => t.fuelType))];
+    const pricedFuels = new Set(rates.map((r) => r.fuelType));
+    const unpriced = fuelsInUse.filter((f) => !pricedFuels.has(f));
+
+    const tanksWithoutNozzle = tanks.filter((t) => !nozzles.some((n) => n.tankId === t.id));
+    const hasCashChannel = channels.some((c) => c.kind === 'CASH');
+    const untaggedSlots = timeSlots.filter((t) => t.shiftType === null).length;
+    const tanksWithDipChart = dipPoints.length;
+
+    type Status = 'DONE' | 'TODO' | 'ATTENTION';
+    const step = (
+      id: string,
+      title: string,
+      status: Status,
+      detail: string,
+      href: string,
+      required: boolean,
+      why: string,
+    ) => ({ id, title, status, detail, href, required, why });
+
+    const steps = [
+      step(
+        'pump',
+        'Confirm your pump details',
+        pump.name && pump.address && pump.city ? 'DONE' : 'TODO',
+        pump.name ? `${pump.name} — ${pump.city}, ${pump.state}` : 'Name and address not filled in',
+        '/settings/pump',
+        true,
+        'Your pump name and address appear on statements you give customers.',
+      ),
+      step(
+        'tanks',
+        'Add your tanks',
+        tanks.length > 0 ? 'DONE' : 'TODO',
+        tanks.length > 0 ? `${tanks.length} tank(s): ${tanks.map((t) => t.name).join(', ')}` : 'No tanks yet',
+        '/settings/pump',
+        true,
+        'Stock, dips and fuel purchases are all tracked per tank.',
+      ),
+      step(
+        'nozzles',
+        'Add the nozzles on each tank',
+        nozzles.length === 0 ? 'TODO' : tanksWithoutNozzle.length > 0 ? 'ATTENTION' : 'DONE',
+        nozzles.length === 0
+          ? 'No nozzles yet'
+          : tanksWithoutNozzle.length > 0
+            ? `${nozzles.length} nozzle(s), but no nozzle on: ${tanksWithoutNozzle.map((t) => t.name).join(', ')}`
+            : `${nozzles.length} nozzle(s) across ${tanks.length} tank(s)`,
+        '/settings/pump',
+        true,
+        'Meter readings are per nozzle — this is how sales are measured.',
+      ),
+      step(
+        'rates',
+        'Set today\'s fuel rates',
+        unpriced.length === 0 && rates.length > 0 ? 'DONE' : 'TODO',
+        rates.length === 0
+          ? 'No rates set'
+          : unpriced.length > 0
+            ? `No price yet for: ${unpriced.join(', ')}`
+            : `Priced: ${[...pricedFuels].join(', ')}`,
+        '/rates',
+        true,
+        'Sales value = litres sold x the rate, so nothing can be valued without it.',
+      ),
+      step(
+        'channels',
+        'List how customers pay you',
+        channels.length === 0 ? 'TODO' : hasCashChannel ? 'DONE' : 'ATTENTION',
+        channels.length === 0
+          ? 'No payment channels yet'
+          : hasCashChannel
+            ? `${channels.length} channel(s), including cash`
+            : `${channels.length} channel(s), but none marked as CASH`,
+        '/settings/pump',
+        true,
+        'Cash, card, UPI and bank deposits are reconciled separately.',
+      ),
+      step(
+        'timeslots',
+        'Tag your shift time slots',
+        timeSlots.length === 0 ? 'TODO' : untaggedSlots > 0 ? 'ATTENTION' : 'DONE',
+        timeSlots.length === 0
+          ? 'No time slots yet (optional if you record one total per shift)'
+          : untaggedSlots > 0
+            ? `${untaggedSlots} slot(s) not tagged Day or Night, so they show on both`
+            : `${timeSlots.length} slot(s), each tagged to a shift`,
+        '/settings/pump',
+        false,
+        'Tagging a slot Day or Night keeps a night slot off your day shift.',
+      ),
+      step(
+        'categories',
+        'Set up your expense heads',
+        categories > 0 ? 'DONE' : 'TODO',
+        categories > 0 ? `${categories} expense categor(ies)` : 'No expense categories yet',
+        '/expenses',
+        true,
+        'Daily expenses are grouped by these on every shift and in the P&L.',
+      ),
+      step(
+        'employees',
+        'Add your staff',
+        employees > 0 ? 'DONE' : 'TODO',
+        employees > 0 ? `${employees} active staff` : 'No staff yet',
+        '/employees',
+        true,
+        'Sales and cash are pinned to the attendant who worked each nozzle.',
+      ),
+      step(
+        'customers',
+        'Add credit customers and their vehicles',
+        customers > 0 ? 'DONE' : 'TODO',
+        customers > 0 ? `${customers} credit customer(s)` : 'None yet — add them when you first sell on credit',
+        '/credit',
+        false,
+        'Needed only if you sell fuel on udhaar. Each customer can hold many vehicles.',
+      ),
+      step(
+        'firstshift',
+        'Create your first shift',
+        shifts > 0 ? 'DONE' : 'TODO',
+        shifts > 0 ? `${shifts} shift(s) created` : 'No shifts yet',
+        '/shifts/new',
+        true,
+        'A shift is the day\'s book: readings, collections, credit, expenses and cash.',
+      ),
+      step(
+        'lockshift',
+        'Lock a shift to start the books',
+        lockedShifts > 0 ? 'DONE' : 'TODO',
+        lockedShifts > 0
+          ? `${lockedShifts} shift(s) locked, ${journalEntries} journal entr(ies) posted`
+          : 'Nothing locked yet — the ledger starts from your first locked shift',
+        '/shifts',
+        true,
+        'Locking freezes the shift and posts it to the double-entry ledger.',
+      ),
+      step(
+        'opening',
+        'Post your opening balances',
+        openingEntries > 0 ? 'DONE' : 'TODO',
+        openingEntries > 0
+          ? `${openingEntries} manual entr(ies) posted`
+          : 'Cash in hand, what customers already owe, and fuel already in the tanks',
+        '/books/new-entry',
+        false,
+        'Without this the balance sheet starts from zero and understates what you own.',
+      ),
+      step(
+        'dipcharts',
+        'Load your tank dip charts',
+        tanksWithDipChart === 0 ? 'TODO' : tanksWithDipChart < tanks.length ? 'ATTENTION' : 'DONE',
+        tanks.length === 0
+          ? 'Add tanks first'
+          : `${tanksWithDipChart} of ${tanks.length} tank(s) have a calibration chart`,
+        '/wet-stock',
+        false,
+        'Turns a dipstick reading into litres, which is what wet-stock variance needs.',
+      ),
+      step(
+        'bank',
+        'Add your bank account',
+        bankAccounts > 0 ? 'DONE' : 'TODO',
+        bankAccounts > 0 ? `${bankAccounts} account(s)` : 'None yet',
+        '/cash',
+        false,
+        'Needed to record deposits and reconcile card and UPI settlement.',
+      ),
+      step(
+        'licences',
+        'Record your licences and their expiry',
+        licences > 0 ? 'DONE' : 'TODO',
+        licences > 0 ? `${licences} licence(s) tracked` : 'PESO, stamping, fire and pollution NOC',
+        '/compliance',
+        false,
+        'A lapsed licence or unstamped nozzle can stop you trading.',
+      ),
+      step(
+        'products',
+        'Add lubricants and other non-fuel lines',
+        products > 0 ? 'DONE' : 'TODO',
+        products > 0 ? `${products} product(s)` : 'None yet',
+        '/products',
+        false,
+        'Fuel margins are fixed; lubes are where the real margin is.',
+      ),
+    ];
+
+    const required = steps.filter((s) => s.required);
+    const requiredDone = required.filter((s) => s.status === 'DONE').length;
+    const nextStep = steps.find((s) => s.required && s.status !== 'DONE')
+      ?? steps.find((s) => s.status !== 'DONE')
+      ?? null;
+
+    res.json({
+      pump: { id: pump.id, name: pump.name, cashHandoverMode: pump.cashHandoverMode },
+      steps,
+      progress: {
+        requiredTotal: required.length,
+        requiredDone,
+        percent: required.length === 0 ? 100 : Math.round((requiredDone / required.length) * 100),
+        allRequiredDone: requiredDone === required.length,
+      },
+      nextStepId: nextStep?.id ?? null,
+      readyForFirstShift: ['pump', 'tanks', 'nozzles', 'rates', 'channels', 'categories', 'employees'].every(
+        (id) => steps.find((s) => s.id === id)?.status !== 'TODO',
+      ),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

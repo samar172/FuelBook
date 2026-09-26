@@ -79,8 +79,10 @@ export function DipChartTab() {
   const [tankId, setTankId] = useState("");
 
   useEffect(() => {
-    if (!tankId && tanks.length) setTankId(tanks[0].id);
-  }, [tanks, tankId]);
+    // Depend on the query result itself: `tanks` is a fresh array every render.
+    const first = tanksQ.data?.[0]?.id;
+    if (!tankId && first) setTankId(first);
+  }, [tanksQ.data, tankId]);
 
   const chartQ = useQuery<DipChartResponse>({
     queryKey: ["wet-dip-chart", tankId],

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
-import { ArrowDownCircle, ArrowUpCircle, AlertTriangle, CheckCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle } from "lucide-react";
 
 export function ReconciliationTab({ shift }: { shift: any }) {
   const { data: rates } = useQuery({

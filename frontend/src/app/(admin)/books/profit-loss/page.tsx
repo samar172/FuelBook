@@ -202,7 +202,7 @@ export default function ProfitLossPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                   <div>
                     <div className="text-xs text-muted-foreground">Fuel sold for</div>
                     <div className="font-semibold">{formatINR(data?.fuelSalesPaise ?? 0)}</div>

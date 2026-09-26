@@ -77,8 +77,11 @@ export function CashCountSection() {
 
   const [shiftId, setShiftId] = useState("");
   useEffect(() => {
-    if (!shiftId && shifts.length > 0) setShiftId(shifts[0].id);
-  }, [shifts, shiftId]);
+    // Depend on the query result itself: `shifts` is a fresh array every render,
+    // which would re-run this effect continuously.
+    const first = shiftsQ.data?.[0]?.id;
+    if (!shiftId && first) setShiftId(first);
+  }, [shiftsQ.data, shiftId]);
 
   const countQ = useQuery<CountResponse>({
     queryKey: ["cash-count", shiftId],

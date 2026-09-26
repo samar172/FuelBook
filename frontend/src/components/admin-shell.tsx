@@ -26,6 +26,7 @@ import {
   Banknote,
   FileText,
   ShieldCheck,
+  Compass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiUser, clearAuth, getAuthUser, setAuth } from "@/lib/api";
@@ -40,7 +41,17 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
+// The handful of places staff actually go on a phone. Everything else lives behind
+// "More", which opens the same drawer the desktop sidebar shows.
+const MOBILE_TABS = [
+  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/shifts", label: "Shifts", icon: ClipboardList },
+  { href: "/cash", label: "Cash", icon: Banknote },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+] as const;
+
 const NAV = [
+  { href: "/guide", label: "Setup Guide", icon: Compass },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/shifts", label: "Shift Reports", icon: ClipboardList },
   { href: "/wet-stock", label: "Wet Stock & Testing", icon: Gauge },
@@ -95,14 +106,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-50 md:flex">
       {/* Mobile top bar */}
-      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-white px-3 py-2.5">
-        <button
-          aria-label="Open menu"
-          onClick={() => setNavOpen(true)}
-          className="-ml-1 inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-slate-100"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+      <header
+        className="md:hidden sticky z-30 flex items-center justify-between gap-2 border-b bg-white px-3 py-2.5"
+        style={{ top: "env(safe-area-inset-top, 0px)" }}
+      >
         <div className="flex items-center gap-2 min-w-0">
           <div className="bg-primary text-primary-foreground rounded-md p-1.5">
             <Fuel className="h-4 w-4" />
@@ -139,6 +146,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           />
           <DialogPrimitive.Content
             aria-describedby={undefined}
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
             className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-lg md:hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left"
           >
             <DialogPrimitive.Title className="sr-only">
@@ -161,11 +169,78 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </DialogPrimitive.Root>
 
       <main className="flex-1 min-w-0 md:overflow-auto">
-        <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto">
+        {/* pb-24 on phones keeps the last row clear of the tab bar */}
+        <div className="p-3 sm:p-4 md:p-6 pb-24 md:pb-6 max-w-[1400px] mx-auto">
           {children}
         </div>
       </main>
+
+      <MobileTabBar pathname={pathname} onMore={() => setNavOpen(true)} moreOpen={navOpen} />
     </div>
+  );
+}
+
+/**
+ * Bottom tab bar for phones. Navigation belongs within thumb reach on a device being
+ * used one-handed at the forecourt, and the bar sits above the iPhone home indicator
+ * via the safe-area inset (which is 0 everywhere else).
+ */
+function MobileTabBar({
+  pathname,
+  onMore,
+  moreOpen,
+}: {
+  pathname: string;
+  onMore: () => void;
+  moreOpen: boolean;
+}) {
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(href + "/");
+  // A section that is not one of the four tabs is still "somewhere", so More owns it.
+  const otherActive =
+    !moreOpen && !MOBILE_TABS.some((t) => isActive(t.href));
+
+  return (
+    <nav
+      aria-label="Main"
+      className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t bg-white"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+    >
+      <div className="grid grid-cols-5">
+        {MOBILE_TABS.map((t) => {
+          const active = isActive(t.href);
+          return (
+            <Link
+              key={t.href}
+              href={t.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
+                active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <t.icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
+              <span className="leading-none">{t.label}</span>
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          onClick={onMore}
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+          className={cn(
+            "flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
+            moreOpen || otherActive
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Menu className={cn("h-5 w-5", (moreOpen || otherActive) && "stroke-[2.5]")} />
+          <span className="leading-none">More</span>
+        </button>
+      </div>
+    </nav>
   );
 }
 
