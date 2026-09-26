@@ -18,8 +18,9 @@ import {
 import { litresToMl } from '../lib/money';
 import { AppError } from '../middleware/error';
 import { ensureChartOfAccounts } from '../services/ledger';
+import { recomputeShift } from '../services/shiftCalc';
 import { signToken } from '../lib/jwt';
-import { Role, ShiftType } from '@prisma/client';
+import { Role, ShiftType, ShiftStatus } from '@prisma/client';
 
 const router = Router();
 router.use(requireAuth);
@@ -266,7 +267,9 @@ router.post('/fuel-rates', requirePermission('canEditFuelRates'), async (req, re
         createdBy: req.user!.userId,
       },
     });
-    res.status(201).json(rate);
+    // Open shifts are valued at the current rate, so they have to be re-valued now.
+    const revalued = await revalueOpenShifts(pumpId);
+    res.status(201).json({ ...rate, revaluedShifts: revalued });
   } catch (e) {
     next(e);
   }
@@ -287,7 +290,8 @@ router.patch('/fuel-rates/:id', requirePermission('canEditFuelRates'), async (re
         ...(data.effectiveFrom !== undefined ? { effectiveFrom: new Date(data.effectiveFrom) } : {}),
       },
     });
-    res.json(rate);
+    const revalued = await revalueOpenShifts(pumpId);
+    res.json({ ...rate, revaluedShifts: revalued });
   } catch (e) {
     next(e);
   }
@@ -429,6 +433,31 @@ router.delete('/payment-time-slots/:id', requirePermission('canManagePump'), asy
     next(e);
   }
 });
+
+/**
+ * Re-values every shift that is still open after a fuel rate changes.
+ *
+ * Shift totals are denormalised (sales = litres x the rate at the time they were
+ * saved), so a rate set AFTER the readings were entered used to leave the shift
+ * showing zero sales until someone happened to re-save a tab. LOCKED shifts are
+ * deliberately excluded: their journal is already posted and their figures must
+ * not move under the books.
+ */
+async function revalueOpenShifts(pumpId: string) {
+  const open = await prisma.shiftReport.findMany({
+    where: { pumpId, status: { in: [ShiftStatus.DRAFT, ShiftStatus.SUBMITTED] } },
+    select: { id: true },
+  });
+  if (open.length === 0) return 0;
+  const pump = await prisma.pump.findUniqueOrThrow({
+    where: { id: pumpId },
+    select: { discrepancyMlThreshold: true },
+  });
+  for (const s of open) {
+    await prisma.$transaction((tx) => recomputeShift(tx, s.id, pump.discrepancyMlThreshold));
+  }
+  return open.length;
+}
 
 // ===== ONBOARDING =====
 // Drives the "Getting started" guide: every step reports whether it is actually

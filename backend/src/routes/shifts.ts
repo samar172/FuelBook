@@ -401,10 +401,35 @@ router.put('/:id/stock-entries', requirePermission('canEditStock'), async (req, 
     const shift = await ensureEditable(req.params.id);
     const { entries } = stockEntriesBulkSchema.parse(req.body);
     const threshold = await getThreshold(shift.pumpId);
+    // Scoped to this pump: a tank id from another pump must not be writable here.
     const tanks = await prisma.tank.findMany({
-      where: { id: { in: entries.map((e) => e.tankId) } },
+      where: { id: { in: entries.map((e) => e.tankId) }, pumpId: shift.pumpId },
     });
     const byId = new Map(tanks.map((t) => [t.id, t]));
+
+    // A tank cannot hold more than its capacity. This is nearly always a typo or a
+    // litres/millilitres slip, and left alone it flows straight into wet-stock
+    // variance and the books.
+    const asL = (ml: bigint) => (Number(ml) / 1000).toLocaleString('en-IN');
+    for (const e of entries) {
+      const t = byId.get(e.tankId);
+      if (!t) throw new AppError(400, `Unknown tank ${e.tankId}`);
+      if (e.closingStockMl > t.capacityMl) {
+        throw new AppError(
+          400,
+          `${t.name}: closing stock ${asL(e.closingStockMl)} L is more than the tank holds ` +
+            `(${asL(t.capacityMl)} L). Check the reading, or correct the tank capacity in Pump Setup.`,
+        );
+      }
+      if (e.openingStockMl > t.capacityMl) {
+        throw new AppError(
+          400,
+          `${t.name}: opening stock ${asL(e.openingStockMl)} L is more than the tank holds ` +
+            `(${asL(t.capacityMl)} L).`,
+        );
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       for (const e of entries) {
         const t = byId.get(e.tankId);
@@ -780,6 +805,28 @@ router.put('/:id/cash-handovers', requirePermission('canEditCollections'), async
       });
     });
     res.json(result);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Re-run the totals for an open shift. Normally unnecessary — every save
+// recomputes — but it gives the owner a way to re-value a shift after a setup
+// change, without having to re-save each tab.
+router.post('/:id/recompute', requirePermission('canCreateShift'), async (req, res, next) => {
+  try {
+    const shift = await ensureEditable(req.params.id);
+    const threshold = await getThreshold(shift.pumpId);
+    const totals = await prisma.$transaction((tx) => recomputeShift(tx, shift.id, threshold));
+    res.json({
+      shiftId: shift.id,
+      totalSalesPaise: totals.totalSalesPaise,
+      totalCollectionsPaise: totals.totalCollectionsPaise,
+      closingCashPaise: totals.closingCashPaise,
+      cashFlowDifferencePaise: totals.cashFlowDifferencePaise,
+      discrepancyMl: totals.discrepancyMl,
+      discrepancyFlag: totals.discrepancyFlag,
+    });
   } catch (e) {
     next(e);
   }

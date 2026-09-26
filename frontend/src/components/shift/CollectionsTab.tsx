@@ -17,6 +17,9 @@ type Row = {
   timeSlotId?: string | null;
   amountPaise: string;
   reference?: string;
+  // Who took this money. Without it, an attendant's expected cash cannot be
+  // reduced by the card/UPI they collected, and they look short at hand-over.
+  employeeId?: string | null;
 };
 
 type TimeSlot = {
@@ -28,6 +31,7 @@ type TimeSlot = {
 };
 
 const NO_SLOT = "none";
+const NO_STAFF = "none";
 
 export function CollectionsTab({ shift, disabled }: { shift: any; disabled: boolean }) {
   const qc = useQueryClient();
@@ -57,12 +61,30 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
     queryFn: async () => (await api.get("/api/setup/payment-time-slots")).data,
   });
 
+  // The crew on this shift first — that is who normally hands money in.
+  const shiftStaff: { id: string; name: string }[] = Array.from(
+    new Map(
+      (shift.employeeAssignments || [])
+        .filter((a: any) => a.employee)
+        .map((a: any) => [a.employee.id, { id: a.employee.id, name: a.employee.name }])
+    ).values()
+  ) as { id: string; name: string }[];
+
+  const { data: allStaff = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["employees"],
+    queryFn: async () => (await api.get("/api/employees")).data,
+  });
+  const staffOptions = shiftStaff.length
+    ? [...shiftStaff, ...allStaff.filter((e) => !shiftStaff.some((s2) => s2.id === e.id))]
+    : allStaff;
+
   const [rows, setRows] = useState<Row[]>(() =>
     (shift.paymentCollections || []).map((c: any) => ({
       channelId: c.channelId,
       timeSlotId: c.timeSlotId,
       amountPaise: c.amountPaise,
       reference: c.reference,
+      employeeId: c.employeeId ?? null,
     }))
   );
 
@@ -84,6 +106,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
           timeSlotId: r.timeSlotId || null,
           amountPaise: r.amountPaise === "" ? "0" : r.amountPaise,
           reference: r.reference,
+          employeeId: r.employeeId || null,
         })),
       })).data;
     },
@@ -103,7 +126,9 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
         <CardTitle>Payment Collections</CardTitle>
         <CardDescription>
           Money received via Cash, Card POS, UPI (Paytm/PhonePe), wallets, bank deposits — split by
-          time slot if you want. Only the slots set up for {shiftWord} shifts are offered.
+          time slot if you want. Only the slots set up for {shiftWord} shifts are offered. Naming who took each
+          amount matters: card and UPI they collected is deducted from the cash that
+          attendant owes at hand-over.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -121,6 +146,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
               <TableRow>
                 <TableHead>Channel</TableHead>
                 {!noSlotsForShift && <TableHead>Time Slot</TableHead>}
+                <TableHead>Taken by</TableHead>
                 <TableHead>Amount (₹)</TableHead>
                 <TableHead>Reference</TableHead>
                 <TableHead></TableHead>
@@ -160,6 +186,23 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
                       </Select>
                     </TableCell>
                   )}
+                  <TableCell>
+                    <Select
+                      value={r.employeeId || NO_STAFF}
+                      onValueChange={(v) =>
+                        setRows(rs => rs.map((x, i) => i === idx ? { ...x, employeeId: v === NO_STAFF ? null : v } : x))
+                      }
+                      disabled={disabled}
+                    >
+                      <SelectTrigger className="min-w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_STAFF}>— Not recorded —</SelectItem>
+                        {staffOptions.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   <TableCell>
                     <Input
                       type="number"
