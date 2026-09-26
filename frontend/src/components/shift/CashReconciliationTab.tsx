@@ -38,12 +38,29 @@ import {
   CASH_MODE_HELP,
   CASH_MODE_LABELS,
   CashReconciliation,
+  CashReconRow,
   inputToPaise,
   paise,
   paiseToInput,
 } from "@/lib/books";
+import { CashDrop, CashDropsPanel, dropTimeLabel } from "./CashDropsPanel";
 
 type Draft = { amount: string; notes: string };
+
+// The reconciliation payload now carries the mid-shift drops as well.
+type ReconRow = CashReconRow & {
+  droppedMidShiftPaise: string;
+  drops: Omit<CashDrop, "fromEmployee">[];
+  remainingToHandOverPaise: string;
+};
+
+type Recon = Omit<CashReconciliation, "rows" | "totals"> & {
+  rows: ReconRow[];
+  totals: CashReconciliation["totals"] & {
+    droppedMidShiftPaise: string;
+    dropCount: number;
+  };
+};
 
 const NO_CASHIER = "NONE";
 
@@ -51,13 +68,13 @@ export function CashReconciliationTab({
   shift,
   disabled,
 }: {
-  shift: { id: string; status: string };
+  shift: { id: string; status: string; reportDate?: string };
   disabled: boolean;
 }) {
   const qc = useQueryClient();
   const shiftId = shift.id;
 
-  const { data, isLoading } = useQuery<CashReconciliation>({
+  const { data, isLoading } = useQuery<Recon>({
     queryKey: ["shift-cash-recon", shiftId],
     queryFn: async () => (await api.get(`/api/shifts/${shiftId}/cash-reconciliation`)).data,
   });
@@ -129,6 +146,8 @@ export function CashReconciliationTab({
   };
 
   const totalExpected = rows.reduce((s, r) => s + paise(r.expectedCashPaise), 0);
+  const totalDropped = rows.reduce((s, r) => s + paise(r.droppedMidShiftPaise), 0);
+  const totalRemaining = rows.reduce((s, r) => s + paise(r.remainingToHandOverPaise), 0);
   const totalReceived = rows.reduce(
     (s, r) => s + Number(inputToPaise(drafts[r.employeeId]?.amount || "0")),
     0,
@@ -216,7 +235,9 @@ export function CashReconciliationTab({
             cash = fuel they dispensed − credit they gave out − money that came in digitally.
             Expenses they paid out of the drawer are shown for context only and are{" "}
             <span className="font-medium">not</span> deducted — collections in FuelBook are
-            recorded gross of expenses.
+            recorded gross of expenses. Cash they already handed in during the shift counts
+            towards the same figure, so what is still outstanding is expected cash minus what
+            was handed in mid-shift.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -239,6 +260,8 @@ export function CashReconciliationTab({
                     <TableHead className="text-right">Credit given</TableHead>
                     <TableHead className="text-right">Digital taken</TableHead>
                     <TableHead className="text-right">Expected cash</TableHead>
+                    <TableHead className="text-right">Handed in mid-shift</TableHead>
+                    <TableHead className="text-right">Still outstanding</TableHead>
                     <TableHead className="text-right w-36">Cash handed over</TableHead>
                     <TableHead className="text-right">Short / Excess</TableHead>
                     <TableHead className="min-w-[10rem]">Notes</TableHead>
@@ -280,6 +303,27 @@ export function CashReconciliationTab({
                         </TableCell>
                         <TableCell className="text-right font-mono font-medium">
                           {formatINR(r.expectedCashPaise)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {paise(r.droppedMidShiftPaise) > 0 ? (
+                            <>
+                              {formatINR(r.droppedMidShiftPaise)}
+                              <div className="text-[11px] font-sans text-muted-foreground">
+                                {r.drops.length} drop{r.drops.length === 1 ? "" : "s"} —{" "}
+                                {r.drops
+                                  .map((d) => dropTimeLabel(d.occurredAt, shift.reportDate))
+                                  .join(", ")}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-xs font-sans text-muted-foreground">Nothing</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatINR(r.remainingToHandOverPaise)}
+                          <div className="text-[11px] font-sans text-muted-foreground">
+                            still to hand over
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Input
@@ -372,6 +416,12 @@ export function CashReconciliationTab({
                       {formatINR(totalExpected)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">
+                      {formatINR(totalDropped)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold">
+                      {formatINR(totalRemaining)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold">
                       {formatINR(totalReceived)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">
@@ -393,9 +443,10 @@ export function CashReconciliationTab({
           {!readOnly && rows.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground max-w-xl">
-                Saving records the whole set at once. Clear someone&apos;s amount to remove their
-                handover record entirely. Shortages become money that person owes you (account
-                1300) once the shift is locked.
+                Saving records the whole set at once — the amount is seeded from what they have
+                already handed in. Clear someone&apos;s amount to remove their handover record
+                entirely. Shortages become money that person owes you (account 1300) once the
+                shift is locked.
               </p>
               <Button onClick={() => save.mutate()} disabled={save.isPending}>
                 {save.isPending ? "Saving…" : "Save handovers"}
@@ -404,6 +455,15 @@ export function CashReconciliationTab({
           )}
         </CardContent>
       </Card>
+
+      <CashDropsPanel
+        shiftId={shiftId}
+        reportDate={shift.reportDate}
+        readOnly={readOnly}
+        employees={employees}
+        attendants={rows.map((r) => ({ employeeId: r.employeeId, employeeName: r.employeeName }))}
+        cashierEmployeeId={data.cashierEmployeeId}
+      />
     </div>
   );
 }

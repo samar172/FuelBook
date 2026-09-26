@@ -5,10 +5,10 @@ import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/utils";
+import { apiError } from "@/lib/types";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -19,13 +19,40 @@ type Row = {
   reference?: string;
 };
 
+type TimeSlot = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  shiftType: "DAY" | "NIGHT" | null;
+  isActive: boolean;
+};
+
+const NO_SLOT = "none";
+
 export function CollectionsTab({ shift, disabled }: { shift: any; disabled: boolean }) {
   const qc = useQueryClient();
+  const shiftType: string | undefined = shift.shiftType;
+
   const { data: channels = [] } = useQuery({
     queryKey: ["payment-channels"],
     queryFn: async () => (await api.get("/api/setup/payment-channels")).data,
   });
-  const { data: slots = [] } = useQuery({
+
+  // Only the slots that apply to this kind of shift (the API also returns
+  // untagged slots, which apply to both).
+  const { data: slots = [], isLoading: slotsLoading } = useQuery<TimeSlot[]>({
+    queryKey: ["payment-time-slots", shiftType ?? "ALL"],
+    queryFn: async () =>
+      (
+        await api.get("/api/setup/payment-time-slots", {
+          params: shiftType ? { shiftType } : undefined,
+        })
+      ).data,
+  });
+
+  // Every slot, so a row that already points at a slot meant for the other
+  // shift still shows its name instead of going blank.
+  const { data: allSlots = [] } = useQuery<TimeSlot[]>({
     queryKey: ["payment-time-slots"],
     queryFn: async () => (await api.get("/api/setup/payment-time-slots")).data,
   });
@@ -40,6 +67,14 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
   );
 
   const total = rows.reduce((acc, r) => acc + Number(r.amountPaise || 0), 0);
+
+  // The slots offered in a row's dropdown: this shift's slots, plus whatever
+  // that row is already set to.
+  const optionsFor = (row: Row): TimeSlot[] => {
+    if (!row.timeSlotId || slots.some((s) => s.id === row.timeSlotId)) return slots;
+    const extra = allSlots.find((s) => s.id === row.timeSlotId);
+    return extra ? [...slots, extra] : slots;
+  };
 
   const save = useMutation({
     mutationFn: async () => {
@@ -56,8 +91,11 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
       toast.success("Collections saved");
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e) => toast.error(apiError(e, "Failed")),
   });
+
+  const noSlotsForShift = !slotsLoading && slots.length === 0;
+  const shiftWord = shiftType === "NIGHT" ? "night" : shiftType === "DAY" ? "day" : "this";
 
   return (
     <Card>
@@ -65,90 +103,124 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
         <CardTitle>Payment Collections</CardTitle>
         <CardDescription>
           Money received via Cash, Card POS, UPI (Paytm/PhonePe), wallets, bank deposits — split by
-          time slot if you want (Before 12 / After 12 etc.).
+          time slot if you want. Only the slots set up for {shiftWord} shifts are offered.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Channel</TableHead>
-              <TableHead>Time Slot</TableHead>
-              <TableHead>Amount (₹)</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r, idx) => (
-              <TableRow key={idx}>
-                <TableCell>
-                  <Select
-                    value={r.channelId}
-                    onValueChange={(v) => setRows(rs => rs.map((x, i) => i === idx ? { ...x, channelId: v } : x))}
-                    disabled={disabled}
-                  >
-                    <SelectTrigger className="min-w-[160px]"><SelectValue placeholder="Channel" /></SelectTrigger>
-                    <SelectContent>
-                      {channels.map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Select
-                    value={r.timeSlotId || "none"}
-                    onValueChange={(v) => setRows(rs => rs.map((x, i) => i === idx ? { ...x, timeSlotId: v === "none" ? null : v } : x))}
-                    disabled={disabled}
-                  >
-                    <SelectTrigger className="min-w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— None —</SelectItem>
-                      {slots.map((s: any) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    disabled={disabled}
-                    value={r.amountPaise === "" ? "" : paiseToRupees(r.amountPaise)}
-                    onChange={(e) =>
-                      setRows(rs => rs.map((x, i) => i === idx ? { ...x, amountPaise: e.target.value === "" ? "" : rupeesToPaise(e.target.value) } : x))
-                    }
-                    className="max-w-[140px]"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    disabled={disabled}
-                    value={r.reference || ""}
-                    onChange={(e) =>
-                      setRows(rs => rs.map((x, i) => i === idx ? { ...x, reference: e.target.value } : x))
-                    }
-                  />
-                </TableCell>
-                <TableCell>
-                  {!disabled && (
-                    <Button size="icon" variant="ghost" onClick={() => setRows(rs => rs.filter((_, i) => i !== idx))}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </TableCell>
+        {noSlotsForShift && (
+          <p className="rounded-md border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
+            No time slots are set up for {shiftWord} shifts, so collections here are recorded
+            without a slot. Add one under <span className="font-medium">Pump Setup → Time Slots</span>{" "}
+            and tag it {shiftWord === "this" ? "Day or Night" : `“${shiftWord}”`} if you want this
+            shift&apos;s money split by time of day.
+          </p>
+        )}
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Channel</TableHead>
+                {!noSlotsForShift && <TableHead>Time Slot</TableHead>}
+                <TableHead>Amount (₹)</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead></TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        <div className="flex items-center justify-between">
+            </TableHeader>
+            <TableBody>
+              {rows.map((r, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>
+                    <Select
+                      value={r.channelId}
+                      onValueChange={(v) => setRows(rs => rs.map((x, i) => i === idx ? { ...x, channelId: v } : x))}
+                      disabled={disabled}
+                    >
+                      <SelectTrigger className="min-w-[160px]"><SelectValue placeholder="Channel" /></SelectTrigger>
+                      <SelectContent>
+                        {channels.map((c: any) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  {!noSlotsForShift && (
+                    <TableCell>
+                      <Select
+                        value={r.timeSlotId || NO_SLOT}
+                        onValueChange={(v) => setRows(rs => rs.map((x, i) => i === idx ? { ...x, timeSlotId: v === NO_SLOT ? null : v } : x))}
+                        disabled={disabled}
+                      >
+                        <SelectTrigger className="min-w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_SLOT}>— None —</SelectItem>
+                          {optionsFor(r).map((s) => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      inputMode="decimal"
+                      disabled={disabled}
+                      value={r.amountPaise === "" ? "" : paiseToRupees(r.amountPaise)}
+                      onChange={(e) =>
+                        setRows(rs => rs.map((x, i) => i === idx ? { ...x, amountPaise: e.target.value === "" ? "" : rupeesToPaise(e.target.value) } : x))
+                      }
+                      className="max-w-[140px]"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      disabled={disabled}
+                      value={r.reference || ""}
+                      onChange={(e) =>
+                        setRows(rs => rs.map((x, i) => i === idx ? { ...x, reference: e.target.value } : x))
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {!disabled && (
+                      <Button size="icon" variant="ghost" onClick={() => setRows(rs => rs.filter((_, i) => i !== idx))}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={noSlotsForShift ? 4 : 5}
+                    className="text-center text-muted-foreground"
+                  >
+                    Nothing collected yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {!disabled && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setRows(rs => [...rs, { channelId: channels[0]?.id || "", amountPaise: "0" }])}
+              onClick={() =>
+                setRows(rs => [
+                  ...rs,
+                  {
+                    channelId: channels[0]?.id || "",
+                    // With exactly one slot to choose from there is nothing to
+                    // decide — pick it for them.
+                    timeSlotId: slots.length === 1 ? slots[0].id : null,
+                    amountPaise: "0",
+                  },
+                ])
+              }
             >
               <Plus className="h-4 w-4 mr-1" /> Add row
             </Button>

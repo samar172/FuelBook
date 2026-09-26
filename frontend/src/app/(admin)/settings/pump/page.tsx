@@ -846,7 +846,8 @@ function TimeSlotsSection() {
         <div>
           <CardTitle className="text-base">Time Slots</CardTitle>
           <CardDescription>
-            Used to bucket collections (e.g. Before 12, After 12). Configurable by you.
+            Used to bucket collections (e.g. Before 12, After 12). Tag a slot Day or Night and it
+            only appears on that kind of shift&apos;s Collections tab.
           </CardDescription>
         </div>
         <Button size="sm" onClick={() => setAdding(true)}>
@@ -858,6 +859,7 @@ function TimeSlotsSection() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Shown on</TableHead>
               <TableHead>Sort</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -867,6 +869,30 @@ function TimeSlotsSection() {
             {slots.map((s: any) => (
               <TableRow key={s.id} className={!s.isActive ? "opacity-60" : ""}>
                 <TableCell className="font-medium">{s.name}</TableCell>
+                <TableCell>
+                  {s.shiftType === "DAY" ? (
+                    <div>
+                      <Badge>Day</Badge>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Shown only on day shifts
+                      </div>
+                    </div>
+                  ) : s.shiftType === "NIGHT" ? (
+                    <div>
+                      <Badge variant="secondary">Night</Badge>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Shown only on night shifts
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <Badge variant="outline">Both</Badge>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Shown on every shift
+                      </div>
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>{s.sortOrder}</TableCell>
                 <TableCell>
                   {s.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
@@ -889,7 +915,7 @@ function TimeSlotsSection() {
             ))}
             {slots.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   No time slots yet.
                 </TableCell>
               </TableRow>
@@ -928,17 +954,26 @@ function SlotFormDialog({
   onDone: () => void;
 }) {
   const isEdit = !!slot;
-  const [form, setForm] = useState({ name: "", sortOrder: "0" });
+  const [form, setForm] = useState({ name: "", sortOrder: "0", shiftType: "BOTH" });
   useEffect(() => {
     if (open) {
-      setForm({ name: slot?.name ?? "", sortOrder: String(slot?.sortOrder ?? 0) });
+      setForm({
+        name: slot?.name ?? "",
+        sortOrder: String(slot?.sortOrder ?? 0),
+        shiftType: slot?.shiftType ?? "BOTH",
+      });
     }
   }, [open, slot]);
 
   const save = useMutation({
     mutationFn: async () => {
       if (!form.name) throw new Error("Name is required");
-      const body = { name: form.name, sortOrder: Number(form.sortOrder) || 0 };
+      const body = {
+        name: form.name,
+        sortOrder: Number(form.sortOrder) || 0,
+        // null = the slot applies to both day and night shifts.
+        shiftType: form.shiftType === "BOTH" ? null : form.shiftType,
+      };
       if (isEdit) {
         return (await api.patch(`/api/setup/payment-time-slots/${slot.id}`, body)).data;
       }
@@ -964,10 +999,32 @@ function SlotFormDialog({
         <div className="space-y-3">
           <Field label="Name">
             <Input
-              placeholder="e.g. Before 12, After 12, Full Shift"
+              placeholder="e.g. 6 AM - 6 PM, Before 12, Full Shift"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
+          </Field>
+          <Field label="Shown on">
+            <Select
+              value={form.shiftType}
+              onValueChange={(v) => setForm({ ...form, shiftType: v })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="BOTH">Both shifts</SelectItem>
+                <SelectItem value="DAY">Day shifts only</SelectItem>
+                <SelectItem value="NIGHT">Night shifts only</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {form.shiftType === "DAY"
+                ? "Shown only on day shifts — night shifts will not offer this slot."
+                : form.shiftType === "NIGHT"
+                  ? "Shown only on night shifts — day shifts will not offer this slot."
+                  : "Shown on every shift, day and night."}
+            </p>
           </Field>
           <Field label="Sort order">
             <Input
