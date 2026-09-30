@@ -9,8 +9,22 @@ export const errorHandler = (
   _next: NextFunction
 ) => {
   if (err instanceof ZodError) {
+    // Name the field that actually failed. "Validation failed" on its own leaves
+    // someone staring at a form with no idea which box is wrong.
+    const label = (path: readonly PropertyKey[]) =>
+      path
+        .filter((p) => typeof p === 'string')
+        .join(' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/^./, (c) => c.toUpperCase())
+        .trim();
+    const parts = err.issues.slice(0, 3).map((i) => {
+      const where = label(i.path);
+      return where ? `${where}: ${i.message}` : i.message;
+    });
+    const more = err.issues.length > 3 ? ` (and ${err.issues.length - 3} more)` : '';
     return res.status(400).json({
-      error: 'Validation failed',
+      error: parts.join('; ') + more,
       details: err.flatten(),
     });
   }

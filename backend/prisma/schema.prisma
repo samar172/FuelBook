@@ -39,6 +39,18 @@ model Pump {
   // How end-of-shift cash accountability works at this pump
   cashHandoverMode CashHandoverMode @default(PER_ATTENDANT)
 
+  // ---- Daily running ----
+  // When switched on, the day's shift is opened by itself the first time anyone
+  // uses the app inside that shift's window, so nobody has to remember to create
+  // it. It can always be started by hand instead.
+  autoStartShift        Boolean @default(false)
+  // Shift windows as minutes past midnight, local time (06:00 and 18:00 by
+  // default). A night shift runs past midnight and is dated by the day it began.
+  dayShiftStartsAtMin   Int     @default(360)
+  nightShiftStartsAtMin Int     @default(1080)
+  // Mark an attendant present automatically when they sign in during their shift.
+  autoMarkAttendance    Boolean @default(false)
+
   // Reconciliation thresholds (per pump, configurable)
   discrepancyMlThreshold    BigInt @default(500)
   discrepancyPaiseThreshold BigInt @default(5000)
@@ -1316,6 +1328,13 @@ model Licence {
   @@index([pumpId, expiresOn])
 }
 
+/// How an attendance row came to exist.
+enum AttendanceSource {
+  MANUAL // someone ticked it: the cashier, manager or owner
+  LOGIN // inferred from the attendant signing in during their shift
+  ROSTER // created with the shift from the crew carried forward
+}
+
 enum AttendanceStatus {
   PRESENT
   ABSENT
@@ -1333,6 +1352,14 @@ model Attendance {
   shiftType       ShiftType?
   status          AttendanceStatus @default(PRESENT)
   overtimeMinutes Int              @default(0)
+
+  // When they actually started and finished, and how the mark came about — a
+  // cashier marking someone in is a different claim from the app inferring it
+  // from a sign-in, and an owner reviewing the register should see which it was.
+  checkInAt  DateTime?
+  checkOutAt DateTime?
+  source     AttendanceSource @default(MANUAL)
+  markedById String? // the user who marked it, when a person did
 
   shiftReportId String?
   shiftReport   ShiftReport? @relation(fields: [shiftReportId], references: [id])

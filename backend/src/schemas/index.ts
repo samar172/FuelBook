@@ -33,6 +33,19 @@ const textNullable = (max = 200) =>
 
 export const optionalText = textNullable;
 
+// A <select> with no choice made sends "" or a sentinel like "none". Treat those
+// as "not set" rather than failing validation — the API should be forgiving about
+// how the form spells "nothing".
+export const optionalId = z
+  .union([z.string(), z.null()])
+  .transform((v) => {
+    if (v === null) return null;
+    const t = v.trim();
+    return t === '' || t === 'none' || t === 'null' || t === 'undefined' ? null : t;
+  })
+  .optional();
+
+
 export const fuelTypeEnum = z.enum(['HSD', 'MS', 'MS_POWER', 'CNG']);
 export const shiftTypeEnum = z.enum(['DAY', 'NIGHT']);
 export const roleEnum = z.enum([
@@ -112,7 +125,7 @@ export const createUserSchema = z.object({
   role: roleEnum.default('MANAGER'),
   // Optionally tie the login to a staff record, which is what lets an attendant
   // see the shifts they worked.
-  employeeId: z.string().min(1).optional().nullable(),
+  employeeId: optionalId,
 });
 
 // Explicit allow-list: a PATCH must never be able to move a user to another pump
@@ -122,7 +135,7 @@ export const updateUserSchema = z.object({
   phone: z.string().min(8).max(15).optional(),
   pin: z.string().min(4).max(8).optional(),
   isActive: z.boolean().optional(),
-  employeeId: z.string().min(1).nullable().optional(),
+  employeeId: optionalId,
 });
 
 export const changeRoleSchema = z.object({
