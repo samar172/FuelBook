@@ -43,6 +43,17 @@ import { useT } from "@/lib/i18n";
 const FUEL_TYPES = ["HSD", "MS", "MS_POWER", "CNG"] as const;
 const CHANNEL_KINDS = ["CASH", "CARD", "UPI", "BANK_DEPOSIT", "WALLET", "OTHER"] as const;
 
+function minToTime(min: number): string {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+function timeToMin(v: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
 function useOnError() {
   const { t } = useT();
   return (e: any) =>
@@ -97,7 +108,21 @@ function PumpInfoSection() {
     city: string;
     state: string;
     cashHandoverMode: CashHandoverMode;
-  }>({ name: "", address: "", city: "", state: "", cashHandoverMode: "PER_ATTENDANT" });
+    autoStartShift: boolean;
+    autoMarkAttendance: boolean;
+    dayStart: string;
+    nightStart: string;
+  }>({
+    name: "",
+    address: "",
+    city: "",
+    state: "",
+    cashHandoverMode: "PER_ATTENDANT",
+    autoStartShift: false,
+    autoMarkAttendance: false,
+    dayStart: "06:00",
+    nightStart: "18:00",
+  });
   useEffect(() => {
     if (pump)
       setForm({
@@ -106,11 +131,32 @@ function PumpInfoSection() {
         city: pump.city,
         state: pump.state,
         cashHandoverMode: pump.cashHandoverMode ?? "PER_ATTENDANT",
+        autoStartShift: Boolean(pump.autoStartShift),
+        autoMarkAttendance: Boolean(pump.autoMarkAttendance),
+        dayStart: minToTime(pump.dayShiftStartsAtMin ?? 360),
+        nightStart: minToTime(pump.nightShiftStartsAtMin ?? 1080),
       });
   }, [pump]);
 
   const save = useMutation({
-    mutationFn: async () => (await api.patch("/api/setup/pump", form)).data,
+    mutationFn: async () => {
+      const { dayStart, nightStart, ...rest } = form;
+      const dayMin = timeToMin(dayStart);
+      const nightMin = timeToMin(nightStart);
+      if (dayMin == null || nightMin == null) {
+        throw new Error(t("settings.timesRequired", "Enter both shift start times"));
+      }
+      if (dayMin === nightMin) {
+        throw new Error(t("settings.timesDiffer", "Day and night shifts cannot start at the same time"));
+      }
+      return (
+        await api.patch("/api/setup/pump", {
+          ...rest,
+          dayShiftStartsAtMin: dayMin,
+          nightShiftStartsAtMin: nightMin,
+        })
+      ).data;
+    },
     onSuccess: () => {
       toast.success(t("settings.pumpUpdated", "Pump details updated"));
       qc.invalidateQueries({ queryKey: ["pump"] });
@@ -195,6 +241,42 @@ function PumpInfoSection() {
               </label>
             ))}
           </div>
+        </div>
+        <div className="mt-6 max-w-2xl">
+          <h3 className="text-sm font-semibold">{t("settings.dailyRunningHeading", "Daily running")}</h3>
+          <div className="mt-2 space-y-2">
+            {([
+              ["autoStartShift", "settings.autoStartShift", "Open the day's shift automatically", "settings.autoStartShiftHelp", "When the first person signs in and today's shift has not been started, it opens by itself. You can still start it by hand."],
+              ["autoMarkAttendance", "settings.autoMarkAttendance", "Mark staff present when they sign in", "settings.autoMarkAttendanceHelp", "A sign-in marks that person present for the shift running now. If you already marked them absent or half day, that stays."],
+            ] as const).map(([field, k, label, hk, help]) => (
+              <label key={field} className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={form[field]}
+                  onChange={(e) => setForm({ ...form, [field]: e.target.checked })}
+                />
+                <span>
+                  <span className="block text-sm font-medium">{t(k, label)}</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">{t(hk, help)}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <Field label={t("settings.dayShiftStarts", "Day shift starts at")}>
+              <Input type="time" value={form.dayStart} onChange={(e) => setForm({ ...form, dayStart: e.target.value })} />
+            </Field>
+            <Field label={t("settings.nightShiftStarts", "Night shift starts at")}>
+              <Input type="time" value={form.nightStart} onChange={(e) => setForm({ ...form, nightStart: e.target.value })} />
+            </Field>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {t(
+              "settings.nightDatedNote",
+              "A night shift is dated by the day it began. A night shift that starts at 18:00 on the 5th and runs past midnight still counts as the 5th."
+            )}
+          </p>
         </div>
         <div className="mt-4">
           <Button onClick={() => save.mutate()} disabled={save.isPending}>

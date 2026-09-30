@@ -30,6 +30,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { useT } from "@/lib/i18n";
 import { useDateLocale } from "@/lib/i18n/core";
+import StartShiftPrompt from "./StartShiftPrompt";
 
 export default function DashboardPage() {
   const { t } = useT();
@@ -78,6 +79,8 @@ export default function DashboardPage() {
           </button>
         </Link>
       </div>
+
+      <StartShiftPrompt />
 
       {/* Money Flow Reconciliation */}
       <Card className={isMatched ? "border-green-200" : "border-amber-300"}>

@@ -92,6 +92,11 @@ export const updatePumpSchema = z.object({
   discrepancyMlThreshold: bigIntStrOptional,
   discrepancyPaiseThreshold: bigIntStrOptional,
   cashHandoverMode: z.enum(['PER_ATTENDANT', 'POOLED_CASHIER']).optional(),
+  // Daily running
+  autoStartShift: z.boolean().optional(),
+  autoMarkAttendance: z.boolean().optional(),
+  dayShiftStartsAtMin: z.number().int().min(0).max(1439).optional(),
+  nightShiftStartsAtMin: z.number().int().min(0).max(1439).optional(),
 });
 
 export const createTankSchema = z.object({
@@ -524,4 +529,19 @@ export const openingBalancesSchema = z.object({
     .array(z.object({ employeeId: z.string().min(1), amountPaise: bigIntStr }))
     .default([]),
   notes: z.string().max(300).optional().nullable(),
+});
+
+// ===== ATTENDANCE MARK IN / OUT =====
+// Marking someone in during a running shift — by the cashier, or by the attendant
+// signing in themselves.
+export const markInSchema = z.object({
+  employeeIds: z.array(z.string().min(1)).min(1),
+  shiftReportId: z.string().min(1).optional().nullable(),
+  at: z.string().datetime().optional(),
+});
+
+export const markOutSchema = z.object({
+  employeeIds: z.array(z.string().min(1)).min(1),
+  shiftReportId: z.string().min(1).optional().nullable(),
+  at: z.string().datetime().optional(),
 });

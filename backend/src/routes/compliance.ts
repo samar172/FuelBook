@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/db';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { AppError } from '../middleware/error';
+import { markAttendanceForShift, windowFor } from '../services/shiftAuto';
 import {
   AttendanceStatus,
   LicenceKind,
@@ -28,6 +29,7 @@ import {
   attendanceStatusEnum,
   dayStr,
 } from '../schemas/compliance';
+import { markInSchema, markOutSchema } from '../schemas';
 import {
   ATTENDANCE_STATUSES,
   LICENCE_KIND_LABELS,
@@ -764,6 +766,173 @@ router.delete('/advances/:id', canManageStaff, async (req, res, next) => {
     await prisma.employeeAdvance.delete({ where: { id: existing.id } });
     const balance = await advanceBalanceFor(existing.employeeId);
     res.json({ deleted: true, advanceId: existing.id, balance });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ----- Marking people in and out of the shift that is running now -----
+//
+// "Mark in" is what the cashier does as staff arrive. It records the time, and
+// who said so, which is a different claim from the app inferring attendance from
+// a sign-in — the register shows which it was.
+router.post('/attendance/mark-in', requirePermission('canManageEmployees'), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const { employeeIds, shiftReportId, at } = markInSchema.parse(req.body);
+    const when = at ? new Date(at) : new Date();
+
+    const valid = await prisma.employee.findMany({
+      where: { id: { in: employeeIds }, pumpId },
+      select: { id: true, name: true },
+    });
+    if (valid.length !== new Set(employeeIds).size) {
+      throw new AppError(400, 'One or more of those staff are not at this pump');
+    }
+
+    // Against the named shift when given, otherwise whichever one is running.
+    let reportDate: Date;
+    let shiftType: 'DAY' | 'NIGHT';
+    let shiftId: string | null = shiftReportId ?? null;
+    if (shiftReportId) {
+      const shift = await prisma.shiftReport.findFirst({
+        where: { id: shiftReportId, pumpId },
+        select: { id: true, reportDate: true, shiftType: true },
+      });
+      if (!shift) throw new AppError(404, 'Shift not found');
+      reportDate = shift.reportDate;
+      shiftType = shift.shiftType;
+    } else {
+      const pump = await prisma.pump.findUniqueOrThrow({
+        where: { id: pumpId },
+        select: { dayShiftStartsAtMin: true, nightShiftStartsAtMin: true },
+      });
+      const w = windowFor(pump, when);
+      reportDate = w.reportDate;
+      shiftType = w.shiftType;
+      const running = await prisma.shiftReport.findUnique({
+        where: { pumpId_reportDate_shiftType: { pumpId, reportDate, shiftType } },
+        select: { id: true },
+      });
+      shiftId = running?.id ?? null;
+    }
+
+    const rows = [];
+    for (const e of valid) {
+      rows.push(
+        await markAttendanceForShift(prisma, {
+          employeeId: e.id,
+          reportDate,
+          shiftType,
+          shiftReportId: shiftId,
+          source: 'MANUAL',
+          markedById: req.user!.userId,
+          checkInAt: when,
+        }),
+      );
+    }
+    res.json({
+      marked: rows.length,
+      attendanceDate: reportDate.toISOString().slice(0, 10),
+      shiftType,
+      rows,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/attendance/mark-out', requirePermission('canManageEmployees'), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const { employeeIds, shiftReportId, at } = markOutSchema.parse(req.body);
+    const when = at ? new Date(at) : new Date();
+
+    const rows = await prisma.attendance.findMany({
+      where: {
+        employeeId: { in: employeeIds },
+        employee: { pumpId },
+        ...(shiftReportId ? { shiftReportId } : {}),
+        checkOutAt: null,
+      },
+      orderBy: { attendanceDate: 'desc' },
+    });
+    if (rows.length === 0) {
+      throw new AppError(400, 'Nobody is marked in without a finish time');
+    }
+    // Overtime is whatever they worked past a normal 12-hour shift.
+    const updated = [];
+    for (const r of rows) {
+      const minutes = r.checkInAt
+        ? Math.max(0, Math.round((when.getTime() - r.checkInAt.getTime()) / 60000))
+        : 0;
+      updated.push(
+        await prisma.attendance.update({
+          where: { id: r.id },
+          data: {
+            checkOutAt: when,
+            overtimeMinutes: minutes > 12 * 60 ? minutes - 12 * 60 : r.overtimeMinutes,
+          },
+        }),
+      );
+    }
+    res.json({ marked: updated.length, rows: updated });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Who is on the floor right now, for the cashier's mark-in screen.
+router.get('/attendance/current', async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const pump = await prisma.pump.findUniqueOrThrow({
+      where: { id: pumpId },
+      select: { dayShiftStartsAtMin: true, nightShiftStartsAtMin: true, autoMarkAttendance: true },
+    });
+    const w = windowFor(pump);
+    const [staff, marked, shift] = await Promise.all([
+      prisma.employee.findMany({
+        where: { pumpId, isActive: true },
+        select: { id: true, name: true, code: true, designation: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.attendance.findMany({
+        where: {
+          employee: { pumpId },
+          attendanceDate: w.reportDate,
+          shiftType: w.shiftType,
+        },
+      }),
+      prisma.shiftReport.findUnique({
+        where: {
+          pumpId_reportDate_shiftType: {
+            pumpId,
+            reportDate: w.reportDate,
+            shiftType: w.shiftType,
+          },
+        },
+        select: { id: true, status: true },
+      }),
+    ]);
+    const byEmployee = new Map(marked.map((m) => [m.employeeId, m]));
+    res.json({
+      attendanceDate: w.reportDate.toISOString().slice(0, 10),
+      shiftType: w.shiftType,
+      shift,
+      autoMarkAttendance: pump.autoMarkAttendance,
+      staff: staff.map((s) => {
+        const row = byEmployee.get(s.id);
+        return {
+          ...s,
+          attendanceId: row?.id ?? null,
+          status: row?.status ?? null,
+          source: row?.source ?? null,
+          checkInAt: row?.checkInAt ?? null,
+          checkOutAt: row?.checkOutAt ?? null,
+        };
+      }),
+    });
   } catch (e) {
     next(e);
   }

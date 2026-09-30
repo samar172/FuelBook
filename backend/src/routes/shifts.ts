@@ -20,6 +20,7 @@ import { recomputeShift } from '../services/shiftCalc';
 import { computeEmployeeExpectations, syncHandoverExpectations } from '../services/ledger';
 import { postShiftJournal, reverseShiftJournal } from '../services/ledgerPosting';
 import { isAttendantRole } from '../services/roles';
+import { ensureShiftForNow, windowFor } from '../services/shiftAuto';
 import { logAudit } from '../services/audit';
 import { ShiftStatus } from '@prisma/client';
 import { AppError } from '../middleware/error';
@@ -133,6 +134,70 @@ router.post('/', requirePermission('canCreateShift'), async (req, res, next) => 
 
     await logAudit(req.user!.userId, 'shift.create', 'ShiftReport', shift.id, null, shift);
     res.status(201).json(shift);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Which shift should be running right now, and whether it exists yet. The screen
+// uses this to offer "start today's shift" without guessing at the clock itself.
+router.get('/current', async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const pump = await prisma.pump.findUniqueOrThrow({
+      where: { id: pumpId },
+      select: {
+        autoStartShift: true,
+        autoMarkAttendance: true,
+        dayShiftStartsAtMin: true,
+        nightShiftStartsAtMin: true,
+      },
+    });
+    const w = windowFor(pump);
+    const shift = await prisma.shiftReport.findUnique({
+      where: {
+        pumpId_reportDate_shiftType: {
+          pumpId,
+          reportDate: w.reportDate,
+          shiftType: w.shiftType,
+        },
+      },
+      include: { employeeAssignments: { include: { employee: true, nozzle: true } } },
+    });
+    res.json({
+      window: {
+        reportDate: w.reportDate.toISOString().slice(0, 10),
+        shiftType: w.shiftType,
+        startsAtMin: w.startsAtMin,
+      },
+      shift,
+      exists: Boolean(shift),
+      autoStartShift: pump.autoStartShift,
+      autoMarkAttendance: pump.autoMarkAttendance,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Open the shift for right now. The button behind "start today's shift"; also what
+// runs at sign-in when the pump has asked for it.
+router.post('/ensure-current', requirePermission('canCreateShift'), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const result = await ensureShiftForNow(pumpId, req.user!.userId, { force: true });
+    if (!result.shift) throw new AppError(400, result.reason ?? 'Could not start the shift');
+    if (result.created) {
+      await logAudit(req.user!.userId, 'shift.autoStart', 'ShiftReport', result.shift.id, null, result.shift);
+    }
+    res.status(result.created ? 201 : 200).json({
+      shift: result.shift,
+      created: result.created,
+      window: {
+        reportDate: result.window.reportDate.toISOString().slice(0, 10),
+        shiftType: result.window.shiftType,
+      },
+    });
   } catch (e) {
     next(e);
   }

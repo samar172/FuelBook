@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { CheckCheck, Save } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import LiveAttendance from "./LiveAttendance";
 import {
   ATTENDANCE_CELL_CLASS,
   ATTENDANCE_LABELS,
@@ -154,6 +155,7 @@ export default function AttendanceSection() {
 
   return (
     <div className="space-y-6">
+      <LiveAttendance />
       {/* ===== Marker ===== */}
       <Card>
         <CardHeader>

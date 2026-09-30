@@ -248,6 +248,18 @@ export const setup = {
     // ---- shared ----
     "settings.deactivate": "Deactivate",
     "settings.activate": "Activate",
+
+    // ---- daily running ----
+    "settings.dailyRunningHeading": "Daily running",
+    "settings.autoStartShift": "Open the day's shift automatically",
+    "settings.autoStartShiftHelp": "When the first person signs in and today's shift has not been started, it opens by itself. You can still start it by hand.",
+    "settings.autoMarkAttendance": "Mark staff present when they sign in",
+    "settings.autoMarkAttendanceHelp": "A sign-in marks that person present for the shift running now. If you already marked them absent or half day, that stays.",
+    "settings.dayShiftStarts": "Day shift starts at",
+    "settings.nightShiftStarts": "Night shift starts at",
+    "settings.nightDatedNote": "A night shift is dated by the day it began. A night shift that starts at 18:00 on the 5th and runs past midnight still counts as the 5th.",
+    "settings.timesRequired": "Enter both shift start times",
+    "settings.timesDiffer": "Day and night shifts cannot start at the same time",
   },
   hi: {
     // ---- pump setup shell ----
@@ -498,5 +510,17 @@ export const setup = {
     // ---- shared ----
     "settings.deactivate": "बंद करें",
     "settings.activate": "चालू करें",
+
+    // ---- daily running ----
+    "settings.dailyRunningHeading": "रोज़ का चलन",
+    "settings.autoStartShift": "दिन की शिफ़्ट अपने-आप खोलें",
+    "settings.autoStartShiftHelp": "आज की शिफ़्ट शुरू नहीं हुई हो और पहला आदमी साइन-इन करे, तो शिफ़्ट अपने-आप खुल जाएगी। हाथ से भी शुरू कर सकते हैं।",
+    "settings.autoMarkAttendance": "साइन-इन पर स्टाफ़ की हाजिरी लगाएँ",
+    "settings.autoMarkAttendanceHelp": "साइन-इन करते ही उस आदमी की चालू शिफ़्ट में हाजिरी लग जाएगी। अगर आपने पहले ही उसे गैरहाज़िर या आधा दिन लगाया है, तो वही रहेगा।",
+    "settings.dayShiftStarts": "दिन की शिफ़्ट शुरू होने का समय",
+    "settings.nightShiftStarts": "रात की शिफ़्ट शुरू होने का समय",
+    "settings.nightDatedNote": "रात की शिफ़्ट उसी दिन की गिनी जाती है जिस दिन वह शुरू हुई। 5 तारीख़ को शाम 6 बजे शुरू होकर आधी रात के बाद चलने वाली शिफ़्ट भी 5 तारीख़ की ही मानी जाएगी।",
+    "settings.timesRequired": "दोनों शिफ़्ट के शुरू होने का समय भरें",
+    "settings.timesDiffer": "दिन और रात की शिफ़्ट एक ही समय पर शुरू नहीं हो सकतीं",
   },
 };

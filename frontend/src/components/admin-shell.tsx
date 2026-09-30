@@ -29,6 +29,7 @@ import {
   Compass,
   Landmark,
   type LucideIcon,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiUser, clearAuth, getAuthUser, setAuth } from "@/lib/api";
@@ -242,7 +243,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <SidebarNav pathname={pathname} user={user} />
+            <SidebarNav pathname={pathname} user={user} onNavigate={() => setNavOpen(false)} />
             <SidebarFooter user={user} onLogout={logout} />
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
@@ -390,42 +391,102 @@ function SidebarBranding({
   );
 }
 
-function SidebarNav({ pathname, user }: { pathname: string; user: ApiUser }) {
+const GROUP_STATE_KEY = "fuelbook.nav.collapsed";
+
+/** Which groups the user has collapsed, remembered per device. */
+function useCollapsedGroups() {
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(GROUP_STATE_KEY);
+      if (raw) setCollapsed(JSON.parse(raw));
+    } catch {
+      // Storage blocked or corrupt — everything simply starts expanded.
+    }
+  }, []);
+
+  const toggle = (key: string) =>
+    setCollapsed((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      try {
+        window.localStorage.setItem(GROUP_STATE_KEY, JSON.stringify(next));
+      } catch {
+        // Not remembering the choice is not a reason to refuse it.
+      }
+      return next;
+    });
+
+  return { collapsed, toggle };
+}
+
+function SidebarNav({
+  pathname,
+  user,
+  onNavigate,
+}: {
+  pathname: string;
+  user: ApiUser;
+  onNavigate?: () => void;
+}) {
   const { t } = useT();
+  const { collapsed, toggle } = useCollapsedGroups();
   const can = visibleTo(user);
   // A group with nothing the user may open is dropped entirely, so a cashier does
   // not see an empty "Finance" heading.
   const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter(can) })).filter(
     (g) => g.items.length > 0
   );
+
   return (
-    <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
-      {groups.map((group) => (
-        <div key={group.key} className="space-y-1">
-          <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {t(group.key, group.label)}
+    <nav className="flex-1 p-2 space-y-2 overflow-y-auto">
+      {groups.map((group) => {
+        // A collapsed group still opens itself when you are inside it, so the
+        // current page is never hidden behind a closed heading.
+        const hasActive = group.items.some(
+          (n) => pathname === n.href || pathname.startsWith(n.href + "/")
+        );
+        const isOpen = !collapsed.includes(group.key) || hasActive;
+        return (
+          <div key={group.key}>
+            <button
+              type="button"
+              onClick={() => toggle(group.key)}
+              aria-expanded={isOpen}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-slate-100"
+            >
+              <span className="truncate">{t(group.key, group.label)}</span>
+              <ChevronDown
+                className={cn("h-3.5 w-3.5 shrink-0 transition-transform", !isOpen && "-rotate-90")}
+              />
+            </button>
+            {isOpen && (
+              <div className="mt-0.5 space-y-1">
+                {group.items.map((n) => {
+                  const active = pathname === n.href || pathname.startsWith(n.href + "/");
+                  const Icon = n.icon;
+                  return (
+                    <Link
+                      key={n.href}
+                      href={n.href}
+                      onClick={onNavigate}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors",
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "text-slate-700 hover:bg-slate-100 active:bg-slate-200",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{t(n.key, n.label)}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          {group.items.map((n) => {
-            const active = pathname === n.href || pathname.startsWith(n.href + "/");
-            const Icon = n.icon;
-            return (
-              <Link
-                key={n.href}
-                href={n.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "text-slate-700 hover:bg-slate-100 active:bg-slate-200",
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{t(n.key, n.label)}</span>
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }
