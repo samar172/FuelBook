@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { prisma } from '../lib/db';
-import { requireAuth, requirePermission } from '../middleware/auth';
-import { createEmployeeSchema, updateEmployeeSchema } from '../schemas';
+import { requireAuth, requirePermission, requireRole } from '../middleware/auth';
+import { createEmployeeSchema, updateEmployeeSchema, transferEmployeeSchema } from '../schemas';
 import { AppError } from '../middleware/error';
-import { FuelType } from '@prisma/client';
+import { logAudit } from '../services/audit';
+import { FuelType, Role } from '@prisma/client';
 
 const router = Router();
 router.use(requireAuth);
@@ -94,6 +95,91 @@ router.post('/:id/reactivate', requirePermission('canManageEmployees'), async (r
       data: { isActive: true, exitDate: null },
     });
     res.json(employee);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Move a staff member to another pump of the same business.
+//
+// Staff belong to one pump: that is what makes "whose cash is this" answerable.
+// Moving someone is therefore an owner's decision, and their history stays where
+// it happened — past shifts, cash and dues remain on the old pump's books, and
+// nothing already recorded is rewritten.
+router.post('/:id/transfer', requireRole(Role.OWNER), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const { toPumpId, reason } = transferEmployeeSchema.parse(req.body);
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: req.params.id, pumpId },
+      include: { pump: { select: { id: true, name: true, businessId: true } } },
+    });
+    if (!employee) throw new AppError(404, 'Employee not found');
+    if (toPumpId === pumpId) throw new AppError(400, 'That is the pump they are already at');
+
+    const target = await prisma.pump.findFirst({
+      where: { id: toPumpId, businessId: employee.pump.businessId },
+      select: { id: true, name: true },
+    });
+    if (!target) {
+      throw new AppError(400, 'That pump is not part of this business');
+    }
+
+    const moved = await prisma.$transaction(async (tx) => {
+      // A login follows the person to the new pump, or it would point at a pump
+      // they no longer work at.
+      await tx.user.updateMany({ where: { employeeId: employee.id }, data: { pumpId: target.id } });
+      return tx.employee.update({
+        where: { id: employee.id },
+        data: {
+          pumpId: target.id,
+          notes: [
+            employee.notes,
+            `Transferred from ${employee.pump.name} to ${target.name} on ${new Date()
+              .toISOString()
+              .slice(0, 10)}${reason ? ` — ${reason}` : ''}`,
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        },
+      });
+    });
+
+    await logAudit(
+      req.user!.userId,
+      'employee.transfer',
+      'Employee',
+      employee.id,
+      { pumpId: employee.pumpId },
+      { pumpId: target.id, reason },
+    );
+    res.json({
+      employee: moved,
+      from: { id: employee.pump.id, name: employee.pump.name },
+      to: target,
+      note: 'Past shifts, cash and dues stay with the old pump.',
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Pumps this employee could be moved to (same business, not their current one).
+router.get('/:id/transfer-targets', requireRole(Role.OWNER), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const employee = await prisma.employee.findFirst({
+      where: { id: req.params.id, pumpId },
+      include: { pump: { select: { businessId: true } } },
+    });
+    if (!employee) throw new AppError(404, 'Employee not found');
+    const pumps = await prisma.pump.findMany({
+      where: { businessId: employee.pump.businessId, isActive: true, id: { not: pumpId } },
+      select: { id: true, name: true, code: true, city: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json(pumps);
   } catch (e) {
     next(e);
   }

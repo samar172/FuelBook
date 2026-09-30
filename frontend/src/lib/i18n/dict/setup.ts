@@ -140,20 +140,87 @@ export const setup = {
 
     // ---- users & permissions ----
     "settings.users": "Users & Permissions",
-    "settings.usersDesc": "Add manager / staff and configure exactly what they can do",
+    "settings.usersDesc": "Give each person a role, then fine-tune exactly what they can do",
+    "settings.noUsers": "No logins yet.",
     "settings.addUser": "Add user",
     "settings.addUserTitle": "Add User",
     "settings.pinFourDigits": "PIN (4 digits)",
+    "settings.newPin": "New PIN (leave blank to keep)",
     "settings.role": "Role",
+    "settings.rolePick": "Choose a role",
+    "settings.newRole": "New role",
     "settings.roleManager": "Manager",
     "settings.roleStaff": "Staff",
     "settings.userCreated": "User created",
+    "settings.loginUpdated": "Login updated",
+    "settings.userDeactivated": "Login deactivated",
+    "settings.userReactivated": "Login reactivated",
     "settings.ownerFullAccess": "Owner has full access — no per-permission toggles.",
     "settings.permissionsUpdated": "Permissions updated",
     "settings.savePermissions": "Save permissions",
-    "settings.roleOWNER": "OWNER",
-    "settings.roleMANAGER": "MANAGER",
-    "settings.roleSTAFF": "STAFF",
+    "settings.editPermissions": "Permissions",
+    "settings.editLogin": "Edit login",
+    "settings.editLoginFor": "Edit login — {name}",
+    "settings.permissionsFor": "Permissions — {name}",
+    "settings.permsIntro": "Role: {role}. Tick exactly what this person may do.",
+    "settings.resetToRoleDefaults": "Reset to role defaults",
+    "settings.continue": "Continue",
+
+    // role names, as the roles endpoint returns them
+    "settings.roleOWNER": "Owner",
+    "settings.roleMANAGER": "Manager",
+    "settings.roleACCOUNTANT": "Accountant",
+    "settings.roleCASHIER": "Cashier",
+    "settings.roleATTENDANT": "Nozzle staff",
+    "settings.roleAUDITOR": "Auditor (read-only)",
+    "settings.roleSTAFF": "Staff (old role)",
+    "settings.roleDescOWNER": "Everything, including other pumps, users and the books.",
+    "settings.roleDescMANAGER":
+      "Runs the pump day to day: shifts, staff, customers, rates. Can lock a shift.",
+    "settings.roleDescACCOUNTANT":
+      "The books, statements, settlement and reports. Cannot enter or lock shifts.",
+    "settings.roleDescCASHIER":
+      "Collections, cash drops, hand-overs and deposits. Cannot lock a shift.",
+    "settings.roleDescATTENDANT": "Nozzle staff: sees only the shifts they worked.",
+    "settings.roleDescAUDITOR": "Read-only access to reports and the books.",
+    "settings.roleDescSTAFF": "Old role kept for existing logins; same as nozzle staff.",
+
+    // the role picker's preview of what a role grants
+    "settings.roleGrants": "This role grants {n} of {total} permissions:",
+    "settings.roleGrantsNone": "Nothing — read-only.",
+    "settings.roleTunableLater": "You can fine-tune any of these afterwards.",
+
+    // linking a login to a staff record
+    "settings.linkedStaff": "This login belongs to staff member",
+    "settings.noStaffLink": "Not linked to any staff record",
+    "settings.linkedStaffHelp":
+      "Linking the login to a staff record is what lets the app show a person the shifts they worked.",
+    "settings.staffLinkedTo": "Staff record: {name}",
+    "settings.staffNotLinked": "No staff record linked",
+    "settings.attendantNeedsStaff":
+      "Nozzle staff see only the shifts they were rostered on. Without a linked staff record this login will see no shifts at all.",
+
+    // changing a role (owner only)
+    "settings.changeRole": "Change role",
+    "settings.changeRoleFor": "Change role — {name}",
+    "settings.roleChanged": "Role changed",
+    "settings.roleUnchanged": "Pick a different role to continue.",
+    "settings.resetPermissions": "Apply this role's default permissions",
+    "settings.resetPermissionsHelp": "Unticked, the person keeps the permissions they have now.",
+    "settings.confirmRoleLine": "{name} becomes {role}.",
+    "settings.confirmRoleReset":
+      "Their permissions will be replaced with this role's defaults. Any fine-tuning done earlier is discarded.",
+    "settings.confirmRoleKeep":
+      "Their existing permissions are kept exactly as they are — only the role label changes.",
+    "settings.confirmChangeRole": "Yes, change the role",
+
+    // permission groups
+    "settings.permGroup.shifts": "Shifts",
+    "settings.permGroup.money": "Money",
+    "settings.permGroup.people": "Customers & staff",
+    "settings.permGroup.books": "Books",
+    "settings.permGroup.setup": "Setup",
+
     "settings.permCreateShift": "Create new shift",
     "settings.permEditNozzleReadings": "Edit nozzle readings",
     "settings.permEditStock": "Edit stock entries",
@@ -172,6 +239,11 @@ export const setup = {
     "settings.permViewReports": "View reports",
     "settings.permExportReports": "Export reports",
     "settings.permManageEmployees": "Manage employees",
+    "settings.permViewBooks": "View the books",
+    "settings.permPostJournalEntries": "Post journal entries",
+    "settings.permManageBankAndSettlement": "Bank deposits & settlement",
+    "settings.permManageProducts": "Manage lubes & non-fuel",
+    "settings.permManageLicences": "Manage licences",
 
     // ---- shared ----
     "settings.deactivate": "Deactivate",
@@ -318,20 +390,87 @@ export const setup = {
 
     // ---- users & permissions ----
     "settings.users": "यूज़र और अधिकार",
-    "settings.usersDesc": "मैनेजर / स्टाफ़ जोड़ें और तय करें कि वे क्या-क्या कर सकते हैं",
+    "settings.usersDesc": "हर व्यक्ति को एक भूमिका दें, फिर तय करें कि वे क्या-क्या कर सकते हैं",
+    "settings.noUsers": "अभी कोई लॉगिन नहीं।",
     "settings.addUser": "यूज़र जोड़ें",
     "settings.addUserTitle": "यूज़र जोड़ें",
     "settings.pinFourDigits": "पिन (4 अंक)",
+    "settings.newPin": "नया पिन (खाली छोड़ें तो वही रहेगा)",
     "settings.role": "भूमिका",
+    "settings.rolePick": "भूमिका चुनें",
+    "settings.newRole": "नई भूमिका",
     "settings.roleManager": "मैनेजर",
     "settings.roleStaff": "स्टाफ़",
     "settings.userCreated": "यूज़र बन गया",
+    "settings.loginUpdated": "लॉगिन अपडेट हो गया",
+    "settings.userDeactivated": "लॉगिन बंद कर दिया गया",
+    "settings.userReactivated": "लॉगिन फिर चालू हो गया",
     "settings.ownerFullAccess": "मालिक के पास पूरा अधिकार है — अलग से कुछ चुनने की ज़रूरत नहीं।",
     "settings.permissionsUpdated": "अधिकार अपडेट हो गए",
     "settings.savePermissions": "अधिकार सेव करें",
+    "settings.editPermissions": "अधिकार",
+    "settings.editLogin": "लॉगिन बदलें",
+    "settings.editLoginFor": "लॉगिन बदलें — {name}",
+    "settings.permissionsFor": "अधिकार — {name}",
+    "settings.permsIntro": "भूमिका: {role}. जो-जो कर सकते हैं, उन पर टिक करें।",
+    "settings.resetToRoleDefaults": "भूमिका के डिफ़ॉल्ट पर वापस लाएँ",
+    "settings.continue": "आगे बढ़ें",
+
+    // role names, as the roles endpoint returns them
     "settings.roleOWNER": "मालिक",
     "settings.roleMANAGER": "मैनेजर",
-    "settings.roleSTAFF": "स्टाफ़",
+    "settings.roleACCOUNTANT": "अकाउंटेंट",
+    "settings.roleCASHIER": "कैशियर",
+    "settings.roleATTENDANT": "सेल्समैन",
+    "settings.roleAUDITOR": "ऑडिटर (सिर्फ़ देखना)",
+    "settings.roleSTAFF": "स्टाफ़ (पुरानी भूमिका)",
+    "settings.roleDescOWNER": "सब कुछ — दूसरे पंप, यूज़र और बहीखाता भी।",
+    "settings.roleDescMANAGER":
+      "रोज़ का पंप चलाना: शिफ़्ट, कर्मचारी, ग्राहक, रेट। शिफ़्ट लॉक भी कर सकते हैं।",
+    "settings.roleDescACCOUNTANT":
+      "बहीखाता, खाता विवरण, सेटलमेंट और रिपोर्ट। शिफ़्ट न बना सकते हैं, न लॉक कर सकते हैं।",
+    "settings.roleDescCASHIER":
+      "वसूली, बीच शिफ़्ट में जमा, नकद जमा और बैंक जमा। शिफ़्ट लॉक नहीं कर सकते।",
+    "settings.roleDescATTENDANT": "सेल्समैन: सिर्फ़ अपनी की हुई शिफ़्ट दिखती हैं।",
+    "settings.roleDescAUDITOR": "रिपोर्ट और बहीखाता सिर्फ़ देख सकते हैं।",
+    "settings.roleDescSTAFF": "पुरानी भूमिका, पुराने लॉगिन के लिए — सेल्समैन जैसी ही।",
+
+    // the role picker's preview of what a role grants
+    "settings.roleGrants": "इस भूमिका को {total} में से {n} अधिकार मिलते हैं:",
+    "settings.roleGrantsNone": "कुछ नहीं — सिर्फ़ देखना।",
+    "settings.roleTunableLater": "ये सब बाद में अलग-अलग बदल सकते हैं।",
+
+    // linking a login to a staff record
+    "settings.linkedStaff": "यह लॉगिन इस कर्मचारी का है",
+    "settings.noStaffLink": "किसी कर्मचारी से नहीं जुड़ा",
+    "settings.linkedStaffHelp":
+      "लॉगिन को कर्मचारी से जोड़ने पर ही ऐप उन्हें उनकी की हुई शिफ़्ट दिखा पाता है।",
+    "settings.staffLinkedTo": "कर्मचारी: {name}",
+    "settings.staffNotLinked": "किसी कर्मचारी से नहीं जुड़ा",
+    "settings.attendantNeedsStaff":
+      "सेल्समैन को सिर्फ़ वही शिफ़्ट दिखती हैं जिनमें उनकी ड्यूटी थी। कर्मचारी से जोड़े बिना इस लॉगिन को एक भी शिफ़्ट नहीं दिखेगी।",
+
+    // changing a role (owner only)
+    "settings.changeRole": "भूमिका बदलें",
+    "settings.changeRoleFor": "भूमिका बदलें — {name}",
+    "settings.roleChanged": "भूमिका बदल गई",
+    "settings.roleUnchanged": "आगे बढ़ने के लिए कोई दूसरी भूमिका चुनें।",
+    "settings.resetPermissions": "इस भूमिका के डिफ़ॉल्ट अधिकार लगाएँ",
+    "settings.resetPermissionsHelp": "टिक हटाने पर उनके अभी वाले अधिकार वैसे ही बने रहेंगे।",
+    "settings.confirmRoleLine": "{name} अब {role} हो जाएँगे।",
+    "settings.confirmRoleReset":
+      "उनके अधिकार इस भूमिका के डिफ़ॉल्ट से बदल दिए जाएँगे। पहले जो अलग से सेट किया था, वह चला जाएगा।",
+    "settings.confirmRoleKeep":
+      "उनके अभी वाले अधिकार वैसे ही रहेंगे — सिर्फ़ भूमिका का नाम बदलेगा।",
+    "settings.confirmChangeRole": "हाँ, भूमिका बदलें",
+
+    // permission groups
+    "settings.permGroup.shifts": "शिफ़्ट",
+    "settings.permGroup.money": "पैसा",
+    "settings.permGroup.people": "ग्राहक और कर्मचारी",
+    "settings.permGroup.books": "बहीखाता",
+    "settings.permGroup.setup": "सेटअप",
+
     "settings.permCreateShift": "नई शिफ़्ट बनाना",
     "settings.permEditNozzleReadings": "नोज़ल रीडिंग बदलना",
     "settings.permEditStock": "स्टॉक एंट्री बदलना",
@@ -350,6 +489,11 @@ export const setup = {
     "settings.permViewReports": "रिपोर्ट देखना",
     "settings.permExportReports": "रिपोर्ट एक्सपोर्ट करना",
     "settings.permManageEmployees": "कर्मचारी संभालना",
+    "settings.permViewBooks": "बहीखाता देखना",
+    "settings.permPostJournalEntries": "जर्नल एंट्री करना",
+    "settings.permManageBankAndSettlement": "बैंक जमा और सेटलमेंट",
+    "settings.permManageProducts": "ऑयल और नॉन-फ़्यूल संभालना",
+    "settings.permManageLicences": "लाइसेंस संभालना",
 
     // ---- shared ----
     "settings.deactivate": "बंद करें",

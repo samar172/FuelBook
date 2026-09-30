@@ -537,7 +537,7 @@ router.get('/bank-accounts/:id', requirePermission('canViewReports'), async (req
   }
 });
 
-router.post('/bank-accounts', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/bank-accounts', requirePermission('canManageBankAndSettlement'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const data = createBankAccountSchema.parse(req.body);
@@ -558,7 +558,7 @@ router.post('/bank-accounts', requireRole(Role.OWNER), async (req, res, next) =>
   }
 });
 
-router.patch('/bank-accounts/:id', requireRole(Role.OWNER), async (req, res, next) => {
+router.patch('/bank-accounts/:id', requirePermission('canManageBankAndSettlement'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const existing = await findOwnBankAccount(pumpId, req.params.id);
@@ -585,7 +585,7 @@ router.patch('/bank-accounts/:id', requireRole(Role.OWNER), async (req, res, nex
 
 // Retire an account. Anything already recorded against it keeps pointing at it,
 // so this deactivates unless the account was never used.
-router.delete('/bank-accounts/:id', requireRole(Role.OWNER), async (req, res, next) => {
+router.delete('/bank-accounts/:id', requirePermission('canManageBankAndSettlement'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const existing = await findOwnBankAccount(pumpId, req.params.id);
@@ -787,7 +787,7 @@ const settlementInclude = {
 
 // Rebuild the expected side of every non-cash channel for a date range from the
 // pump's own locked collections. Settled figures already recorded are preserved.
-router.post('/settlements/build', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/settlements/build', requirePermission('canManageBankAndSettlement'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const from = parseDay(req.query.from, 'from');
@@ -965,7 +965,7 @@ router.get('/settlements', requirePermission('canViewReports'), async (req, res,
   }
 });
 
-router.patch('/settlements/:id', requireRole(Role.OWNER), async (req, res, next) => {
+router.patch('/settlements/:id', requirePermission('canManageBankAndSettlement'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const existing = await findOwnSettlement(pumpId, req.params.id);
@@ -1016,7 +1016,7 @@ router.patch('/settlements/:id', requireRole(Role.OWNER), async (req, res, next)
 // overlapping statement twice does not duplicate the month.
 router.post(
   '/bank-accounts/:id/transactions/import',
-  requireRole(Role.OWNER),
+  requirePermission('canManageBankAndSettlement'),
   async (req, res, next) => {
     try {
       const pumpId = requirePump(req);
@@ -1140,7 +1140,7 @@ router.get('/transactions', requirePermission('canViewReports'), async (req, res
   }
 });
 
-router.post('/transactions/:id/match', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/transactions/:id/match', requirePermission('canManageBankAndSettlement'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const txn = await findOwnTransaction(pumpId, req.params.id);
@@ -1197,7 +1197,7 @@ router.post('/transactions/:id/match', requireRole(Role.OWNER), async (req, res,
   }
 });
 
-router.post('/transactions/:id/unmatch', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/transactions/:id/unmatch', requirePermission('canManageBankAndSettlement'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const txn = await findOwnTransaction(pumpId, req.params.id);

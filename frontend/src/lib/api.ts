@@ -32,7 +32,7 @@ export type ApiUser = {
   id: string;
   name: string;
   phone: string;
-  role: "OWNER" | "MANAGER" | "STAFF";
+  role: "OWNER" | "MANAGER" | "ACCOUNTANT" | "CASHIER" | "ATTENDANT" | "AUDITOR" | "STAFF";
   businessId?: string | null;
   businessName?: string;
   pumpId: string | null;

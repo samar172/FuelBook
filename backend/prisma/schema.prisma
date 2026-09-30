@@ -161,10 +161,16 @@ model FuelRate {
 
 // ===================== USERS + PERMISSIONS =====================
 
+/// Who someone is at the pump. Permissions are still per-user; the role only
+/// decides the defaults they start with (see ROLE_PRESETS in services/roles.ts).
 enum Role {
-  OWNER
-  MANAGER
-  STAFF
+  OWNER // the dealer: everything, including other pumps and the books
+  MANAGER // runs the pump day to day, locks shifts, manages staff and customers
+  ACCOUNTANT // books, statements, settlement and reports — no shift data entry
+  CASHIER // collections, cash drops, hand-overs and bank deposits
+  ATTENDANT // nozzle staff: sees only the shifts they worked
+  AUDITOR // read-only, for the CA
+  STAFF // legacy: kept so existing logins keep working, behaves like ATTENDANT
 }
 
 model User {
@@ -180,6 +186,11 @@ model User {
   isActive   Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  // The staff record this login belongs to, when it is one. An attendant's
+  // login needs this to know which shifts are theirs.
+  employeeId String?   @unique
+  employee   Employee? @relation(fields: [employeeId], references: [id])
 
   permissions UserPermission?
 }
@@ -208,6 +219,13 @@ model UserPermission {
   canViewReports             Boolean @default(true)
   canExportReports           Boolean @default(false)
   canManageEmployees         Boolean @default(false)
+
+  // Areas added after the first release. Owners always pass regardless.
+  canViewBooks               Boolean @default(false) // ledger, trial balance, P&L
+  canPostJournalEntries      Boolean @default(false) // manual entries, opening balances
+  canManageBankAndSettlement Boolean @default(false) // bank accounts, card/UPI settlement
+  canManageProducts          Boolean @default(false) // lubricants catalogue
+  canManageLicences          Boolean @default(false) // compliance calendar
 }
 
 // ===================== SHIFT REPORT =====================
@@ -613,6 +631,7 @@ model Employee {
   expensesPaid    ExpenseEntry[]
   shiftsAsCashier ShiftReport[]             @relation("ShiftCashier")
   journalLines    JournalLine[]
+  loginUser       User?
   attendances     Attendance[]
   advances        EmployeeAdvance[]
   cashDeposits    CashDeposit[]

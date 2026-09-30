@@ -19,6 +19,7 @@ import { buildCarryForward, initializeShiftChildren } from '../services/carryFor
 import { recomputeShift } from '../services/shiftCalc';
 import { computeEmployeeExpectations, syncHandoverExpectations } from '../services/ledger';
 import { postShiftJournal, reverseShiftJournal } from '../services/ledgerPosting';
+import { isAttendantRole } from '../services/roles';
 import { logAudit } from '../services/audit';
 import { ShiftStatus } from '@prisma/client';
 import { AppError } from '../middleware/error';
@@ -59,6 +60,20 @@ router.get('/', async (req, res, next) => {
       if (to) where.reportDate.lte = new Date(String(to));
     }
     if (status) where.status = status;
+
+    // Nozzle staff see only the shifts they actually worked. The link runs
+    // login -> staff record -> nozzle assignment; a login with no staff record
+    // attached sees nothing rather than everything.
+    if (isAttendantRole(req.user!.role)) {
+      const me = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: { employeeId: true },
+      });
+      where.employeeAssignments = me?.employeeId
+        ? { some: { employeeId: me.employeeId } }
+        : { some: { employeeId: '__none__' } };
+    }
+
     const shifts = await prisma.shiftReport.findMany({
       where,
       orderBy: [{ reportDate: 'desc' }, { shiftType: 'desc' }],
@@ -128,8 +143,18 @@ router.get('/:id', async (req, res, next) => {
   try {
     // Scoped to the caller's pump: a shift id from another pump must not resolve.
     const pumpId = requirePump(req);
+    const scope: any = { id: req.params.id, pumpId };
+    if (isAttendantRole(req.user!.role)) {
+      const me = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: { employeeId: true },
+      });
+      scope.employeeAssignments = me?.employeeId
+        ? { some: { employeeId: me.employeeId } }
+        : { some: { employeeId: '__none__' } };
+    }
     const shift = await prisma.shiftReport.findFirst({
-      where: { id: req.params.id, pumpId },
+      where: scope,
       include: {
         nozzleReadings: { include: { nozzle: true } },
         stockEntries: { include: { tank: true } },
@@ -376,6 +401,17 @@ router.put(
       }
 
       const result = await prisma.$transaction(async (tx) => {
+        // This is a PUT: the payload is the whole roster for the shift. Anything
+        // not in it is removed, so taking someone off a nozzle actually sticks —
+        // it previously only ever added, which made an assignment impossible to
+        // undo (and, now that attendants see the shifts they are rostered on,
+        // impossible to revoke).
+        await tx.shiftEmployeeAssignment.deleteMany({
+          where: {
+            shiftReportId: shift.id,
+            nozzleId: { notIn: assignments.length ? assignments.map((a) => a.nozzleId) : ['__none__'] },
+          },
+        });
         for (const a of assignments) {
           await tx.shiftEmployeeAssignment.upsert({
             where: { shiftReportId_nozzleId: { shiftReportId: shift.id, nozzleId: a.nozzleId } },
@@ -911,8 +947,18 @@ router.post('/:id/cash-drops', requirePermission('canEditCollections'), async (r
 router.get('/:id/cash-drops', async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
+    const scope: any = { id: req.params.id, pumpId };
+    if (isAttendantRole(req.user!.role)) {
+      const me = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: { employeeId: true },
+      });
+      scope.employeeAssignments = me?.employeeId
+        ? { some: { employeeId: me.employeeId } }
+        : { some: { employeeId: '__none__' } };
+    }
     const shift = await prisma.shiftReport.findFirst({
-      where: { id: req.params.id, pumpId },
+      where: scope,
       select: { id: true },
     });
     if (!shift) throw new AppError(404, 'Shift not found');

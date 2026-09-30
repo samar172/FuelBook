@@ -242,6 +242,18 @@ export const compliance = {
     "employees.shiftType.DAY": "Day",
     "employees.shiftType.NIGHT": "Night",
 
+    // transfer to another pump (owner only)
+    "employees.transfer": "Move to another pump",
+    "employees.transferTitle": "Move {name} to another pump",
+    "employees.transferTo": "Move to",
+    "employees.transferPick": "Choose a pump",
+    "employees.transferReason": "Reason (optional)",
+    "employees.transferWarning":
+      "Their past shifts, cash and dues stay with the old pump — nothing already recorded is moved. Any login they have follows them to the new pump.",
+    "employees.transferConfirm": "Yes, move them",
+    "employees.transferred": "{name} moved from {from} to {to}",
+    "employees.transferFailed": "Could not move this employee",
+
     // ── expense categories ──────────────────────────────────────────────────
     "expenses.title": "Expense Categories",
     "expenses.subtitle": "Categories shown when entering expenses on a shift",
@@ -511,6 +523,18 @@ export const compliance = {
     "employees.noAssignments": "अभी कोई शिफ़्ट ड्यूटी नहीं",
     "employees.shiftType.DAY": "दिन",
     "employees.shiftType.NIGHT": "रात",
+
+    // transfer to another pump (owner only)
+    "employees.transfer": "दूसरे पंप पर भेजें",
+    "employees.transferTitle": "{name} को दूसरे पंप पर भेजें",
+    "employees.transferTo": "कहाँ भेजना है",
+    "employees.transferPick": "पंप चुनें",
+    "employees.transferReason": "कारण (ज़रूरी नहीं)",
+    "employees.transferWarning":
+      "उनकी पुरानी शिफ़्ट, नकद और बकाया पुराने पंप पर ही रहेंगे — पहले की कोई एंट्री नहीं हटेगी। उनका लॉगिन उनके साथ नए पंप पर चला जाएगा।",
+    "employees.transferConfirm": "हाँ, भेज दें",
+    "employees.transferred": "{name} को {from} से {to} भेज दिया गया",
+    "employees.transferFailed": "यह कर्मचारी भेजा नहीं जा सका",
 
     "expenses.title": "खर्च की श्रेणियाँ",
     "expenses.subtitle": "शिफ़्ट में खर्च डालते समय यही श्रेणियाँ दिखती हैं",

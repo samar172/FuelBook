@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Compass,
   Landmark,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiUser, clearAuth, getAuthUser, setAuth } from "@/lib/api";
@@ -46,33 +47,59 @@ import { LanguageSwitch } from "@/components/language-switch";
 
 // The handful of places staff actually go on a phone. Everything else lives behind
 // "More", which opens the same drawer the desktop sidebar shows.
-const MOBILE_TABS = [
+const MOBILE_TABS: NavItem[] = [
   { href: "/dashboard", label: "Home", key: "tab.home", icon: LayoutDashboard },
   { href: "/shifts", label: "Shifts", key: "tab.shifts", icon: ClipboardList },
-  { href: "/cash", label: "Cash", key: "tab.cash", icon: Banknote },
-  { href: "/reports", label: "Reports", key: "tab.reports", icon: BarChart3 },
-] as const;
+  { href: "/cash", label: "Cash", key: "tab.cash", icon: Banknote, anyPerm: ["canEditCollections", "canManageBankAndSettlement"] },
+  { href: "/reports", label: "Reports", key: "tab.reports", icon: BarChart3, anyPerm: ["canViewReports"] },
+];
 
-const NAV = [
+/**
+ * A nav item is hidden when the signed-in user holds none of `anyPerm`. This is a
+ * courtesy, not the control — every route is enforced server-side — so anything
+ * whose mapping is not obvious (the dashboard, shift reports, wet stock) carries no
+ * `anyPerm` and stays visible for everyone.
+ */
+type NavItem = {
+  href: string;
+  label: string;
+  key: string;
+  icon: LucideIcon;
+  ownerOnly?: boolean;
+  anyPerm?: string[];
+};
+
+function visibleTo(user: ApiUser) {
+  return (item: NavItem) => {
+    if (item.ownerOnly && user.role !== "OWNER") return false;
+    if (!item.anyPerm) return true;
+    // An owner passes every check, and a user whose permissions have not loaded
+    // keeps the full menu rather than an empty one.
+    if (user.role === "OWNER" || !user.permissions) return true;
+    return item.anyPerm.some((p) => user.permissions?.[p]);
+  };
+}
+
+const NAV: NavItem[] = [
   { href: "/guide", label: "Setup Guide", key: "nav.guide", icon: Compass },
   { href: "/dashboard", label: "Dashboard", key: "nav.dashboard", icon: LayoutDashboard },
   { href: "/shifts", label: "Shift Reports", key: "nav.shifts", icon: ClipboardList },
   { href: "/wet-stock", label: "Wet Stock & Testing", key: "nav.wetStock", icon: Gauge },
-  { href: "/tanker-receipts", label: "Tanker Receipts", key: "nav.tankers", icon: Truck },
-  { href: "/cash", label: "Cash & Bank", key: "nav.cash", icon: Banknote },
-  { href: "/credit", label: "Credit Customers", key: "nav.credit", icon: Wallet },
-  { href: "/receivables", label: "Statements & Cheques", key: "nav.receivables", icon: FileText },
-  { href: "/products", label: "Lubes & Non-Fuel", key: "nav.products", icon: Package },
-  { href: "/pricing", label: "Price Revisions", key: "nav.pricing", icon: IndianRupee },
-  { href: "/rates", label: "Fuel Rates", key: "nav.rates", icon: Fuel },
-  { href: "/employees", label: "Employees", key: "nav.employees", icon: HardHat },
-  { href: "/compliance", label: "Compliance & Staff", key: "nav.compliance", icon: ShieldCheck },
-  { href: "/expenses", label: "Expense Categories", key: "nav.expenses", icon: Tags },
-  { href: "/reports", label: "Reports", key: "nav.reports", icon: BarChart3 },
-  { href: "/books", label: "Books (Ledger)", key: "nav.books", icon: BookOpen },
-  { href: "/opening-balances", label: "Opening Balances", key: "nav.opening", icon: Landmark },
-  { href: "/settings/users", label: "Users", key: "nav.users", icon: Users },
-  { href: "/settings/pump", label: "Pump Setup", key: "nav.pumpSetup", icon: Settings },
+  { href: "/tanker-receipts", label: "Tanker Receipts", key: "nav.tankers", icon: Truck, anyPerm: ["canEditTankerReceipts", "canEditStock"] },
+  { href: "/cash", label: "Cash & Bank", key: "nav.cash", icon: Banknote, anyPerm: ["canEditCollections", "canManageBankAndSettlement"] },
+  { href: "/credit", label: "Credit Customers", key: "nav.credit", icon: Wallet, anyPerm: ["canManageCreditCustomers", "canEditCreditSales"] },
+  { href: "/receivables", label: "Statements & Cheques", key: "nav.receivables", icon: FileText, anyPerm: ["canManageCreditCustomers", "canViewBooks"] },
+  { href: "/products", label: "Lubes & Non-Fuel", key: "nav.products", icon: Package, anyPerm: ["canManageProducts"] },
+  { href: "/pricing", label: "Price Revisions", key: "nav.pricing", icon: IndianRupee, anyPerm: ["canEditFuelRates"] },
+  { href: "/rates", label: "Fuel Rates", key: "nav.rates", icon: Fuel, anyPerm: ["canEditFuelRates"] },
+  { href: "/employees", label: "Employees", key: "nav.employees", icon: HardHat, anyPerm: ["canManageEmployees"] },
+  { href: "/compliance", label: "Compliance & Staff", key: "nav.compliance", icon: ShieldCheck, anyPerm: ["canManageLicences", "canManageEmployees"] },
+  { href: "/expenses", label: "Expense Categories", key: "nav.expenses", icon: Tags, anyPerm: ["canManageExpenseCategories"] },
+  { href: "/reports", label: "Reports", key: "nav.reports", icon: BarChart3, anyPerm: ["canViewReports"] },
+  { href: "/books", label: "Books (Ledger)", key: "nav.books", icon: BookOpen, anyPerm: ["canViewBooks"] },
+  { href: "/opening-balances", label: "Opening Balances", key: "nav.opening", icon: Landmark, anyPerm: ["canViewBooks"] },
+  { href: "/settings/users", label: "Users", key: "nav.users", icon: Users, anyPerm: ["canManageUsers"] },
+  { href: "/settings/pump", label: "Pump Setup", key: "nav.pumpSetup", icon: Settings, anyPerm: ["canManagePump"] },
   { href: "/settings/pumps", label: "Manage Pumps", key: "nav.managePumps", icon: Building2, ownerOnly: true },
 ];
 
@@ -142,7 +169,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           variant={user.role === "OWNER" ? "default" : "secondary"}
           className="text-[10px]"
         >
-          {user.role}
+          {t(`settings.role${user.role}`, user.role)}
         </Badge>
       </header>
 
@@ -190,7 +217,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      <MobileTabBar pathname={pathname} onMore={() => setNavOpen(true)} moreOpen={navOpen} />
+      <MobileTabBar pathname={pathname} user={user} onMore={() => setNavOpen(true)} moreOpen={navOpen} />
     </div>
   );
 }
@@ -202,19 +229,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
  */
 function MobileTabBar({
   pathname,
+  user,
   onMore,
   moreOpen,
 }: {
   pathname: string;
+  user: ApiUser;
   onMore: () => void;
   moreOpen: boolean;
 }) {
   const { t } = useT();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
-  // A section that is not one of the four tabs is still "somewhere", so More owns it.
-  const otherActive =
-    !moreOpen && !MOBILE_TABS.some((item) => isActive(item.href));
+  const tabs = MOBILE_TABS.filter(visibleTo(user));
+  // A section that is not one of the tabs is still "somewhere", so More owns it.
+  const otherActive = !moreOpen && !tabs.some((item) => isActive(item.href));
 
   return (
     <nav
@@ -222,8 +251,11 @@ function MobileTabBar({
       className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t bg-white"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <div className="grid grid-cols-5">
-        {MOBILE_TABS.map((item) => {
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}
+      >
+        {tabs.map((item) => {
           const active = isActive(item.href);
           return (
             <Link
@@ -322,7 +354,7 @@ function SidebarBranding({
 
 function SidebarNav({ pathname, user }: { pathname: string; user: ApiUser }) {
   const { t } = useT();
-  const items = NAV.filter((n) => !n.ownerOnly || user.role === "OWNER");
+  const items = NAV.filter(visibleTo(user));
   return (
     <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
       {items.map((n) => {
@@ -370,7 +402,7 @@ function SidebarFooter({
           variant={user.role === "OWNER" ? "default" : "secondary"}
           className="text-[10px]"
         >
-          {user.role}
+          {t(`settings.role${user.role}`, user.role)}
         </Badge>
       </div>
       <Button variant="outline" size="sm" className="w-full" onClick={onLogout}>

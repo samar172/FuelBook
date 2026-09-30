@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, can } from "@/lib/api";
+import { api, can, getAuthUser } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
 import { apiError, toDateInput, type Employee } from "@/lib/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Pencil, UserCheck, UserX } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Pencil, UserCheck, UserX } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useDateLocale } from "@/lib/i18n/core";
 
@@ -28,6 +30,8 @@ type Assignment = {
 
 type EmployeeLedger = { employee: Employee; assignments: Assignment[] };
 
+type TransferTarget = { id: string; name: string; code: string | null; city: string | null };
+
 export default function EmployeeLedgerPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const qc = useQueryClient();
@@ -37,10 +41,22 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
   const fmtDate = (iso: string | null | undefined) =>
     iso ? format(new Date(iso), "d MMM yyyy", { locale }) : null;
   const [editOpen, setEditOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const router = useRouter();
+  // Moving staff between pumps is the owner's call; the API refuses anyone else.
+  const isOwner = getAuthUser()?.role === "OWNER";
 
   const { data, isLoading } = useQuery<EmployeeLedger>({
     queryKey: ["employee-ledger", id],
     queryFn: async () => (await api.get(`/api/employees/${id}/ledger`)).data,
+  });
+
+  // No other pump in the business means there is nowhere to move anyone, so the
+  // action is not shown at all.
+  const { data: transferTargets = [] } = useQuery<TransferTarget[]>({
+    queryKey: ["employee-transfer-targets", id],
+    queryFn: async () => (await api.get(`/api/employees/${id}/transfer-targets`)).data,
+    enabled: isOwner,
   });
 
   const refresh = () => {
@@ -83,10 +99,16 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
           </div>
         </div>
         {canManage && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setEditOpen(true)}>
               <Pencil className="h-4 w-4 mr-1" /> {t("employees.editDetails", "Edit details")}
             </Button>
+            {isOwner && transferTargets.length > 0 && (
+              <Button variant="outline" onClick={() => setTransferOpen(true)}>
+                <ArrowRightLeft className="h-4 w-4 mr-1" />{" "}
+                {t("employees.transfer", "Move to another pump")}
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => toggleActive.mutate(!employee.isActive)}
@@ -162,6 +184,26 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
         </CardContent>
       </Card>
 
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("employees.transferTitle", "Move {name} to another pump", { name: employee.name })}</DialogTitle>
+          </DialogHeader>
+          <TransferForm
+            employee={employee}
+            targets={transferTargets}
+            onSuccess={() => {
+              setTransferOpen(false);
+              // They now belong to another pump, so this page's data no longer
+              // exists for the pump we are signed in to — go back to the list.
+              qc.removeQueries({ queryKey: ["employee-ledger", id] });
+              qc.invalidateQueries({ queryKey: ["employees"] });
+              router.push("/employees");
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{t("employees.editTitle", "Edit employee")}</DialogTitle></DialogHeader>
@@ -178,6 +220,101 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
   );
 }
 
+
+/**
+ * Moving a staff member to another pump of the same business. Their history is
+ * deliberately left behind — past shifts, cash and dues belong to the pump where
+ * they happened, which is what makes "whose cash is this" answerable at all.
+ */
+function TransferForm({
+  employee,
+  targets,
+  onSuccess,
+}: {
+  employee: Employee;
+  targets: TransferTarget[];
+  onSuccess: () => void;
+}) {
+  const { t } = useT();
+  const [toPumpId, setToPumpId] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  const move = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post(`/api/employees/${employee.id}/transfer`, {
+          toPumpId,
+          reason: reason.trim() === "" ? null : reason.trim(),
+        })
+      ).data,
+    onSuccess: (res: { from?: { name: string }; to?: { name: string } }) => {
+      toast.success(
+        t("employees.transferred", "{name} moved from {from} to {to}", {
+          name: employee.name,
+          from: res?.from?.name ?? "-",
+          to: res?.to?.name ?? "-",
+        })
+      );
+      onSuccess();
+    },
+    onError: (e) => {
+      const msg = apiError(e, t("employees.transferFailed", "Could not move this employee"));
+      setError(msg);
+      toast.error(msg);
+    },
+  });
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>{t("employees.transferTo", "Move to")}</Label>
+        <Select value={toPumpId} onValueChange={setToPumpId}>
+          <SelectTrigger>
+            <SelectValue placeholder={t("employees.transferPick", "Choose a pump")} />
+          </SelectTrigger>
+          <SelectContent>
+            {targets.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {[p.name, p.city].filter(Boolean).join(" · ")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>{t("employees.transferReason", "Reason (optional)")}</Label>
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} />
+      </div>
+
+      <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+        <span>
+          {t(
+            "employees.transferWarning",
+            "Their past shifts, cash and dues stay with the old pump — nothing already recorded is moved. Any login they have follows them to the new pump."
+          )}
+        </span>
+      </div>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <Button
+        className="w-full"
+        onClick={() => {
+          setError("");
+          move.mutate();
+        }}
+        disabled={!toPumpId || move.isPending}
+      >
+        {move.isPending
+          ? t("common.saving", "Saving…")
+          : t("employees.transferConfirm", "Yes, move them")}
+      </Button>
+    </div>
+  );
+}
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (

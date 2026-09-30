@@ -45,7 +45,7 @@ const today = () => {
   return d;
 };
 
-router.get('/accounts', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/accounts', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     // Lazily bootstrap so a pump created before the ledger existed still works.
@@ -57,7 +57,7 @@ router.get('/accounts', requirePermission('canViewReports'), async (req, res, ne
   }
 });
 
-router.get('/trial-balance', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/trial-balance', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     res.json(
@@ -71,7 +71,7 @@ router.get('/trial-balance', requirePermission('canViewReports'), async (req, re
   }
 });
 
-router.get('/profit-loss', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/profit-loss', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const to = parseDay(req.query.to, today())!;
@@ -85,7 +85,7 @@ router.get('/profit-loss', requirePermission('canViewReports'), async (req, res,
   }
 });
 
-router.get('/balance-sheet', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/balance-sheet', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     res.json(await balanceSheet(pumpId, parseDay(req.query.asOf, today())!));
@@ -94,7 +94,7 @@ router.get('/balance-sheet', requirePermission('canViewReports'), async (req, re
   }
 });
 
-router.get('/subsidiary/customers', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/subsidiary/customers', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     res.json(
       await customerBalances(requirePump(req), {
@@ -107,7 +107,7 @@ router.get('/subsidiary/customers', requirePermission('canViewReports'), async (
   }
 });
 
-router.get('/subsidiary/employees', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/subsidiary/employees', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     res.json(
       await employeeDues(requirePump(req), {
@@ -120,7 +120,7 @@ router.get('/subsidiary/employees', requirePermission('canViewReports'), async (
   }
 });
 
-router.get('/subsidiary/channels', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/subsidiary/channels', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     res.json(
       await channelBalances(requirePump(req), {
@@ -134,7 +134,7 @@ router.get('/subsidiary/channels', requirePermission('canViewReports'), async (r
 });
 
 // One account's running ledger, optionally narrowed to a single subject.
-router.get('/accounts/:code/ledger', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/accounts/:code/ledger', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const result = await accountLedger(
@@ -156,7 +156,7 @@ router.get('/accounts/:code/ledger', requirePermission('canViewReports'), async 
 });
 
 // Journal entries, newest first.
-router.get('/entries', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/entries', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const from = parseDay(req.query.from);
@@ -211,7 +211,7 @@ router.get('/entries', requirePermission('canViewReports'), async (req, res, nex
   }
 });
 
-router.get('/entries/:id', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/entries/:id', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const entry = await prisma.journalEntry.findFirst({
@@ -240,7 +240,7 @@ router.get('/entries/:id', requirePermission('canViewReports'), async (req, res,
 
 // Manual adjustment (capital, drawings, recovering a staff shortage, settling a
 // channel to bank). Owner only, and it must balance.
-router.post('/entries', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/entries', requirePermission('canPostJournalEntries'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const data = manualJournalSchema.parse(req.body);
@@ -281,7 +281,7 @@ router.post('/entries', requireRole(Role.OWNER), async (req, res, next) => {
 });
 
 // Reverse any entry by posting its mirror image.
-router.post('/entries/:id/reverse', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/entries/:id/reverse', requirePermission('canPostJournalEntries'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const entry = await prisma.journalEntry.findFirst({
@@ -324,7 +324,7 @@ router.post('/entries/:id/reverse', requireRole(Role.OWNER), async (req, res, ne
 
 // What operational activity (bank deposits, staff advances, cash sent to the bank)
 // has not reached the books yet.
-router.get('/pending', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/pending', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     res.json(await countPending(requirePump(req)));
   } catch (e) {
@@ -334,7 +334,7 @@ router.get('/pending', requirePermission('canViewReports'), async (req, res, nex
 
 // Post that activity. Idempotent: each record is picked up only while it has no
 // journal entry, and the link is written in the same transaction as the entry.
-router.post('/post-pending', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/post-pending', requirePermission('canPostJournalEntries'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     res.json(await postPendingEntries(pumpId, (req as any).user.userId));
@@ -348,7 +348,7 @@ router.post('/post-pending', requireRole(Role.OWNER), async (req, res, next) => 
 // Everything the form needs: what the pump already has on file, plus whatever
 // opening entry is currently in force so the figures can be edited rather than
 // re-typed.
-router.get('/opening-balances', requirePermission('canViewReports'), async (req, res, next) => {
+router.get('/opening-balances', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const [customers, tanks, products, bankAccounts, employees, current, firstShift] =
@@ -438,7 +438,7 @@ router.get('/opening-balances', requirePermission('canViewReports'), async (req,
 });
 
 // Preview the totals and the balancing capital figure without posting anything.
-router.post('/opening-balances/preview', requirePermission('canViewReports'), async (req, res, next) => {
+router.post('/opening-balances/preview', requirePermission('canViewBooks'), async (req, res, next) => {
   try {
     requirePump(req);
     const data = openingBalancesSchema.parse(req.body);
@@ -449,7 +449,7 @@ router.post('/opening-balances/preview', requirePermission('canViewReports'), as
 });
 
 // Post them. Owner only: this writes the business's starting position.
-router.post('/opening-balances', requireRole(Role.OWNER), async (req, res, next) => {
+router.post('/opening-balances', requirePermission('canPostJournalEntries'), async (req, res, next) => {
   try {
     const pumpId = requirePump(req);
     const data = openingBalancesSchema.parse(req.body);

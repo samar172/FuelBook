@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyToken, JwtPayload } from '../lib/jwt';
 import { prisma } from '../lib/db';
 import { Role } from '@prisma/client';
+import { presetFor } from '../services/roles';
 
 declare global {
   namespace Express {
@@ -58,23 +59,6 @@ export const requirePermission = (perm: string) => {
   };
 };
 
-const makeOwnerPermissions = () => ({
-  canCreateShift: true,
-  canEditNozzleReadings: true,
-  canEditStock: true,
-  canEditTankerReceipts: true,
-  canEditCollections: true,
-  canEditOutstanding: true,
-  canEditExpenses: true,
-  canEditCreditSales: true,
-  canSubmitShift: true,
-  canLockShift: true,
-  canEditFuelRates: true,
-  canManageCreditCustomers: true,
-  canManageExpenseCategories: true,
-  canManageUsers: true,
-  canManagePump: true,
-  canViewReports: true,
-  canExportReports: true,
-  canManageEmployees: true,
-});
+// An owner passes every check, including permissions added later, so this is
+// derived rather than a hand-maintained list that silently falls behind.
+const makeOwnerPermissions = () => presetFor(Role.OWNER);

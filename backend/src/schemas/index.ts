@@ -35,7 +35,15 @@ export const optionalText = textNullable;
 
 export const fuelTypeEnum = z.enum(['HSD', 'MS', 'MS_POWER', 'CNG']);
 export const shiftTypeEnum = z.enum(['DAY', 'NIGHT']);
-export const roleEnum = z.enum(['OWNER', 'MANAGER', 'STAFF']);
+export const roleEnum = z.enum([
+  'OWNER',
+  'MANAGER',
+  'ACCOUNTANT',
+  'CASHIER',
+  'ATTENDANT',
+  'AUDITOR',
+  'STAFF',
+]);
 
 // ===== AUTH =====
 export const loginSchema = z.object({
@@ -102,6 +110,31 @@ export const createUserSchema = z.object({
   phone: z.string().min(8).max(15),
   pin: z.string().min(4).max(8),
   role: roleEnum.default('MANAGER'),
+  // Optionally tie the login to a staff record, which is what lets an attendant
+  // see the shifts they worked.
+  employeeId: z.string().min(1).optional().nullable(),
+});
+
+// Explicit allow-list: a PATCH must never be able to move a user to another pump
+// or flip their own role.
+export const updateUserSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().min(8).max(15).optional(),
+  pin: z.string().min(4).max(8).optional(),
+  isActive: z.boolean().optional(),
+  employeeId: z.string().min(1).nullable().optional(),
+});
+
+export const changeRoleSchema = z.object({
+  role: roleEnum,
+  // Re-apply that role's default permissions, discarding any fine-tuning.
+  resetPermissions: z.boolean().default(true),
+});
+
+// Moving a staff member to another pump of the same business. Owner only.
+export const transferEmployeeSchema = z.object({
+  toPumpId: z.string().min(1),
+  reason: z.string().max(200).optional().nullable(),
 });
 
 export const updatePermissionsSchema = z.object({
@@ -123,6 +156,11 @@ export const updatePermissionsSchema = z.object({
   canViewReports: z.boolean().optional(),
   canExportReports: z.boolean().optional(),
   canManageEmployees: z.boolean().optional(),
+  canViewBooks: z.boolean().optional(),
+  canPostJournalEntries: z.boolean().optional(),
+  canManageBankAndSettlement: z.boolean().optional(),
+  canManageProducts: z.boolean().optional(),
+  canManageLicences: z.boolean().optional(),
 });
 
 // ===== SHIFT =====
