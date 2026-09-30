@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -135,6 +136,18 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
         <CardContent>
           <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
             <Field label={t("employees.designation", "Designation")} value={employee.designation} />
+            {/* Designation is what they do on the forecourt; it is NOT what the app
+                lets them see. Access comes from the login's role, which lives on a
+                different screen — people look for it here, so point at it. */}
+            <div className="sm:col-span-2 rounded-md border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
+              {t(
+                "employees.designationVsRole",
+                "Designation is their job at the pump. What they can see and do in the app comes from their login's role."
+              )}{" "}
+              <Link href="/settings/users" className="font-medium underline">
+                {t("nav.users", "Users & Roles")}
+              </Link>
+            </div>
             <Field label={t("employees.joiningDate", "Joining date")} value={fmtDate(employee.joiningDate)} />
             <Field label={t("employees.exitDate", "Exit date")} value={fmtDate(employee.exitDate)} />
             <Field label={t("employees.dob", "Date of birth")} value={fmtDate(employee.dateOfBirth)} />

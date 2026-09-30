@@ -80,28 +80,66 @@ function visibleTo(user: ApiUser) {
   };
 }
 
-const NAV: NavItem[] = [
-  { href: "/guide", label: "Setup Guide", key: "nav.guide", icon: Compass },
-  { href: "/dashboard", label: "Dashboard", key: "nav.dashboard", icon: LayoutDashboard },
-  { href: "/shifts", label: "Shift Reports", key: "nav.shifts", icon: ClipboardList },
-  { href: "/wet-stock", label: "Wet Stock & Testing", key: "nav.wetStock", icon: Gauge },
-  { href: "/tanker-receipts", label: "Tanker Receipts", key: "nav.tankers", icon: Truck, anyPerm: ["canEditTankerReceipts", "canEditStock"] },
-  { href: "/cash", label: "Cash & Bank", key: "nav.cash", icon: Banknote, anyPerm: ["canEditCollections", "canManageBankAndSettlement"] },
-  { href: "/credit", label: "Credit Customers", key: "nav.credit", icon: Wallet, anyPerm: ["canManageCreditCustomers", "canEditCreditSales"] },
-  { href: "/receivables", label: "Statements & Cheques", key: "nav.receivables", icon: FileText, anyPerm: ["canManageCreditCustomers", "canViewBooks"] },
-  { href: "/products", label: "Lubes & Non-Fuel", key: "nav.products", icon: Package, anyPerm: ["canManageProducts"] },
-  { href: "/pricing", label: "Price Revisions", key: "nav.pricing", icon: IndianRupee, anyPerm: ["canEditFuelRates"] },
-  { href: "/rates", label: "Fuel Rates", key: "nav.rates", icon: Fuel, anyPerm: ["canEditFuelRates"] },
-  { href: "/employees", label: "Employees", key: "nav.employees", icon: HardHat, anyPerm: ["canManageEmployees"] },
-  { href: "/compliance", label: "Compliance & Staff", key: "nav.compliance", icon: ShieldCheck, anyPerm: ["canManageLicences", "canManageEmployees"] },
-  { href: "/expenses", label: "Expense Categories", key: "nav.expenses", icon: Tags, anyPerm: ["canManageExpenseCategories"] },
-  { href: "/reports", label: "Reports", key: "nav.reports", icon: BarChart3, anyPerm: ["canViewReports"] },
-  { href: "/books", label: "Books (Ledger)", key: "nav.books", icon: BookOpen, anyPerm: ["canViewBooks"] },
-  { href: "/opening-balances", label: "Opening Balances", key: "nav.opening", icon: Landmark, anyPerm: ["canViewBooks"] },
-  { href: "/settings/users", label: "Users", key: "nav.users", icon: Users, anyPerm: ["canManageUsers"] },
-  { href: "/settings/pump", label: "Pump Setup", key: "nav.pumpSetup", icon: Settings, anyPerm: ["canManagePump"] },
-  { href: "/settings/pumps", label: "Manage Pumps", key: "nav.managePumps", icon: Building2, ownerOnly: true },
+type NavGroup = { key: string; label: string; items: NavItem[] };
+
+// Grouped the way a pump owner thinks about the work, not the way the screens were
+// built. "Users & Roles" is named for what people look for — the role editor was
+// previously hiding behind a bare "Users".
+const NAV_GROUPS: NavGroup[] = [
+  {
+    key: "navgroup.daily",
+    label: "Daily work",
+    items: [
+      { href: "/dashboard", label: "Dashboard", key: "nav.dashboard", icon: LayoutDashboard },
+      { href: "/shifts", label: "Shift Reports", key: "nav.shifts", icon: ClipboardList },
+      { href: "/wet-stock", label: "Wet Stock & Testing", key: "nav.wetStock", icon: Gauge },
+      { href: "/tanker-receipts", label: "Tanker Receipts", key: "nav.tankers", icon: Truck, anyPerm: ["canEditTankerReceipts", "canEditStock"] },
+    ],
+  },
+  {
+    key: "navgroup.sales",
+    label: "Sales & customers",
+    items: [
+      { href: "/credit", label: "Credit Customers", key: "nav.credit", icon: Wallet, anyPerm: ["canManageCreditCustomers", "canEditCreditSales"] },
+      { href: "/receivables", label: "Statements & Cheques", key: "nav.receivables", icon: FileText, anyPerm: ["canManageCreditCustomers", "canViewBooks"] },
+      { href: "/products", label: "Lubes & Non-Fuel", key: "nav.products", icon: Package, anyPerm: ["canManageProducts"] },
+      { href: "/rates", label: "Fuel Rates", key: "nav.rates", icon: Fuel, anyPerm: ["canEditFuelRates"] },
+      { href: "/pricing", label: "Price Revisions", key: "nav.pricing", icon: IndianRupee, anyPerm: ["canEditFuelRates"] },
+    ],
+  },
+  {
+    key: "navgroup.finance",
+    label: "Finance",
+    items: [
+      { href: "/cash", label: "Cash & Bank", key: "nav.cash", icon: Banknote, anyPerm: ["canEditCollections", "canManageBankAndSettlement"] },
+      { href: "/books", label: "Books (Ledger)", key: "nav.books", icon: BookOpen, anyPerm: ["canViewBooks"] },
+      { href: "/opening-balances", label: "Opening Balances", key: "nav.opening", icon: Landmark, anyPerm: ["canViewBooks"] },
+      { href: "/expenses", label: "Expense Categories", key: "nav.expenses", icon: Tags, anyPerm: ["canManageExpenseCategories"] },
+      { href: "/reports", label: "Reports", key: "nav.reports", icon: BarChart3, anyPerm: ["canViewReports"] },
+    ],
+  },
+  {
+    key: "navgroup.people",
+    label: "Staff",
+    items: [
+      { href: "/employees", label: "Employees", key: "nav.employees", icon: HardHat, anyPerm: ["canManageEmployees"] },
+      { href: "/compliance", label: "Compliance & Staff", key: "nav.compliance", icon: ShieldCheck, anyPerm: ["canManageLicences", "canManageEmployees"] },
+      { href: "/settings/users", label: "Users & Roles", key: "nav.users", icon: Users, anyPerm: ["canManageUsers"] },
+    ],
+  },
+  {
+    key: "navgroup.setup",
+    label: "Setup",
+    items: [
+      { href: "/guide", label: "Setup Guide", key: "nav.guide", icon: Compass },
+      { href: "/settings/pump", label: "Pump Setup", key: "nav.pumpSetup", icon: Settings, anyPerm: ["canManagePump"] },
+      { href: "/settings/pumps", label: "Manage Pumps", key: "nav.managePumps", icon: Building2, ownerOnly: true },
+    ],
+  },
 ];
+
+// Flat list, still used for the "which section am I in" lookup and the tab bar.
+const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useT();
@@ -354,28 +392,40 @@ function SidebarBranding({
 
 function SidebarNav({ pathname, user }: { pathname: string; user: ApiUser }) {
   const { t } = useT();
-  const items = NAV.filter(visibleTo(user));
+  const can = visibleTo(user);
+  // A group with nothing the user may open is dropped entirely, so a cashier does
+  // not see an empty "Finance" heading.
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter(can) })).filter(
+    (g) => g.items.length > 0
+  );
   return (
-    <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-      {items.map((n) => {
-        const active = pathname === n.href || pathname.startsWith(n.href + "/");
-        const Icon = n.icon;
-        return (
-          <Link
-            key={n.href}
-            href={n.href}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors",
-              active
-                ? "bg-primary text-primary-foreground"
-                : "text-slate-700 hover:bg-slate-100 active:bg-slate-200",
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{t(n.key, n.label)}</span>
-          </Link>
-        );
-      })}
+    <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+      {groups.map((group) => (
+        <div key={group.key} className="space-y-1">
+          <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t(group.key, group.label)}
+          </div>
+          {group.items.map((n) => {
+            const active = pathname === n.href || pathname.startsWith(n.href + "/");
+            const Icon = n.icon;
+            return (
+              <Link
+                key={n.href}
+                href={n.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "text-slate-700 hover:bg-slate-100 active:bg-slate-200",
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{t(n.key, n.label)}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }

@@ -5,6 +5,7 @@
 // thing — that distinction is spelled out on the advances tab and has to survive translation.
 export const compliance = {
   en: {
+    "employees.designationVsRole": "Designation is their job at the pump. What they can see and do in the app comes from their login's role.",
     // ── compliance page ─────────────────────────────────────────────────────
     "compliance.title": "Compliance & Staff",
     "compliance.subtitle":
@@ -295,6 +296,7 @@ export const compliance = {
     "rates.required": "Rate and effective date are required",
   },
   hi: {
+    "employees.designationVsRole": "पद का मतलब है पंप पर उनका काम। ऐप में वे क्या देख और कर सकते हैं, यह उनके लॉगिन की भूमिका से तय होता है।",
     "compliance.title": "कंप्लायंस और स्टाफ़",
     "compliance.subtitle":
       "लाइसेंस की आख़िरी तारीख़, रोज़ की हाजिरी और स्टाफ़ के एडवांस — ये तीन चीज़ें पंप बंद करवा सकती हैं, या महीने के आख़िर में झगड़ा।",
