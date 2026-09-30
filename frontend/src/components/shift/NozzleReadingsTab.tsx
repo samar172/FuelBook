@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatLitres, FUEL_LABELS, litresToMl, mlToLitres } from "@/lib/utils";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
+import { LastSaved } from "./LastSaved";
 
 export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: boolean }) {
   const { t } = useT();
@@ -80,6 +81,7 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
             "Opening readings are auto-filled from the previous shift. Enter closing reading and any testing deduction.",
           )}
         </CardDescription>
+        <LastSaved shiftId={shift.id} panel="readings" />
       </CardHeader>
       <CardContent className="space-y-6">
         {Object.entries(byFuel).map(([fuel, items]) => (

@@ -10,6 +10,7 @@ import { apiError, Employee, toDateInput } from "@/lib/types";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
+import { LastSaved } from "./LastSaved";
 
 type Row = {
   nozzleId: string;
@@ -113,6 +114,7 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
             },
           )}
         </CardDescription>
+        <LastSaved shiftId={shift.id} panel="roster" />
       </CardHeader>
       <CardContent className="space-y-4">
         {hasAttendance && (

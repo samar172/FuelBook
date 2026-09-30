@@ -12,6 +12,7 @@ import { vehicleSummary, type CreditCustomer } from "@/lib/types";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
+import { LastSaved } from "./LastSaved";
 
 type Row = {
   customerId?: string | null;
@@ -74,6 +75,7 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
             "Past credit balances collected from customers during this shift. These reduce the customer's outstanding balance when the shift is locked.",
           )}
         </CardDescription>
+        <LastSaved shiftId={shift.id} panel="outstanding" />
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>

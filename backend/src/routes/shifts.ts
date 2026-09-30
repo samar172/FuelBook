@@ -21,6 +21,7 @@ import { computeEmployeeExpectations, syncHandoverExpectations } from '../servic
 import { postShiftJournal, reverseShiftJournal } from '../services/ledgerPosting';
 import { isAttendantRole } from '../services/roles';
 import { ensureShiftForNow, windowFor } from '../services/shiftAuto';
+import { buildShiftTimeline, lastEditsForShift } from '../services/shiftTimeline';
 import { logAudit } from '../services/audit';
 import { ShiftStatus } from '@prisma/client';
 import { AppError } from '../middleware/error';
@@ -139,6 +140,18 @@ router.post('/', requirePermission('canCreateShift'), async (req, res, next) => 
   }
 });
 
+// The whole shift in the order it happened — the owner's snapshot.
+router.get('/:id/timeline', async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const timeline = await buildShiftTimeline(pumpId, req.params.id);
+    if (!timeline) throw new AppError(404, 'Shift not found');
+    res.json(timeline);
+  } catch (e) {
+    next(e);
+  }
+});
+
 // Which shift should be running right now, and whether it exists yet. The screen
 // uses this to offer "start today's shift" without guessing at the clock itself.
 router.get('/current', async (req, res, next) => {
@@ -243,7 +256,10 @@ router.get('/:id', async (req, res, next) => {
       },
     });
     if (!shift) throw new AppError(404, 'Shift not found');
-    res.json(shift);
+    // Every panel shows when it was last written and by whom; this rides along so
+    // the screen does not need a second request for it.
+    const lastEdits = await lastEditsForShift(shift.id);
+    res.json({ ...shift, lastEdits });
   } catch (e) {
     next(e);
   }
@@ -389,6 +405,26 @@ router.post('/:id/unlock', requirePermission('canLockShift'), async (req, res, n
   }
 });
 
+
+/**
+ * Records that someone entered data on a shift. The child tables are saved in
+ * bulk (delete-and-replace or upsert), so the row timestamps alone cannot say
+ * when a person actually did the work or who they were — this can.
+ */
+async function logShiftEdit(
+  userId: string,
+  shiftReportId: string,
+  action: string,
+  summary: Record<string, unknown>,
+) {
+  try {
+    await logAudit(userId, action, 'ShiftReport', shiftReportId, null, summary);
+  } catch (e) {
+    // The trail is valuable but never worth failing a save for.
+    console.error('[audit] failed to record', action, e);
+  }
+}
+
 // ----- Nozzle readings bulk upsert -----
 router.put(
   '/:id/nozzle-readings',
@@ -436,6 +472,7 @@ router.put(
           include: { nozzleReadings: { include: { nozzle: true } } },
         });
       });
+      await logShiftEdit(req.user!.userId, shift.id, 'shift.readings.save', { count: readings.length });
       res.json(result);
     } catch (e) {
       next(e);
@@ -489,6 +526,7 @@ router.put(
           include: { employeeAssignments: { include: { employee: true, nozzle: true } } },
         });
       });
+      await logShiftEdit(req.user!.userId, shift.id, 'shift.roster.save', { count: assignments.length });
       res.json(result);
     } catch (e) {
       next(e);
@@ -556,7 +594,8 @@ router.put('/:id/stock-entries', requirePermission('canEditStock'), async (req, 
         include: { stockEntries: { include: { tank: true } } },
       });
     });
-    res.json(result);
+    await logShiftEdit(req.user!.userId, shift.id, 'shift.stock.save', { count: entries.length });
+      res.json(result);
   } catch (e) {
     next(e);
   }
@@ -591,6 +630,7 @@ router.put(
           include: { paymentCollections: { include: { channel: true, timeSlot: true } } },
         });
       });
+      await logShiftEdit(req.user!.userId, shift.id, 'shift.collections.save', { count: collections.length, totalPaise: collections.reduce((a, c) => a + c.amountPaise, 0n).toString() });
       res.json(result);
     } catch (e) {
       next(e);
@@ -627,6 +667,7 @@ router.put(
           include: { outstandingReceipts: { include: { customer: true } } },
         });
       });
+      await logShiftEdit(req.user!.userId, shift.id, 'shift.outstanding.save', { count: receipts.length, totalPaise: receipts.reduce((a, r) => a + r.amountPaise, 0n).toString() });
       res.json(result);
     } catch (e) {
       next(e);
@@ -662,7 +703,8 @@ router.put('/:id/expense-entries', requirePermission('canEditExpenses'), async (
         include: { expenseEntries: { include: { category: true } } },
       });
     });
-    res.json(result);
+    await logShiftEdit(req.user!.userId, shift.id, 'shift.expenses.save', { count: entries.length, totalPaise: entries.reduce((a, e) => a + e.dayExpensePaise, 0n).toString() });
+      res.json(result);
   } catch (e) {
     next(e);
   }

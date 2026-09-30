@@ -20,6 +20,7 @@ import { OutstandingTab } from "@/components/shift/OutstandingTab";
 import { ExpensesTab } from "@/components/shift/ExpensesTab";
 import { CreditSalesTab } from "@/components/shift/CreditSalesTab";
 import { ReconciliationTab } from "@/components/shift/ReconciliationTab";
+import { TimelineTab } from "@/components/shift/TimelineTab";
 import { CashReconciliationTab } from "@/components/shift/CashReconciliationTab";
 
 export default function ShiftEntryPage({ params }: { params: { id: string } }) {
@@ -146,6 +147,7 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
 
       <Tabs defaultValue="nozzles" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="timeline">{t("shift.tabs.timeline", "Timeline")}</TabsTrigger>
           <TabsTrigger value="nozzles">{t("shift.tabs.nozzles", "Nozzle Readings")}</TabsTrigger>
           <TabsTrigger value="employees">{t("shift.tabs.employees", "Employees")}</TabsTrigger>
           <TabsTrigger value="stock">{t("shift.tabs.stock", "Stock")}</TabsTrigger>
@@ -157,6 +159,9 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
           <TabsTrigger value="reconciliation">{t("shift.tabs.reconciliation", "Reconciliation")}</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="timeline">
+          <TimelineTab shiftId={id} />
+        </TabsContent>
         <TabsContent value="nozzles">
           <NozzleReadingsTab shift={shift} disabled={isLocked} />
         </TabsContent>

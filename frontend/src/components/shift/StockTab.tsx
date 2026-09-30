@@ -13,6 +13,7 @@ import { formatLitres, FUEL_LABELS, litresToMl, mlToLitres, rupeesToPaise } from
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import { Plus } from "lucide-react";
+import { LastSaved } from "./LastSaved";
 
 export function StockTab({ shift, disabled }: { shift: any; disabled: boolean }) {
   const { t } = useT();
@@ -69,6 +70,7 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
               "Opening stock auto-filled. Enter closing stock per tank. Sale is computed from opening + purchase - closing.",
             )}
           </CardDescription>
+          <LastSaved shiftId={shift.id} panel="stock" />
         </div>
         {!disabled && (
           <Dialog open={showReceipt} onOpenChange={setShowReceipt}>

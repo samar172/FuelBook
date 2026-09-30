@@ -31,6 +31,7 @@ import { useT } from "@/lib/i18n";
 import { useDateLocale } from "@/lib/i18n/core";
 import { HandCoins, Plus, Trash2, X } from "lucide-react";
 import { inputToPaise, paise } from "@/lib/books";
+import { LastSaved } from "./LastSaved";
 
 export type DropLocation = "CASHIER" | "OFFICE_SAFE";
 
@@ -182,6 +183,7 @@ export function CashDropsPanel({
               "Every time an attendant passes cash to the cashier or drops it in the office safe, record it here with the time. It counts towards what they owe at the end of the shift.",
             )}
           </CardDescription>
+          <LastSaved shiftId={shiftId} panel="cashDrops" />
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">

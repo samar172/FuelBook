@@ -12,6 +12,7 @@ import { apiError } from "@/lib/types";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
+import { LastSaved } from "./LastSaved";
 
 type Row = {
   channelId: string;
@@ -134,6 +135,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
             { shiftWord },
           )}
         </CardDescription>
+        <LastSaved shiftId={shift.id} panel="collections" />
       </CardHeader>
       <CardContent className="space-y-4">
         {noSlotsForShift && (

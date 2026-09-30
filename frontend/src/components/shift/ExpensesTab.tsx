@@ -11,6 +11,7 @@ import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/utils";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
+import { LastSaved } from "./LastSaved";
 
 type Row = {
   categoryId: string;
@@ -72,6 +73,7 @@ export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean
             "Recurring categories carry their balance forward. Day expense is what was paid in this shift. Closing = opening + day expense.",
           )}
         </CardDescription>
+        <LastSaved shiftId={shift.id} panel="expenses" />
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>
