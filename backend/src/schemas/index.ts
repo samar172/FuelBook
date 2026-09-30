@@ -433,3 +433,44 @@ export const cashDropSchema = z.object({
   purpose: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
+
+// ===== OPENING BALANCES =====
+// What the business already had on the day it started using FuelBook. A pump
+// rarely starts on 1 April — it starts mid-year, already holding cash, fuel,
+// customer dues and an oil-company bill.
+export const openingBalancesSchema = z.object({
+  asOnDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD'),
+  cashInHandPaise: bigIntStr.default(0n),
+  supplierPayablePaise: bigIntStr.default(0n),
+  bankBalances: z
+    .array(z.object({ bankAccountId: z.string().min(1), amountPaise: bigIntStr }))
+    .default([]),
+  customerDues: z
+    .array(z.object({ customerId: z.string().min(1), amountPaise: bigIntStr }))
+    .default([]),
+  fuelStock: z
+    .array(
+      z.object({
+        tankId: z.string().min(1),
+        quantityMl: bigIntStr.default(0n),
+        valuePaise: bigIntStr.default(0n),
+      })
+    )
+    .default([]),
+  productStock: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        quantity: z.number().int().min(0).default(0),
+        valuePaise: bigIntStr.default(0n),
+      })
+    )
+    .default([]),
+  staffAdvances: z
+    .array(z.object({ employeeId: z.string().min(1), amountPaise: bigIntStr }))
+    .default([]),
+  staffShortages: z
+    .array(z.object({ employeeId: z.string().min(1), amountPaise: bigIntStr }))
+    .default([]),
+  notes: z.string().max(300).optional().nullable(),
+});

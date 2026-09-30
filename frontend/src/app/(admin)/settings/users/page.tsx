@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, ShieldCheck } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 const PERMISSIONS = [
   { key: "canCreateShift", label: "Create new shift" },
@@ -34,6 +35,7 @@ const PERMISSIONS = [
 ];
 
 export default function UsersPage() {
+  const { t } = useT();
   const qc = useQueryClient();
   const { data = [] } = useQuery({
     queryKey: ["users"],
@@ -48,40 +50,40 @@ export default function UsersPage() {
   const create = useMutation({
     mutationFn: async () => (await api.post("/api/users", { name, phone, pin, role })).data,
     onSuccess: () => {
-      toast.success("User created");
+      toast.success(t("settings.userCreated", "User created"));
       setOpen(false); setName(""); setPhone(""); setPin("");
       qc.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("settings.failed", "Failed")),
   });
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Users & Permissions</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">Add manager / staff and configure exactly what they can do</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("settings.users", "Users & Permissions")}</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">{t("settings.usersDesc", "Add manager / staff and configure exactly what they can do")}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add user</Button></DialogTrigger>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> {t("settings.addUser", "Add user")}</Button></DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Add User</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t("settings.addUserTitle", "Add User")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-              <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-              <div><Label>PIN (4 digits)</Label><Input type="password" value={pin} onChange={(e) => setPin(e.target.value)} /></div>
+              <div><Label>{t("common.name", "Name")}</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+              <div><Label>{t("common.phone", "Phone")}</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+              <div><Label>{t("settings.pinFourDigits", "PIN (4 digits)")}</Label><Input type="password" value={pin} onChange={(e) => setPin(e.target.value)} /></div>
               <div>
-                <Label>Role</Label>
+                <Label>{t("settings.role", "Role")}</Label>
                 <Select value={role} onValueChange={(v) => setRole(v as any)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MANAGER">Manager</SelectItem>
-                    <SelectItem value="STAFF">Staff</SelectItem>
+                    <SelectItem value="MANAGER">{t("settings.roleManager", "Manager")}</SelectItem>
+                    <SelectItem value="STAFF">{t("settings.roleStaff", "Staff")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <Button className="w-full" onClick={() => create.mutate()} disabled={!name || !phone || !pin || create.isPending}>
-                {create.isPending ? "Saving…" : "Add"}
+                {create.isPending ? t("common.saving", "Saving…") : t("common.add", "Add")}
               </Button>
             </div>
           </DialogContent>
@@ -96,6 +98,7 @@ export default function UsersPage() {
 }
 
 function UserCard({ user }: { user: any }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [perms, setPerms] = useState<Record<string, boolean>>(() => {
     const p = user.permissions || {};
@@ -106,7 +109,7 @@ function UserCard({ user }: { user: any }) {
 
   const save = useMutation({
     mutationFn: async () => (await api.put(`/api/users/${user.id}/permissions`, perms)).data,
-    onSuccess: () => { toast.success("Permissions updated"); qc.invalidateQueries({ queryKey: ["users"] }); },
+    onSuccess: () => { toast.success(t("settings.permissionsUpdated", "Permissions updated")); qc.invalidateQueries({ queryKey: ["users"] }); },
   });
 
   return (
@@ -114,14 +117,14 @@ function UserCard({ user }: { user: any }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ShieldCheck className="h-4 w-4" /> {user.name}
-          <Badge variant={user.role === "OWNER" ? "default" : "secondary"}>{user.role}</Badge>
-          {!user.isActive && <Badge variant="destructive">Inactive</Badge>}
+          <Badge variant={user.role === "OWNER" ? "default" : "secondary"}>{t(`settings.role${user.role}`, user.role)}</Badge>
+          {!user.isActive && <Badge variant="destructive">{t("common.inactive", "Inactive")}</Badge>}
         </CardTitle>
         <CardDescription>{user.phone}</CardDescription>
       </CardHeader>
       <CardContent>
         {user.role === "OWNER" ? (
-          <p className="text-sm text-muted-foreground">Owner has full access — no per-permission toggles.</p>
+          <p className="text-sm text-muted-foreground">{t("settings.ownerFullAccess", "Owner has full access — no per-permission toggles.")}</p>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -132,12 +135,12 @@ function UserCard({ user }: { user: any }) {
                     checked={Boolean(perms[p.key])}
                     onChange={(e) => setPerms((s) => ({ ...s, [p.key]: e.target.checked }))}
                   />
-                  {p.label}
+                  {t(`settings.perm${p.key.slice(3)}`, p.label)}
                 </label>
               ))}
             </div>
             <Button className="mt-4" onClick={() => save.mutate()} disabled={save.isPending}>
-              {save.isPending ? "Saving…" : "Save permissions"}
+              {save.isPending ? t("common.saving", "Saving…") : t("settings.savePermissions", "Save permissions")}
             </Button>
           </>
         )}

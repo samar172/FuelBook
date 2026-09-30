@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { formatINR } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { Lock, LockOpen, Send, AlertTriangle, FileSpreadsheet } from "lucide-react";
 
 import { NozzleReadingsTab } from "@/components/shift/NozzleReadingsTab";
@@ -22,6 +24,8 @@ import { CashReconciliationTab } from "@/components/shift/CashReconciliationTab"
 
 export default function ShiftEntryPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const { t } = useT();
+  const locale = useDateLocale();
   const qc = useQueryClient();
 
   const { data: shift, isLoading } = useQuery({
@@ -32,31 +36,31 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
   const submit = useMutation({
     mutationFn: async () => (await api.post(`/api/shifts/${id}/submit`)).data,
     onSuccess: () => {
-      toast.success("Shift submitted");
+      toast.success(t("shift.detail.submitted", "Shift submitted"));
       qc.invalidateQueries({ queryKey: ["shift", id] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("shift.detail.failed", "Failed")),
   });
 
   const lock = useMutation({
     mutationFn: async () => (await api.post(`/api/shifts/${id}/lock`)).data,
     onSuccess: () => {
-      toast.success("Shift locked. Customer balances updated.");
+      toast.success(t("shift.detail.locked", "Shift locked. Customer balances updated."));
       qc.invalidateQueries({ queryKey: ["shift", id] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("shift.detail.failed", "Failed")),
   });
 
   const unlock = useMutation({
     mutationFn: async () => (await api.post(`/api/shifts/${id}/unlock`)).data,
     onSuccess: () => {
-      toast.success("Shift unlocked — back to Submitted, editable again.");
+      toast.success(t("shift.detail.unlocked", "Shift unlocked — back to Submitted, editable again."));
       qc.invalidateQueries({ queryKey: ["shift", id] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("shift.detail.failed", "Failed")),
   });
 
-  if (isLoading) return <div className="text-muted-foreground">Loading…</div>;
+  if (isLoading) return <div className="text-muted-foreground">{t("common.loading", "Loading…")}</div>;
   if (!shift) return null;
 
   const isLocked = shift.status === "LOCKED";
@@ -67,18 +71,18 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
-            <span>{format(new Date(shift.reportDate), "EEE, dd MMM yyyy")}</span>
-            <Badge variant={shift.shiftType === "DAY" ? "default" : "secondary"}>{shift.shiftType}</Badge>
-            <Badge variant="outline">{shift.status}</Badge>
+            <span>{format(new Date(shift.reportDate), "EEE, dd MMM yyyy", { locale })}</span>
+            <Badge variant={shift.shiftType === "DAY" ? "default" : "secondary"}>{t(`shift.type.${shift.shiftType}`, shift.shiftType)}</Badge>
+            <Badge variant="outline">{t(`shift.status.${shift.status}`, shift.status)}</Badge>
             {shift.discrepancyFlag && (
               <Badge variant="warning" className="gap-1">
-                <AlertTriangle className="h-3 w-3" /> Discrepancy
+                <AlertTriangle className="h-3 w-3" /> {t("shift.detail.discrepancy", "Discrepancy")}
               </Badge>
             )}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold mt-1">Shift Entry</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold mt-1">{t("shift.detail.title", "Shift Entry")}</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
-            Opening {formatINR(shift.openingCashPaise)} → Closing{" "}
+            {t("shift.detail.opening", "Opening")} {formatINR(shift.openingCashPaise)} → {t("shift.detail.closing", "Closing")}{" "}
             <span className="font-semibold text-foreground">{formatINR(shift.closingCashPaise)}</span>
           </p>
         </div>
@@ -94,23 +98,23 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
                   `shift-${date}-${shift.shiftType}.xlsx`,
                 );
               } catch (e: any) {
-                toast.error(e?.message || "Export failed");
+                toast.error(e?.message || t("shift.detail.exportFailed", "Export failed"));
               }
             }}
           >
             <FileSpreadsheet className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Excel</span>
+            <span className="hidden sm:inline">{t("shift.detail.excel", "Excel")}</span>
           </Button>
           {!isSubmitted && !isLocked && (
             <Button size="sm" onClick={() => submit.mutate()} disabled={submit.isPending}>
-              <Send className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Submit</span>
-              <span className="sm:hidden">Submit</span>
+              <Send className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("shift.detail.submit", "Submit")}</span>
+              <span className="sm:hidden">{t("shift.detail.submit", "Submit")}</span>
             </Button>
           )}
           {!isLocked && (
             <Button size="sm" variant="outline" onClick={() => lock.mutate()} disabled={lock.isPending}>
-              <Lock className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Lock</span>
-              <span className="sm:hidden">Lock</span>
+              <Lock className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("shift.detail.lock", "Lock")}</span>
+              <span className="sm:hidden">{t("shift.detail.lock", "Lock")}</span>
             </Button>
           )}
           {isLocked && (
@@ -120,7 +124,10 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
               onClick={() => {
                 if (
                   window.confirm(
-                    "Unlock this shift? It goes back to Submitted and becomes editable again. Credit customer balances posted at lock time will be reversed and re-applied when it's locked again.",
+                    t(
+                      "shift.detail.unlockConfirm",
+                      "Unlock this shift? It goes back to Submitted and becomes editable again. Credit customer balances posted at lock time will be reversed and re-applied when it's locked again.",
+                    ),
                   )
                 ) {
                   unlock.mutate();
@@ -128,8 +135,8 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
               }}
               disabled={unlock.isPending}
             >
-              <LockOpen className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Unlock</span>
-              <span className="sm:hidden">Unlock</span>
+              <LockOpen className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">{t("shift.detail.unlock", "Unlock")}</span>
+              <span className="sm:hidden">{t("shift.detail.unlock", "Unlock")}</span>
             </Button>
           )}
         </div>
@@ -139,15 +146,15 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
 
       <Tabs defaultValue="nozzles" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="nozzles">Nozzle Readings</TabsTrigger>
-          <TabsTrigger value="employees">Employees</TabsTrigger>
-          <TabsTrigger value="stock">Stock</TabsTrigger>
-          <TabsTrigger value="collections">Collections</TabsTrigger>
-          <TabsTrigger value="credit-sales">Credit Sales</TabsTrigger>
-          <TabsTrigger value="outstanding">Outstanding Received</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="cash-handover">Cash Handover</TabsTrigger>
-          <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
+          <TabsTrigger value="nozzles">{t("shift.tabs.nozzles", "Nozzle Readings")}</TabsTrigger>
+          <TabsTrigger value="employees">{t("shift.tabs.employees", "Employees")}</TabsTrigger>
+          <TabsTrigger value="stock">{t("shift.tabs.stock", "Stock")}</TabsTrigger>
+          <TabsTrigger value="collections">{t("shift.tabs.collections", "Collections")}</TabsTrigger>
+          <TabsTrigger value="credit-sales">{t("shift.tabs.creditSales", "Credit Sales")}</TabsTrigger>
+          <TabsTrigger value="outstanding">{t("shift.tabs.outstanding", "Outstanding Received")}</TabsTrigger>
+          <TabsTrigger value="expenses">{t("shift.tabs.expenses", "Expenses")}</TabsTrigger>
+          <TabsTrigger value="cash-handover">{t("shift.tabs.cashHandover", "Cash Handover")}</TabsTrigger>
+          <TabsTrigger value="reconciliation">{t("shift.tabs.reconciliation", "Reconciliation")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="nozzles">
@@ -183,13 +190,14 @@ export default function ShiftEntryPage({ params }: { params: { id: string } }) {
 }
 
 function SummaryStrip({ shift }: { shift: any }) {
+  const { t } = useT();
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-      <Stat label="Total Sales" value={formatINR(shift.totalSalesPaise)} />
-      <Stat label="Credit Issued" value={formatINR(shift.totalCreditIssuedPaise)} />
-      <Stat label="Outstanding Recv'd" value={formatINR(shift.totalOutstandingReceivedPaise)} />
-      <Stat label="Collections" value={formatINR(shift.totalCollectionsPaise)} />
-      <Stat label="Expenses" value={formatINR(shift.totalExpensesPaise)} />
+      <Stat label={t("shift.detail.statTotalSales", "Total Sales")} value={formatINR(shift.totalSalesPaise)} />
+      <Stat label={t("shift.detail.statCreditIssued", "Credit Issued")} value={formatINR(shift.totalCreditIssuedPaise)} />
+      <Stat label={t("shift.detail.statOutstandingRecv", "Outstanding Recv'd")} value={formatINR(shift.totalOutstandingReceivedPaise)} />
+      <Stat label={t("shift.detail.statCollections", "Collections")} value={formatINR(shift.totalCollectionsPaise)} />
+      <Stat label={t("shift.detail.statExpenses", "Expenses")} value={formatINR(shift.totalExpensesPaise)} />
     </div>
   );
 }

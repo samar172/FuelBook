@@ -61,7 +61,9 @@ export const ACCOUNT_PLAIN: Record<string, string> = {
   "1100": "Card / UPI money taken but not yet in the bank",
   "1200": "Money customers owe you",
   "1300": "Cash short on staff — recoverable from them",
+  "1310": "Money lent to staff — they will pay it back",
   "1400": "Value of the fuel still in your tanks",
+  "1450": "Value of lubricants and other goods still in stock",
   "2000": "Money you owe the fuel supplier",
   "3000": "Money you put into the business",
   "3100": "Money you took out of the business",
@@ -69,6 +71,7 @@ export const ACCOUNT_PLAIN: Record<string, string> = {
   "4900": "Extra cash found in the drawer",
   "5000": "What the fuel you sold cost you",
   "6000": "Day-to-day running costs",
+  "6100": "Card / UPI fees and bank charges",
   "6900": "Cash short that was written off",
 };
 

@@ -10,6 +10,7 @@ import * as React from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { TableHead, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export type SortDir = "asc" | "desc";
@@ -183,27 +184,28 @@ export function NoMatchRow({
   colSpan,
   filtered,
   onClear,
-  emptyMessage = "Nothing here yet.",
+  emptyMessage,
 }: {
   colSpan: number;
   filtered: boolean;
   onClear?: () => void;
   emptyMessage?: string;
 }) {
+  const { t } = useT();
   return (
     <TableRow>
       <TableCell colSpan={colSpan} className="text-center text-muted-foreground py-8">
         {filtered ? (
           <div className="space-y-2">
-            <div>No data matches these filters.</div>
+            <div>{t("common.noMatch", "No data matches these filters")}</div>
             {onClear && (
               <Button size="sm" variant="outline" onClick={onClear}>
-                Clear filters
+                {t("common.clearFilters", "Clear filters")}
               </Button>
             )}
           </div>
         ) : (
-          emptyMessage
+          emptyMessage ?? t("common.nothingYet", "Nothing here yet.")
         )}
       </TableCell>
     </TableRow>

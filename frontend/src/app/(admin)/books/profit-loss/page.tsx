@@ -18,11 +18,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
-import { ACCOUNT_PLAIN, ProfitLoss, Range, defaultRange, paise } from "@/lib/books";
-import { DateRangeBar, EmptyBooks, StatCard } from "../_components/controls";
+import { formatINR, formatLitres } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
+import { ProfitLoss, Range, defaultRange, paise } from "@/lib/books";
+import {
+  DateRangeBar,
+  EmptyBooks,
+  StatCard,
+  acctName,
+  acctPlain,
+  fuelLabel,
+} from "../_components/controls";
 
 export default function ProfitLossPage() {
+  const { t } = useT();
   const [range, setRange] = useState<Range>(defaultRange);
 
   const { data, isLoading } = useQuery<ProfitLoss>({
@@ -44,26 +53,28 @@ export default function ProfitLossPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          label="Income"
+          label={t("books.pl.income", "Income")}
           value={formatINR(data?.totalIncomePaise ?? 0)}
-          hint="Everything you earned"
+          hint={t("books.pl.incomeHint", "Everything you earned")}
         />
         <StatCard
-          label="Expenses"
+          label={t("books.pl.expenses", "Expenses")}
           value={formatINR(data?.totalExpensesPaise ?? 0)}
-          hint="Fuel cost + running costs"
+          hint={t("books.pl.expensesHint", "Fuel cost + running costs")}
           accent="red"
         />
         <StatCard
-          label={net >= 0 ? "Profit" : "Loss"}
+          label={net >= 0 ? t("books.pl.profit", "Profit") : t("books.pl.loss", "Loss")}
           value={formatINR(data?.netProfitPaise ?? 0)}
-          hint="Income minus expenses"
+          hint={t("books.pl.netHint", "Income minus expenses")}
           accent={net >= 0 ? "green" : "red"}
         />
         <StatCard
-          label="Gross margin on fuel"
+          label={t("books.pl.grossMargin", "Gross margin on fuel")}
           value={formatINR(data?.grossMarginPaise ?? 0)}
-          hint={`Sale value minus cost — ${marginPct.toFixed(2)}% of fuel sales`}
+          hint={t("books.pl.grossMarginHint", "Sale value minus cost — {pct}% of fuel sales", {
+            pct: marginPct.toFixed(2),
+          })}
           accent="primary"
         />
       </div>
@@ -71,15 +82,18 @@ export default function ProfitLossPage() {
       {isLoading ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground text-center">
-            Loading…
+            {t("common.loading", "Loading…")}
           </CardContent>
         </Card>
       ) : nothing ? (
         <Card>
           <CardContent className="p-4">
             <EmptyBooks
-              title="No income or expenses in this range"
-              body="The profit & loss is built from locked shifts. Lock a shift report and its sales, fuel cost and expenses will appear here."
+              title={t("books.pl.emptyTitle", "No income or expenses in this range")}
+              body={t(
+                "books.pl.emptyBody",
+                "The profit & loss is built from locked shifts. Lock a shift report and its sales, fuel cost and expenses will appear here.",
+              )}
             />
           </CardContent>
         </Card>
@@ -87,29 +101,32 @@ export default function ProfitLossPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Profit &amp; Loss</CardTitle>
+              <CardTitle className="text-base">{t("books.nav.profitLoss", "Profit & Loss")}</CardTitle>
               <CardDescription>
-                {range.from} to {range.to} — what you earned, what it cost, what is left.
+                {t("books.pl.desc", "{from} to {to} — what you earned, what it cost, what is left.", {
+                  from: range.from,
+                  to: range.to,
+                })}
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Account</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>{t("books.col.account", "Account")}</TableHead>
+                    <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   <TableRow className="bg-slate-50">
                     <TableCell colSpan={2} className="font-semibold text-xs uppercase tracking-wide">
-                      Income — money you earned
+                      {t("books.pl.incomeHead", "Income — money you earned")}
                     </TableCell>
                   </TableRow>
                   {(data?.income ?? []).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-muted-foreground text-sm">
-                        No income booked in this range.
+                        {t("books.pl.noIncome", "No income booked in this range.")}
                       </TableCell>
                     </TableRow>
                   )}
@@ -120,10 +137,10 @@ export default function ProfitLossPage() {
                           <span className="font-mono text-xs text-muted-foreground mr-1.5">
                             {r.code}
                           </span>
-                          {r.name}
+                          {acctName(t, r.code, r.name)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {ACCOUNT_PLAIN[r.code] ?? ""}
+                          {acctPlain(t, r.code)}
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono">
@@ -132,7 +149,7 @@ export default function ProfitLossPage() {
                     </TableRow>
                   ))}
                   <TableRow>
-                    <TableCell className="font-medium">Total income</TableCell>
+                    <TableCell className="font-medium">{t("books.pl.totalIncome", "Total income")}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">
                       {formatINR(data?.totalIncomePaise ?? 0)}
                     </TableCell>
@@ -140,13 +157,13 @@ export default function ProfitLossPage() {
 
                   <TableRow className="bg-slate-50">
                     <TableCell colSpan={2} className="font-semibold text-xs uppercase tracking-wide">
-                      Expenses — what it cost you
+                      {t("books.pl.expensesHead", "Expenses — what it cost you")}
                     </TableCell>
                   </TableRow>
                   {(data?.expenses ?? []).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-muted-foreground text-sm">
-                        No expenses booked in this range.
+                        {t("books.pl.noExpenses", "No expenses booked in this range.")}
                       </TableCell>
                     </TableRow>
                   )}
@@ -157,10 +174,10 @@ export default function ProfitLossPage() {
                           <span className="font-mono text-xs text-muted-foreground mr-1.5">
                             {r.code}
                           </span>
-                          {r.name}
+                          {acctName(t, r.code, r.name)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {ACCOUNT_PLAIN[r.code] ?? ""}
+                          {acctPlain(t, r.code)}
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono">
@@ -169,7 +186,7 @@ export default function ProfitLossPage() {
                     </TableRow>
                   ))}
                   <TableRow>
-                    <TableCell className="font-medium">Total expenses</TableCell>
+                    <TableCell className="font-medium">{t("books.pl.totalExpenses", "Total expenses")}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">
                       {formatINR(data?.totalExpensesPaise ?? 0)}
                     </TableCell>
@@ -178,7 +195,7 @@ export default function ProfitLossPage() {
                 <TableFooter>
                   <TableRow>
                     <TableCell className="font-semibold">
-                      {net >= 0 ? "Net profit" : "Net loss"}
+                      {net >= 0 ? t("books.pl.netProfit", "Net profit") : t("books.pl.netLoss", "Net loss")}
                     </TableCell>
                     <TableCell
                       className={`text-right font-mono font-bold ${
@@ -196,23 +213,32 @@ export default function ProfitLossPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Fuel margin</CardTitle>
+                <CardTitle className="text-base">{t("books.pl.fuelMargin", "Fuel margin")}</CardTitle>
                 <CardDescription>
-                  What the fuel sold for, against what it cost you to buy.
+                  {t(
+                    "books.pl.fuelMarginDesc",
+                    "What the fuel sold for, against what it cost you to buy.",
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                   <div>
-                    <div className="text-xs text-muted-foreground">Fuel sold for</div>
+                    <div className="text-xs text-muted-foreground">
+                      {t("books.pl.fuelSoldFor", "Fuel sold for")}
+                    </div>
                     <div className="font-semibold">{formatINR(data?.fuelSalesPaise ?? 0)}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">Cost of that fuel</div>
+                    <div className="text-xs text-muted-foreground">
+                      {t("books.pl.fuelCost", "Cost of that fuel")}
+                    </div>
                     <div className="font-semibold">{formatINR(data?.cogsPaise ?? 0)}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">You kept</div>
+                    <div className="text-xs text-muted-foreground">
+                      {t("books.pl.youKept", "You kept")}
+                    </div>
                     <div className="font-semibold text-green-700">
                       {formatINR(data?.grossMarginPaise ?? 0)}
                     </div>
@@ -221,22 +247,22 @@ export default function ProfitLossPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Fuel</TableHead>
-                      <TableHead className="text-right">Litres</TableHead>
-                      <TableHead className="text-right">Sale value</TableHead>
+                      <TableHead>{t("books.pl.colFuel", "Fuel")}</TableHead>
+                      <TableHead className="text-right">{t("common.litres", "Litres")}</TableHead>
+                      <TableHead className="text-right">{t("books.pl.colSaleValue", "Sale value")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(data?.salesByFuel ?? []).length === 0 && (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center text-muted-foreground">
-                          No fuel sales in this range.
+                          {t("books.pl.noFuelSales", "No fuel sales in this range.")}
                         </TableCell>
                       </TableRow>
                     )}
                     {(data?.salesByFuel ?? []).map((f) => (
                       <TableRow key={f.fuelType}>
-                        <TableCell>{FUEL_LABELS[f.fuelType] ?? f.fuelType}</TableCell>
+                        <TableCell>{fuelLabel(t, f.fuelType)}</TableCell>
                         <TableCell className="text-right font-mono">
                           {formatLitres(f.quantityMl)}
                         </TableCell>
@@ -252,24 +278,29 @@ export default function ProfitLossPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Running costs by category</CardTitle>
+                <CardTitle className="text-base">
+                  {t("books.pl.byCategory", "Running costs by category")}
+                </CardTitle>
                 <CardDescription>
-                  Operating expenses booked in this range, split by category.
+                  {t(
+                    "books.pl.byCategoryDesc",
+                    "Operating expenses booked in this range, split by category.",
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>{t("books.pl.colCategory", "Category")}</TableHead>
+                      <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(data?.expensesByCategory ?? []).length === 0 && (
                       <TableRow>
                         <TableCell colSpan={2} className="text-center text-muted-foreground">
-                          No operating expenses in this range.
+                          {t("books.pl.noOpex", "No operating expenses in this range.")}
                         </TableCell>
                       </TableRow>
                     )}

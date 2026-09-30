@@ -31,12 +31,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatINR } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
+import { acctName, acctPlain } from "../_components/controls";
 import { apiError } from "@/lib/types";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Lock, Plus, Trash2 } from "lucide-react";
 import {
   ACCOUNT_CODE,
-  ACCOUNT_PLAIN,
   ACCOUNT_SUBJECT,
   AccountRow,
   SubjectKind,
@@ -70,8 +71,9 @@ const newLine = (over?: Partial<LineDraft>): LineDraft => ({
 
 // Common corrections, pre-wired so the owner does not have to remember which side
 // each account sits on.
-const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[] }[] = [
+const TEMPLATES: { key: string; label: string; narration: string; lines: Partial<LineDraft>[] }[] = [
   {
+    key: "books.tpl.ownerIn",
     label: "I put money into the business",
     narration: "Owner capital introduced",
     lines: [
@@ -80,6 +82,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
     ],
   },
   {
+    key: "books.tpl.ownerOut",
     label: "I took money out of the business",
     narration: "Owner drawings",
     lines: [
@@ -88,6 +91,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
     ],
   },
   {
+    key: "books.tpl.digitalIn",
     label: "Card / UPI money landed in the bank",
     narration: "Digital settlement received in bank",
     lines: [
@@ -96,6 +100,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
     ],
   },
   {
+    key: "books.tpl.staffPaid",
     label: "Staff paid back a cash shortage",
     narration: "Cash shortage recovered from staff",
     lines: [
@@ -104,6 +109,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
     ],
   },
   {
+    key: "books.tpl.staffWriteOff",
     label: "Writing off a staff shortage",
     narration: "Staff cash shortage written off",
     lines: [
@@ -112,6 +118,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
     ],
   },
   {
+    key: "books.tpl.paySupplier",
     label: "Paid the fuel supplier",
     narration: "Payment to fuel supplier",
     lines: [
@@ -120,6 +127,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
     ],
   },
   {
+    key: "books.tpl.cashDeposit",
     label: "Cash deposited into the bank",
     narration: "Cash deposited to bank",
     lines: [
@@ -128,6 +136,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
     ],
   },
   {
+    key: "books.tpl.customerPaid",
     label: "A customer paid off their dues",
     narration: "Payment received from credit customer",
     lines: [
@@ -138,6 +147,7 @@ const TEMPLATES: { label: string; narration: string; lines: Partial<LineDraft>[]
 ];
 
 export default function NewEntryPage() {
+  const { t } = useT();
   const router = useRouter();
   const qc = useQueryClient();
   const isOwner = getAuthUser()?.role === "OWNER";
@@ -192,11 +202,11 @@ export default function NewEntryPage() {
       return (await api.post("/api/ledger/entries", payload)).data;
     },
     onSuccess: () => {
-      toast.success("Entry posted to the books");
+      toast.success(t("books.new.posted", "Entry posted to the books"));
       qc.invalidateQueries({ queryKey: ["ledger"] });
       router.push("/books/journal");
     },
-    onError: (e) => toast.error(apiError(e, "Could not post this entry")),
+    onError: (e) => toast.error(apiError(e, t("books.new.postFailed", "Could not post this entry"))),
   });
 
   if (!isOwner) {
@@ -204,18 +214,23 @@ export default function NewEntryPage() {
       <Card>
         <CardContent className="p-8 text-center">
           <Lock className="h-6 w-6 mx-auto text-muted-foreground" />
-          <div className="font-medium mt-2">Only the owner can post a manual entry</div>
+          <div className="font-medium mt-2">
+            {t("books.new.ownerOnly", "Only the owner can post a manual entry")}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Manual entries are accounting corrections, not day-to-day data entry.
+            {t(
+              "books.new.ownerOnlyBody",
+              "Manual entries are accounting corrections, not day-to-day data entry.",
+            )}
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  const applyTemplate = (t: (typeof TEMPLATES)[number]) => {
-    setNarration(t.narration);
-    setLines(t.lines.map((l) => newLine(l)));
+  const applyTemplate = (tpl: (typeof TEMPLATES)[number]) => {
+    setNarration(tpl.narration);
+    setLines(tpl.lines.map((l) => newLine(l)));
   };
 
   const update = (key: string, patch: Partial<LineDraft>) =>
@@ -225,20 +240,25 @@ export default function NewEntryPage() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Start from a common situation</CardTitle>
+          <CardTitle className="text-base">
+            {t("books.new.templatesTitle", "Start from a common situation")}
+          </CardTitle>
           <CardDescription>
-            Picks the right two accounts and sides for you — then just fill in the amount.
+            {t(
+              "books.new.templatesDesc",
+              "Picks the right two accounts and sides for you — then just fill in the amount.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          {TEMPLATES.map((t) => (
+          {TEMPLATES.map((tpl) => (
             <Button
-              key={t.label}
+              key={tpl.key}
               size="sm"
               variant="outline"
-              onClick={() => applyTemplate(t)}
+              onClick={() => applyTemplate(tpl)}
             >
-              {t.label}
+              {t(tpl.key, tpl.label)}
             </Button>
           ))}
         </CardContent>
@@ -246,17 +266,18 @@ export default function NewEntryPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Manual journal entry</CardTitle>
+          <CardTitle className="text-base">{t("books.new.title", "Manual journal entry")}</CardTitle>
           <CardDescription>
-            Every entry has two sides that must add up to the same total. Debit (Dr) the account
-            money goes <em>into</em>, credit (Cr) the account it comes <em>out of</em>. Nothing
-            posted here can be edited or deleted later — only reversed.
+            {t(
+              "books.new.desc",
+              "Every entry has two sides that must add up to the same total. Debit (Dr) the account money goes into, credit (Cr) the account it comes out of. Nothing posted here can be edited or deleted later — only reversed.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs">Date</Label>
+              <Label className="text-xs">{t("common.date", "Date")}</Label>
               <Input
                 type="date"
                 value={entryDate}
@@ -266,17 +287,17 @@ export default function NewEntryPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <Label className="text-xs">What is this for?</Label>
+              <Label className="text-xs">{t("books.new.narration", "What is this for?")}</Label>
               <Input
                 value={narration}
-                placeholder="e.g. Owner capital introduced for new dispenser"
+                placeholder={t("books.new.narrationPh", "e.g. Owner capital introduced for new dispenser")}
                 maxLength={300}
                 onChange={(e) => setNarration(e.target.value)}
                 className="mt-1"
               />
               {narration.trim().length > 0 && narration.trim().length < 3 && (
                 <p className="text-xs text-red-700 mt-1">
-                  Give this at least a few words of description.
+                  {t("books.new.narrationShort", "Give this at least a few words of description.")}
                 </p>
               )}
             </div>
@@ -286,11 +307,11 @@ export default function NewEntryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[16rem]">Account</TableHead>
-                  <TableHead className="w-28">Side</TableHead>
-                  <TableHead className="w-36 text-right">Amount (₹)</TableHead>
-                  <TableHead className="min-w-[12rem]">Tagged to</TableHead>
-                  <TableHead className="min-w-[10rem]">Note</TableHead>
+                  <TableHead className="min-w-[16rem]">{t("books.col.account", "Account")}</TableHead>
+                  <TableHead className="w-28">{t("books.new.colSide", "Side")}</TableHead>
+                  <TableHead className="w-36 text-right">{t("books.new.colAmount", "Amount (₹)")}</TableHead>
+                  <TableHead className="min-w-[12rem]">{t("books.col.taggedTo", "Tagged to")}</TableHead>
+                  <TableHead className="min-w-[10rem]">{t("books.new.colNote", "Note")}</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -306,19 +327,19 @@ export default function NewEntryPage() {
                           onValueChange={(v) => update(l.key, { code: v, subjectId: "" })}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Pick an account" />
+                            <SelectValue placeholder={t("books.lg.pickAccount", "Pick an account")} />
                           </SelectTrigger>
                           <SelectContent>
                             {accounts.map((a) => (
                               <SelectItem key={a.code} value={a.code}>
-                                {a.code} · {a.name}
+                                {a.code} · {acctName(t, a.code, a.name)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         {account && (
                           <div className="text-xs text-muted-foreground mt-1">
-                            {ACCOUNT_PLAIN[account.code] ?? ""}
+                            {acctPlain(t, account.code)}
                           </div>
                         )}
                       </TableCell>
@@ -331,8 +352,8 @@ export default function NewEntryPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="DR">Debit (Dr)</SelectItem>
-                            <SelectItem value="CR">Credit (Cr)</SelectItem>
+                            <SelectItem value="DR">{t("books.entry.colDebit", "Debit (Dr)")}</SelectItem>
+                            <SelectItem value="CR">{t("books.entry.colCredit", "Credit (Cr)")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -357,7 +378,7 @@ export default function NewEntryPage() {
                           />
                         ) : (
                           <span className="text-xs text-muted-foreground">
-                            Not tracked per person
+                            {t("books.new.notTracked", "Not tracked per person")}
                           </span>
                         )}
                       </TableCell>
@@ -365,7 +386,7 @@ export default function NewEntryPage() {
                         <Input
                           value={l.memo}
                           maxLength={200}
-                          placeholder="Optional"
+                          placeholder={t("common.optional", "Optional")}
                           onChange={(e) => update(l.key, { memo: e.target.value })}
                         />
                       </TableCell>
@@ -388,7 +409,7 @@ export default function NewEntryPage() {
               <TableFooter>
                 <TableRow>
                   <TableCell colSpan={2} className="font-medium">
-                    Totals
+                    {t("books.new.totals", "Totals")}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="font-mono text-xs">
@@ -399,16 +420,18 @@ export default function NewEntryPage() {
                   <TableCell colSpan={3}>
                     {totals.dr === 0 && totals.cr === 0 ? (
                       <span className="text-xs text-muted-foreground">
-                        Enter the amounts on both sides.
+                        {t("books.new.enterAmounts", "Enter the amounts on both sides.")}
                       </span>
                     ) : balanced ? (
                       <Badge variant="success" className="gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Balances
+                        <CheckCircle2 className="h-3 w-3" /> {t("books.new.balances", "Balances")}
                       </Badge>
                     ) : (
                       <Badge variant="destructive" className="gap-1">
-                        <AlertTriangle className="h-3 w-3" /> Does not balance — out by{" "}
-                        {formatINR(Math.abs(totals.diff))}
+                        <AlertTriangle className="h-3 w-3" />{" "}
+                        {t("books.new.notBalanced", "Does not balance — out by {amount}", {
+                          amount: formatINR(Math.abs(totals.diff)),
+                        })}
                       </Badge>
                     )}
                   </TableCell>
@@ -423,16 +446,19 @@ export default function NewEntryPage() {
               variant="outline"
               onClick={() => setLines((ls) => [...ls, newLine()])}
             >
-              <Plus className="h-4 w-4 mr-1" /> Add a line
+              <Plus className="h-4 w-4 mr-1" /> {t("books.new.addLine", "Add a line")}
             </Button>
             <div className="flex items-center gap-3">
               {!balanced && (totals.dr > 0 || totals.cr > 0) && (
                 <span className="text-xs text-red-700">
-                  Debits and credits must match before this can be posted.
+                  {t(
+                    "books.new.mustMatch",
+                    "Debits and credits must match before this can be posted.",
+                  )}
                 </span>
               )}
               <Button disabled={!canSubmit || post.isPending} onClick={() => post.mutate()}>
-                {post.isPending ? "Posting…" : "Post entry"}
+                {post.isPending ? t("books.entry.posting", "Posting…") : t("books.new.post", "Post entry")}
               </Button>
             </div>
           </div>
@@ -442,13 +468,35 @@ export default function NewEntryPage() {
   );
 }
 
-const SUBJECT_META: Record<SubjectKind, { label: string; url: string }> = {
-  customer: { label: "Customer", url: "/api/credit/customers" },
-  employee: { label: "Employee", url: "/api/employees" },
-  channel: { label: "Channel", url: "/api/setup/payment-channels" },
-  tank: { label: "Tank", url: "/api/setup/tanks" },
-  expenseCategory: { label: "Expense category", url: "/api/setup/expense-categories" },
-};
+type TFn = ReturnType<typeof useT>["t"];
+
+const subjectMeta = (t: TFn): Record<SubjectKind, { label: string; none: string; url: string }> => ({
+  customer: {
+    label: t("books.new.subjCustomer", "Customer"),
+    none: t("books.new.noCustomer", "No customer"),
+    url: "/api/credit/customers",
+  },
+  employee: {
+    label: t("books.new.subjEmployee", "Employee"),
+    none: t("books.new.noEmployee", "No employee"),
+    url: "/api/employees",
+  },
+  channel: {
+    label: t("books.new.subjChannel", "Channel"),
+    none: t("books.new.noChannel", "No channel"),
+    url: "/api/setup/payment-channels",
+  },
+  tank: {
+    label: t("books.new.subjTank", "Tank"),
+    none: t("books.new.noTank", "No tank"),
+    url: "/api/setup/tanks",
+  },
+  expenseCategory: {
+    label: t("books.new.subjCategory", "Expense category"),
+    none: t("books.new.noCategory", "No expense category"),
+    url: "/api/setup/expense-categories",
+  },
+});
 
 function SubjectSelect({
   kind,
@@ -459,7 +507,8 @@ function SubjectSelect({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const meta = SUBJECT_META[kind];
+  const { t } = useT();
+  const meta = subjectMeta(t)[kind];
   const { data: options = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["books-subjects", kind],
     queryFn: async () => (await api.get(meta.url)).data,
@@ -474,7 +523,7 @@ function SubjectSelect({
         <SelectValue placeholder={meta.label} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={NONE}>No {meta.label.toLowerCase()}</SelectItem>
+        <SelectItem value={NONE}>{meta.none}</SelectItem>
         {options.map((o) => (
           <SelectItem key={o.id} value={o.id}>
             {o.name}

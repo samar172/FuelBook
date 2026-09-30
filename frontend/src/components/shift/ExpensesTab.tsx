@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
 
 type Row = {
@@ -21,6 +22,7 @@ type Row = {
 };
 
 export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const { data: cats = [] } = useQuery({
     queryKey: ["expense-categories"],
@@ -54,31 +56,33 @@ export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean
       })).data;
     },
     onSuccess: () => {
-      toast.success("Expenses saved");
+      toast.success(t("shift.expenses.saved", "Expenses saved"));
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("common.failed", "Something went wrong")),
   });
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Expenses</CardTitle>
+        <CardTitle>{t("shift.expenses.title", "Expenses")}</CardTitle>
         <CardDescription>
-          Recurring categories carry their balance forward. Day expense is what was paid in this shift.
-          Closing = opening + day expense.
+          {t(
+            "shift.expenses.desc",
+            "Recurring categories carry their balance forward. Day expense is what was paid in this shift. Closing = opening + day expense.",
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Category</TableHead>
-              <TableHead>Ref</TableHead>
-              <TableHead>Last Bill Date</TableHead>
-              <TableHead>Opening (₹)</TableHead>
-              <TableHead>Day Expense (₹)</TableHead>
-              <TableHead className="text-right">Closing (₹)</TableHead>
+              <TableHead>{t("shift.expenses.category", "Category")}</TableHead>
+              <TableHead>{t("shift.expenses.ref", "Ref")}</TableHead>
+              <TableHead>{t("shift.expenses.lastBillDate", "Last Bill Date")}</TableHead>
+              <TableHead>{t("shift.expenses.opening", "Opening (₹)")}</TableHead>
+              <TableHead>{t("shift.expenses.dayExpense", "Day Expense (₹)")}</TableHead>
+              <TableHead className="text-right">{t("shift.expenses.closing", "Closing (₹)")}</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
@@ -95,7 +99,7 @@ export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean
                       }
                       disabled={disabled}
                     >
-                      <SelectTrigger className="min-w-[200px]"><SelectValue placeholder="Category" /></SelectTrigger>
+                      <SelectTrigger className="min-w-[200px]"><SelectValue placeholder={t("shift.expenses.category", "Category")} /></SelectTrigger>
                       <SelectContent>
                         {cats.map((c: any) => (
                           <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -174,16 +178,16 @@ export function ExpensesTab({ shift, disabled }: { shift: any; disabled: boolean
                 setRows((rs) => [...rs, { categoryId: cats[0]?.id || "", openingBalancePaise: "0", dayExpensePaise: "0" }])
               }
             >
-              <Plus className="h-4 w-4 mr-1" /> Add row
+              <Plus className="h-4 w-4 mr-1" /> {t("common.addRow", "Add row")}
             </Button>
           )}
           <div className="text-sm">
-            Total day expense: <span className="font-semibold">{formatINR(totalDay)}</span>
+            {t("shift.expenses.totalDay", "Total day expense")}: <span className="font-semibold">{formatINR(totalDay)}</span>
           </div>
         </div>
         {!disabled && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save expenses"}
+            {save.isPending ? t("common.saving", "Saving…") : t("shift.expenses.save", "Save expenses")}
           </Button>
         )}
       </CardContent>

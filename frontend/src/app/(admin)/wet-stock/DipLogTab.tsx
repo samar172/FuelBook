@@ -24,6 +24,7 @@ import { formatLitres, FUEL_LABELS } from "@/lib/utils";
 import { apiError, Employee } from "@/lib/types";
 import { toast } from "sonner";
 import { AlertTriangle, Info, Ruler } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import { ShiftPicker } from "./ShiftPicker";
 import { DipReadingsResponse, numOrNull } from "./types";
 
@@ -53,6 +54,9 @@ export function DipLogTab({
   setShiftId: (id: string) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
+  // `t` is shadowed by the tank inside the per-tank map below, so keep an alias.
+  const t2 = t;
   const writable = can("canEditStock");
 
   const { data, isLoading, isError, error } = useQuery<DipReadingsResponse>({
@@ -108,23 +112,27 @@ export function DipLogTab({
             notes: d.notes.trim() || null,
           };
         });
-      if (!readings.length) throw new Error("Enter at least one dip before saving");
+      if (!readings.length)
+        throw new Error(t("wetstock.dip.needOne", "Enter at least one dip before saving"));
       return (await api.put(`/api/wet-stock/shifts/${shiftId}/dip-readings`, { readings })).data;
     },
     onSuccess: () => {
-      toast.success("Dip readings saved");
+      toast.success(t("wetstock.dip.saved", "Dip readings saved"));
       qc.invalidateQueries({ queryKey: ["wet-dip-readings", shiftId] });
       qc.invalidateQueries({ queryKey: ["wet-variance"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not save the dip readings")),
+    onError: (e) =>
+      toast.error(apiError(e, t("wetstock.dip.saveFailed", "Could not save the dip readings"))),
   });
 
   if (!shiftId) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Dip & density log</CardTitle>
-          <CardDescription>Pick a shift to record its tank dips.</CardDescription>
+          <CardTitle>{t("wetstock.dip.title", "Dip & density log")}</CardTitle>
+          <CardDescription>
+            {t("wetstock.dip.pickShift", "Pick a shift to record its tank dips.")}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ShiftPicker value={shiftId} onChange={setShiftId} />
@@ -138,11 +146,13 @@ export function DipLogTab({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Ruler className="h-4 w-4" /> Dip &amp; density log
+            <Ruler className="h-4 w-4" /> {t("wetstock.dip.title", "Dip & density log")}
           </CardTitle>
           <CardDescription>
-            One dip per tank, taken at the tank. The volume is read off the tank&apos;s dip chart
-            automatically.
+            {t(
+              "wetstock.dip.desc",
+              "One dip per tank, taken at the tank. The volume is read off the tank's dip chart automatically."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -153,17 +163,19 @@ export function DipLogTab({
       {isError ? (
         <Card>
           <CardContent className="py-6 text-sm text-destructive">
-            {apiError(error, "Could not load the dip log")}
+            {apiError(error, t("wetstock.dip.loadError", "Could not load the dip log"))}
           </CardContent>
         </Card>
       ) : isLoading ? (
         <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">Loading…</CardContent>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            {t("common.loading", "Loading…")}
+          </CardContent>
         </Card>
       ) : !data || data.tanks.length === 0 ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
-            No active tanks yet. Add tanks in Settings first.
+            {t("wetstock.dip.noTanks", "No active tanks yet. Add tanks in Settings first.")}
           </CardContent>
         </Card>
       ) : (
@@ -171,9 +183,12 @@ export function DipLogTab({
           <p className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              Density at 15&nbsp;°C is <strong>approximate</strong>: a simplified linear
-              correction of 0.65&nbsp;kg/m³ per&nbsp;°C, not the ASTM&nbsp;54B table. Good enough
-              for the daily log and for checking an invoice — not a lab figure.
+              {t("wetstock.dip.densityNoteLead", "Density at 15 °C is")}{" "}
+              <strong>{t("wetstock.dip.densityNoteApprox", "approximate")}</strong>
+              {t(
+                "wetstock.dip.densityNoteTail",
+                ": a simplified linear correction of 0.65 kg/m³ per °C, not the ASTM 54B table. Good enough for the daily log and for checking an invoice — not a lab figure."
+              )}
             </span>
           </p>
 
@@ -188,23 +203,31 @@ export function DipLogTab({
                   <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="text-base">{t.name}</CardTitle>
-                      <Badge variant="outline">{FUEL_LABELS[t.fuelType] ?? t.fuelType}</Badge>
+                      <Badge variant="outline">{t2(`shift.fuel.${t.fuelType}`, FUEL_LABELS[t.fuelType] ?? t.fuelType)}</Badge>
                     </div>
                     <CardDescription>
-                      Capacity {formatLitres(t.capacityMl, 0)} L ·{" "}
+                      {t2("wetstock.dip.capacity", "Capacity {litres} L", {
+                        litres: formatLitres(t.capacityMl, 0),
+                      })}{" "}
+                      ·{" "}
                       {noChart ? (
                         <span className="text-amber-700">
-                          no dip chart — the volume cannot be derived
+                          {t2(
+                            "wetstock.dip.noChart",
+                            "no dip chart — the volume cannot be derived"
+                          )}
                         </span>
                       ) : (
-                        `${t.chartPoints} chart points`
+                        t2("wetstock.dip.chartPoints", "{count} chart points", {
+                          count: t.chartPoints ?? 0,
+                        })
                       )}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label htmlFor={`dip-${t.id}`}>Dip (mm)</Label>
+                        <Label htmlFor={`dip-${t.id}`}>{t2("wetstock.dip.dipMm", "Dip (mm)")}</Label>
                         <Input
                           id={`dip-${t.id}`}
                           inputMode="numeric"
@@ -215,7 +238,7 @@ export function DipLogTab({
                         />
                       </div>
                       <div>
-                        <Label htmlFor={`temp-${t.id}`}>Temp (°C)</Label>
+                        <Label htmlFor={`temp-${t.id}`}>{t2("wetstock.dip.tempC", "Temp (°C)")}</Label>
                         <Input
                           id={`temp-${t.id}`}
                           inputMode="numeric"
@@ -226,7 +249,9 @@ export function DipLogTab({
                         />
                       </div>
                       <div>
-                        <Label htmlFor={`den-${t.id}`}>Density (kg/m³)</Label>
+                        <Label htmlFor={`den-${t.id}`}>
+                          {t2("wetstock.dip.density", "Density (kg/m³)")}
+                        </Label>
                         <Input
                           id={`den-${t.id}`}
                           inputMode="numeric"
@@ -237,7 +262,7 @@ export function DipLogTab({
                         />
                       </div>
                       <div>
-                        <Label htmlFor={`by-${t.id}`}>Taken by</Label>
+                        <Label htmlFor={`by-${t.id}`}>{t2("wetstock.dip.takenBy", "Taken by")}</Label>
                         <Select
                           value={d.recordedById}
                           onValueChange={(v) => set(t.id, "recordedById", v)}
@@ -247,7 +272,9 @@ export function DipLogTab({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={NO_EMPLOYEE}>Not recorded</SelectItem>
+                            <SelectItem value={NO_EMPLOYEE}>
+                              {t2("wetstock.notRecorded", "Not recorded")}
+                            </SelectItem>
                             {employees.map((e) => (
                               <SelectItem key={e.id} value={e.id}>
                                 {e.name}
@@ -258,19 +285,24 @@ export function DipLogTab({
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor={`notes-${t.id}`}>Notes</Label>
+                      <Label htmlFor={`notes-${t.id}`}>{t2("common.notes", "Notes")}</Label>
                       <Input
                         id={`notes-${t.id}`}
                         value={d.notes}
                         disabled={disabled}
-                        placeholder="Water in tank, foam, anything unusual"
+                        placeholder={t2(
+                          "wetstock.dip.notesPlaceholder",
+                          "Water in tank, foam, anything unusual"
+                        )}
                         onChange={(e) => set(t.id, "notes", e.target.value)}
                         className="mt-1"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/40 p-3 text-sm">
                       <div>
-                        <div className="text-xs text-muted-foreground">Volume from chart</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t2("wetstock.dip.volumeFromChart", "Volume from chart")}
+                        </div>
                         <div className="font-medium">
                           {saved?.volumeFromChartMl
                             ? `${formatLitres(saved.volumeFromChartMl)} L`
@@ -279,7 +311,7 @@ export function DipLogTab({
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">
-                          Density @ 15 °C (approx.)
+                          {t2("wetstock.dip.densityAt15", "Density @ 15 °C (approx.)")}
                         </div>
                         <div className="font-medium">
                           {saved?.densityAt15CKgM3 !== null && saved?.densityAt15CKgM3 !== undefined
@@ -296,16 +328,24 @@ export function DipLogTab({
 
           {locked ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <AlertTriangle className="h-4 w-4" /> This shift is locked, so its dip log can no
-              longer be edited.
+              <AlertTriangle className="h-4 w-4" />{" "}
+              {t(
+                "wetstock.dip.lockedNote",
+                "This shift is locked, so its dip log can no longer be edited."
+              )}
             </p>
           ) : !writable ? (
             <p className="text-sm text-muted-foreground">
-              You do not have permission to edit stock readings.
+              {t(
+                "wetstock.noStockPermission",
+                "You do not have permission to edit stock readings."
+              )}
             </p>
           ) : (
             <Button onClick={() => save.mutate()} disabled={save.isPending} className="w-full sm:w-auto">
-              {save.isPending ? "Saving…" : "Save dip readings"}
+              {save.isPending
+                ? t("common.saving", "Saving…")
+                : t("wetstock.dip.save", "Save dip readings")}
             </Button>
           )}
         </>

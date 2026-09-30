@@ -29,19 +29,17 @@ import {
 } from "@/components/ui/table";
 import { formatINR } from "@/lib/utils";
 import { format } from "date-fns";
-import {
-  JOURNAL_SOURCES,
-  JournalPage,
-  Range,
-  SOURCE_LABELS,
-  defaultRange,
-} from "@/lib/books";
-import { DateRangeBar, EmptyBooks } from "../_components/controls";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
+import { JOURNAL_SOURCES, JournalPage, Range, defaultRange } from "@/lib/books";
+import { DateRangeBar, EmptyBooks, acctName, sourceLabel } from "../_components/controls";
 import { EntryDetailDialog } from "../_components/entry-detail";
 
 const PAGE_SIZE = 50;
 
 export default function JournalPageView() {
+  const { t } = useT();
+  const locale = useDateLocale();
   const [range, setRange] = useState<Range>(defaultRange);
   const [source, setSource] = useState<string>("ALL");
   const [offset, setOffset] = useState(0);
@@ -75,7 +73,7 @@ export default function JournalPageView() {
         }}
       >
         <div>
-          <Label className="text-xs">Where it came from</Label>
+          <Label className="text-xs">{t("books.jr.source", "Where it came from")}</Label>
           <Select
             value={source}
             onValueChange={(v) => {
@@ -87,10 +85,10 @@ export default function JournalPageView() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Everything</SelectItem>
+              <SelectItem value="ALL">{t("books.jr.everything", "Everything")}</SelectItem>
               {JOURNAL_SOURCES.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {SOURCE_LABELS[s]}
+                  {sourceLabel(t, s)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -100,30 +98,36 @@ export default function JournalPageView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Journal</CardTitle>
+          <CardTitle className="text-base">{t("books.nav.journal", "Journal")}</CardTitle>
           <CardDescription>
-            Every entry ever written to the books, newest first. Click one to see both sides of
-            it. Entries appear automatically when a shift is locked; unlocking a shift adds a
-            mirror entry rather than removing the original.
+            {t(
+              "books.jr.desc",
+              "Every entry ever written to the books, newest first. Click one to see both sides of it. Entries appear automatically when a shift is locked; unlocking a shift adds a mirror entry rather than removing the original.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">Loading…</div>
+            <div className="text-sm text-muted-foreground py-6 text-center">
+              {t("common.loading", "Loading…")}
+            </div>
           ) : entries.length === 0 ? (
             <EmptyBooks
-              title="No entries in this range"
-              body="Widen the dates, or lock a shift report — that is what writes entries into the journal."
+              title={t("books.jr.emptyTitle", "No entries in this range")}
+              body={t(
+                "books.jr.emptyBody",
+                "Widen the dates, or lock a shift report — that is what writes entries into the journal.",
+              )}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-28">Date</TableHead>
-                    <TableHead>What happened</TableHead>
-                    <TableHead>Accounts touched</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="w-28">{t("common.date", "Date")}</TableHead>
+                    <TableHead>{t("books.jr.colWhat", "What happened")}</TableHead>
+                    <TableHead>{t("books.jr.colAccounts", "Accounts touched")}</TableHead>
+                    <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -134,23 +138,23 @@ export default function JournalPageView() {
                       onClick={() => setOpenId(e.id)}
                     >
                       <TableCell className="whitespace-nowrap">
-                        {format(new Date(e.entryDate), "dd MMM yy")}
+                        {format(new Date(e.entryDate), "dd MMM yy", { locale })}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{e.narration}</div>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <Badge variant="outline" className="text-[10px]">
-                            {SOURCE_LABELS[e.source] ?? e.source}
+                            {sourceLabel(t, e.source)}
                           </Badge>
                           {e.isReversed && (
                             <Badge variant="warning" className="text-[10px]">
-                              Reversed
+                              {t("books.reversed", "Reversed")}
                             </Badge>
                           )}
                         </div>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-xs">
-                        {[...new Set(e.lines.map((l) => l.account.name))].join(", ")}
+                        {[...new Set(e.lines.map((l) => acctName(t, l.account.code, l.account.name)))].join(", ")}
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {formatINR(e.totalPaise)}
@@ -165,7 +169,11 @@ export default function JournalPageView() {
           {total > PAGE_SIZE && (
             <div className="flex items-center justify-between mt-3 text-sm">
               <span className="text-muted-foreground">
-                {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+                {t("books.jr.range", "{from}–{to} of {total}", {
+                  from: offset + 1,
+                  to: Math.min(offset + PAGE_SIZE, total),
+                  total,
+                })}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -174,7 +182,7 @@ export default function JournalPageView() {
                   disabled={offset === 0}
                   onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
                 >
-                  Previous
+                  {t("books.jr.prev", "Previous")}
                 </Button>
                 <Button
                   size="sm"
@@ -182,7 +190,7 @@ export default function JournalPageView() {
                   disabled={offset + PAGE_SIZE >= total}
                   onClick={() => setOffset((o) => o + PAGE_SIZE)}
                 >
-                  Next
+                  {t("common.next", "Next")}
                 </Button>
               </div>
             </div>

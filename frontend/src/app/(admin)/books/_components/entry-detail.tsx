@@ -20,19 +20,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
+import { formatINR, formatLitres } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
+import { acctName, acctPlain, fuelLabel, sourceLabel } from "./controls";
 import { apiError } from "@/lib/types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Undo2, ExternalLink } from "lucide-react";
-import {
-  ACCOUNT_PLAIN,
-  JournalEntry,
-  JournalLine,
-  SOURCE_LABELS,
-  paise,
-  sumPaise,
-} from "@/lib/books";
+import { JournalEntry, JournalLine, paise, sumPaise } from "@/lib/books";
 
 /** The subject a line is tagged against, e.g. which customer owes the money. */
 export function lineSubject(l: JournalLine): string | null {
@@ -56,6 +52,8 @@ export function EntryDetailDialog({
   entryId: string | null;
   onClose: () => void;
 }) {
+  const { t } = useT();
+  const locale = useDateLocale();
   const qc = useQueryClient();
   const isOwner = getAuthUser()?.role === "OWNER";
 
@@ -69,12 +67,14 @@ export function EntryDetailDialog({
     mutationFn: async () =>
       (await api.post(`/api/ledger/entries/${entryId}/reverse`)).data,
     onSuccess: () => {
-      toast.success("Reversal posted. The original entry stays on record.");
+      toast.success(
+        t("books.entry.reversed", "Reversal posted. The original entry stays on record."),
+      );
       qc.invalidateQueries({ queryKey: ["ledger"] });
       qc.invalidateQueries({ queryKey: ["ledger-entry", entryId] });
       onClose();
     },
-    onError: (e) => toast.error(apiError(e, "Could not reverse this entry")),
+    onError: (e) => toast.error(apiError(e, t("books.entry.reverseFailed", "Could not reverse this entry"))),
   });
 
   const lines = entry?.lines ?? [];
@@ -87,28 +87,34 @@ export function EntryDetailDialog({
     <Dialog open={Boolean(entryId)} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Journal entry</DialogTitle>
+          <DialogTitle>{t("books.entry.title", "Journal entry")}</DialogTitle>
           <DialogDescription>
             {entry
-              ? `${format(new Date(entry.entryDate), "dd MMM yyyy")} — ${entry.narration}`
-              : "Loading…"}
+              ? `${format(new Date(entry.entryDate), "dd MMM yyyy", { locale })} — ${entry.narration}`
+              : t("common.loading", "Loading…")}
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading && <div className="text-muted-foreground text-sm">Loading…</div>}
+        {isLoading && (
+          <div className="text-muted-foreground text-sm">{t("common.loading", "Loading…")}</div>
+        )}
 
         {entry && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="outline">{SOURCE_LABELS[entry.source] ?? entry.source}</Badge>
-              {alreadyReversed && <Badge variant="warning">Reversed</Badge>}
-              {isReversal && <Badge variant="secondary">This is itself a reversal</Badge>}
+              <Badge variant="outline">{sourceLabel(t, entry.source)}</Badge>
+              {alreadyReversed && <Badge variant="warning">{t("books.reversed", "Reversed")}</Badge>}
+              {isReversal && (
+                <Badge variant="secondary">
+                  {t("books.entry.isReversal", "This is itself a reversal")}
+                </Badge>
+              )}
               {entry.shiftReportId && (
                 <Link
                   href={`/shifts/${entry.shiftReportId}`}
                   className="inline-flex items-center gap-1 text-primary hover:underline"
                 >
-                  Open the shift <ExternalLink className="h-3 w-3" />
+                  {t("books.entry.openShift", "Open the shift")} <ExternalLink className="h-3 w-3" />
                 </Link>
               )}
             </div>
@@ -117,10 +123,10 @@ export function EntryDetailDialog({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Account</TableHead>
-                    <TableHead>Tagged to</TableHead>
-                    <TableHead className="text-right">Debit (Dr)</TableHead>
-                    <TableHead className="text-right">Credit (Cr)</TableHead>
+                    <TableHead>{t("books.col.account", "Account")}</TableHead>
+                    <TableHead>{t("books.col.taggedTo", "Tagged to")}</TableHead>
+                    <TableHead className="text-right">{t("books.entry.colDebit", "Debit (Dr)")}</TableHead>
+                    <TableHead className="text-right">{t("books.entry.colCredit", "Credit (Cr)")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -131,10 +137,10 @@ export function EntryDetailDialog({
                           <span className="font-mono text-xs text-muted-foreground mr-1.5">
                             {l.account.code}
                           </span>
-                          {l.account.name}
+                          {acctName(t, l.account.code, l.account.name)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {ACCOUNT_PLAIN[l.account.code] ?? ""}
+                          {acctPlain(t, l.account.code)}
                         </div>
                         {l.memo && (
                           <div className="text-xs text-muted-foreground italic mt-0.5">
@@ -146,7 +152,7 @@ export function EntryDetailDialog({
                         {lineSubject(l) ?? <span className="text-muted-foreground">—</span>}
                         {l.fuelType && (
                           <div className="text-xs text-muted-foreground">
-                            {FUEL_LABELS[l.fuelType] ?? l.fuelType}
+                            {fuelLabel(t, l.fuelType)}
                             {paise(l.quantityMl) > 0 &&
                               ` · ${formatLitres(l.quantityMl ?? 0)} L`}
                           </div>
@@ -164,7 +170,7 @@ export function EntryDetailDialog({
                 <TableFooter>
                   <TableRow>
                     <TableCell colSpan={2} className="font-medium">
-                      Total
+                      {t("common.total", "Total")}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">
                       {formatINR(totalDr)}
@@ -180,8 +186,10 @@ export function EntryDetailDialog({
             {isOwner && (
               <div className="flex items-center justify-between gap-3 border-t pt-3">
                 <p className="text-xs text-muted-foreground max-w-md">
-                  Nothing is ever edited or deleted in the books. To undo an entry, post a
-                  mirror entry that cancels it — the original stays on record.
+                  {t(
+                    "books.entry.undoNote",
+                    "Nothing is ever edited or deleted in the books. To undo an entry, post a mirror entry that cancels it — the original stays on record.",
+                  )}
                 </p>
                 <Button
                   variant="outline"
@@ -190,7 +198,10 @@ export function EntryDetailDialog({
                   onClick={() => {
                     if (
                       window.confirm(
-                        "Post a reversing entry?\n\nThis writes a real mirror entry, dated the same day as the original, that cancels it out. It cannot be undone — you would have to reverse the reversal.",
+                        t(
+                          "books.entry.reverseConfirm",
+                          "Post a reversing entry?\n\nThis writes a real mirror entry, dated the same day as the original, that cancels it out. It cannot be undone — you would have to reverse the reversal.",
+                        ),
                       )
                     ) {
                       reverse.mutate();
@@ -199,10 +210,10 @@ export function EntryDetailDialog({
                 >
                   <Undo2 className="h-4 w-4 mr-2" />
                   {alreadyReversed
-                    ? "Already reversed"
+                    ? t("books.entry.alreadyReversed", "Already reversed")
                     : reverse.isPending
-                      ? "Posting…"
-                      : "Reverse this entry"}
+                      ? t("books.entry.posting", "Posting…")
+                      : t("books.entry.reverse", "Reverse this entry")}
                 </Button>
               </div>
             )}

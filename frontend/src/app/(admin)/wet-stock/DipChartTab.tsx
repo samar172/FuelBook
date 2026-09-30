@@ -31,6 +31,7 @@ import {
 import { formatLitres, FUEL_LABELS } from "@/lib/utils";
 import { apiError } from "@/lib/types";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import { Table2, Wand2 } from "lucide-react";
 import { DipChartResponse, WetTank } from "./types";
 
@@ -38,16 +39,22 @@ type Parsed = { rows: { dipMm: number; litres: number }[]; errors: string[] };
 
 // The OMC calibration chart arrives as a printout or a spreadsheet, so the paste
 // box accepts anything two-column: tabs, commas, semicolons or runs of spaces.
-function parseChart(text: string): Parsed {
+type TFn = (key: string, fallback: string, vars?: Record<string, string | number>) => string;
+
+function parseChart(text: string, t: TFn): Parsed {
   const rows: { dipMm: number; litres: number }[] = [];
   const errors: string[] = [];
   const lines = text.split(/\r?\n/);
   lines.forEach((line, i) => {
-    const t = line.trim();
-    if (t === "") return;
-    const parts = t.split(/[\t,;]+|\s{1,}/).filter((p) => p !== "");
+    const trimmed = line.trim();
+    if (trimmed === "") return;
+    const parts = trimmed.split(/[\t,;]+|\s{1,}/).filter((p) => p !== "");
     if (parts.length < 2) {
-      errors.push(`Line ${i + 1}: needs two columns (dip mm and litres)`);
+      errors.push(
+        t("wetstock.chart.errTwoColumns", "Line {line}: needs two columns (dip mm and litres)", {
+          line: i + 1,
+        })
+      );
       return;
     }
     const dip = Number(parts[0].replace(/[^\d.-]/g, ""));
@@ -55,11 +62,20 @@ function parseChart(text: string): Parsed {
     if (!Number.isFinite(dip) || !Number.isFinite(litres)) {
       // A header row like "Dip (mm)  Litres" is skipped silently.
       if (i === 0) return;
-      errors.push(`Line ${i + 1}: could not read "${t}"`);
+      errors.push(
+        t("wetstock.chart.errUnreadable", 'Line {line}: could not read "{text}"', {
+          line: i + 1,
+          text: trimmed,
+        })
+      );
       return;
     }
     if (dip < 0 || litres < 0) {
-      errors.push(`Line ${i + 1}: negative values are not possible`);
+      errors.push(
+        t("wetstock.chart.errNegative", "Line {line}: negative values are not possible", {
+          line: i + 1,
+        })
+      );
       return;
     }
     rows.push({ dipMm: Math.round(dip), litres });
@@ -68,6 +84,7 @@ function parseChart(text: string): Parsed {
 }
 
 export function DipChartTab() {
+  const { t } = useT();
   const qc = useQueryClient();
   const writable = can("canEditStock");
 
@@ -101,7 +118,7 @@ export function DipChartTab() {
     setProbeDip("");
   }, [tankId]);
 
-  const parsed = useMemo(() => parseChart(paste), [paste]);
+  const parsed = useMemo(() => parseChart(paste, t), [paste, t]);
 
   const save = useMutation({
     mutationFn: async () =>
@@ -111,12 +128,14 @@ export function DipChartTab() {
         })
       ).data,
     onSuccess: (res: { count: number }) => {
-      toast.success(`Chart saved — ${res.count} calibration points`);
+      toast.success(
+        t("wetstock.chart.saved", "Chart saved — {count} calibration points", { count: res.count })
+      );
       setPaste("");
       qc.invalidateQueries({ queryKey: ["wet-dip-chart", tankId] });
       qc.invalidateQueries({ queryKey: ["wet-dip-readings"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not save the dip chart")),
+    onError: (e) => toast.error(apiError(e, t("wetstock.chart.saveFailed", "Could not save the dip chart"))),
   });
 
   const convert = useMutation({
@@ -127,11 +146,19 @@ export function DipChartTab() {
         })
       ).data,
     onSuccess: (res: { volumeMl: string; exact: boolean }) => {
-      setProbe(`${formatLitres(res.volumeMl)} L${res.exact ? " (exact chart point)" : " (interpolated)"}`);
+      setProbe(
+        res.exact
+          ? t("wetstock.chart.exactPoint", "{litres} L (exact chart point)", {
+              litres: formatLitres(res.volumeMl),
+            })
+          : t("wetstock.chart.interpolated", "{litres} L (interpolated)", {
+              litres: formatLitres(res.volumeMl),
+            })
+      );
     },
     onError: (e) => {
       setProbe(null);
-      toast.error(apiError(e, "Could not convert that dip"));
+      toast.error(apiError(e, t("wetstock.chart.convertFailed", "Could not convert that dip")));
     },
   });
 
@@ -141,37 +168,39 @@ export function DipChartTab() {
   };
 
   const chart = chartQ.data;
-  const tank = tanks.find((t) => t.id === tankId);
+  const tank = tanks.find((x) => x.id === tankId);
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Table2 className="h-4 w-4" /> Tank dip charts
+            <Table2 className="h-4 w-4" /> {t("wetstock.chart.title", "Tank dip charts")}
           </CardTitle>
           <CardDescription>
-            The calibration table from the OMC: dip in millimetres against volume in litres. Every
-            dip reading and every decantation is measured through this chart.
+            {t(
+              "wetstock.chart.desc",
+              "The calibration table from the OMC: dip in millimetres against volume in litres. Every dip reading and every decantation is measured through this chart."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {tanks.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No tanks yet. Add tanks in Settings first.
+              {t("wetstock.chart.noTanks", "No tanks yet. Add tanks in Settings first.")}
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label htmlFor="c-tank">Tank</Label>
+                <Label htmlFor="c-tank">{t("wetstock.chart.tank", "Tank")}</Label>
                 <Select value={tankId || undefined} onValueChange={setTankId}>
                   <SelectTrigger id="c-tank" className="mt-1">
-                    <SelectValue placeholder="Pick a tank" />
+                    <SelectValue placeholder={t("wetstock.chart.pickTank", "Pick a tank")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {tanks.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name} · {FUEL_LABELS[t.fuelType] ?? t.fuelType}
+                    {tanks.map((tk) => (
+                      <SelectItem key={tk.id} value={tk.id}>
+                        {tk.name} · {t(`shift.fuel.${tk.fuelType}`, FUEL_LABELS[tk.fuelType] ?? tk.fuelType)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -179,12 +208,18 @@ export function DipChartTab() {
               </div>
               {tank ? (
                 <div className="flex items-end gap-2 text-sm text-muted-foreground">
-                  Capacity {formatLitres(tank.capacityMl, 0)} L
+                  {t("wetstock.chart.capacity", "Capacity {litres} L", {
+                    litres: formatLitres(tank.capacityMl, 0),
+                  })}
                   {chart ? (
                     <Badge variant="outline">
                       {chart.points.length
-                        ? `${chart.points.length} points (${chart.minDipMm}–${chart.maxDipMm} mm)`
-                        : "no chart"}
+                        ? t("wetstock.chart.pointsRange", "{count} points ({min}–{max} mm)", {
+                            count: chart.points.length,
+                            min: chart.minDipMm ?? 0,
+                            max: chart.maxDipMm ?? 0,
+                          })
+                        : t("wetstock.chart.noChartBadge", "no chart")}
                     </Badge>
                   ) : null}
                 </div>
@@ -198,15 +233,18 @@ export function DipChartTab() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Dip to volume</CardTitle>
+              <CardTitle className="text-base">{t("wetstock.chart.dipToVolume", "Dip to volume")}</CardTitle>
               <CardDescription>
-                Linear interpolation between the two nearest chart points.
+                {t(
+                  "wetstock.chart.dipToVolumeDesc",
+                  "Linear interpolation between the two nearest chart points."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
-                  <Label htmlFor="c-probe">Dip (mm)</Label>
+                  <Label htmlFor="c-probe">{t("wetstock.chart.dipMm", "Dip (mm)")}</Label>
                   <Input
                     id="c-probe"
                     inputMode="numeric"
@@ -220,7 +258,7 @@ export function DipChartTab() {
                   onClick={() => convert.mutate()}
                   disabled={convert.isPending || probeDip.trim() === ""}
                 >
-                  Convert
+                  {t("wetstock.chart.convert", "Convert")}
                 </Button>
               </div>
               {probe ? <p className="mt-3 text-sm font-medium">{probe}</p> : null}
@@ -229,10 +267,14 @@ export function DipChartTab() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Paste a calibration table</CardTitle>
+              <CardTitle className="text-base">
+                {t("wetstock.chart.pasteTitle", "Paste a calibration table")}
+              </CardTitle>
               <CardDescription>
-                Two columns per line — dip in mm, then litres. Tabs, commas or spaces all work, and
-                a header row is ignored. Saving replaces the whole chart for this tank.
+                {t(
+                  "wetstock.chart.pasteDesc",
+                  "Two columns per line — dip in mm, then litres. Tabs, commas or spaces all work, and a header row is ignored. Saving replaces the whole chart for this tank."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -251,28 +293,38 @@ export function DipChartTab() {
                     <div key={e}>{e}</div>
                   ))}
                   {parsed.errors.length > 6 ? (
-                    <div>…and {parsed.errors.length - 6} more</div>
+                    <div>
+                      {t("wetstock.chart.errMore", "…and {count} more", {
+                        count: parsed.errors.length - 6,
+                      })}
+                    </div>
                   ) : null}
                 </div>
               ) : null}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <span className="text-sm text-muted-foreground">
-                  {parsed.rows.length} point{parsed.rows.length === 1 ? "" : "s"} parsed
+                  {t("wetstock.chart.pointsParsed", "{count} point(s) parsed", {
+                    count: parsed.rows.length,
+                  })}
                 </span>
                 <div className="flex-1" />
                 <Button variant="outline" onClick={loadIntoBox} disabled={!chart?.points.length}>
-                  <Wand2 className="mr-1 h-4 w-4" /> Load current chart to edit
+                  <Wand2 className="mr-1 h-4 w-4" />{" "}
+                  {t("wetstock.chart.loadCurrent", "Load current chart to edit")}
                 </Button>
                 <Button
                   onClick={() => save.mutate()}
                   disabled={!writable || save.isPending || parsed.rows.length === 0}
                 >
-                  {save.isPending ? "Saving…" : "Replace chart"}
+                  {save.isPending ? t("common.saving", "Saving…") : t("wetstock.chart.replace", "Replace chart")}
                 </Button>
               </div>
               {!writable ? (
                 <p className="text-xs text-muted-foreground">
-                  You do not have permission to edit stock data.
+                  {t(
+                    "wetstock.chart.noDataPermission",
+                    "You do not have permission to edit stock data."
+                  )}
                 </p>
               ) : null}
             </CardContent>
@@ -280,27 +332,33 @@ export function DipChartTab() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Current chart</CardTitle>
+              <CardTitle className="text-base">{t("wetstock.chart.current", "Current chart")}</CardTitle>
             </CardHeader>
             <CardContent>
               {chartQ.isLoading ? (
-                <p className="py-4 text-sm text-muted-foreground">Loading…</p>
+                <p className="py-4 text-sm text-muted-foreground">
+                  {t("common.loading", "Loading…")}
+                </p>
               ) : chartQ.isError ? (
                 <p className="py-4 text-sm text-destructive">
-                  {apiError(chartQ.error, "Could not load the chart")}
+                  {apiError(chartQ.error, t("wetstock.chart.loadError", "Could not load the chart"))}
                 </p>
               ) : !chart?.points.length ? (
                 <p className="py-4 text-sm text-muted-foreground">
-                  No chart loaded for this tank yet. Dips can still be recorded, but the volume and
-                  the wet-stock variance cannot be derived until a chart is pasted in.
+                  {t(
+                    "wetstock.chart.emptyChart",
+                    "No chart loaded for this tank yet. Dips can still be recorded, but the volume and the wet-stock variance cannot be derived until a chart is pasted in."
+                  )}
                 </p>
               ) : (
                 <div className="max-h-96 overflow-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Dip (mm)</TableHead>
-                        <TableHead className="text-right">Volume (L)</TableHead>
+                        <TableHead>{t("wetstock.chart.dipMm", "Dip (mm)")}</TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.chart.thVolume", "Volume (L)")}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

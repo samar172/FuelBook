@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/utils";
 import { vehicleSummary, type CreditCustomer } from "@/lib/types";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
 
 type Row = {
@@ -21,6 +22,7 @@ type Row = {
 };
 
 export function OutstandingTab({ shift, disabled }: { shift: any; disabled: boolean }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const { data: customers = [] } = useQuery<CreditCustomer[]>({
     queryKey: ["credit-customers"],
@@ -56,29 +58,31 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
       })).data;
     },
     onSuccess: () => {
-      toast.success("Outstanding receipts saved");
+      toast.success(t("shift.outstanding.saved", "Outstanding receipts saved"));
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("common.failed", "Something went wrong")),
   });
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Outstanding Received Today</CardTitle>
+        <CardTitle>{t("shift.outstanding.title", "Outstanding Received Today")}</CardTitle>
         <CardDescription>
-          Past credit balances collected from customers during this shift. These reduce the customer's
-          outstanding balance when the shift is locked.
+          {t(
+            "shift.outstanding.desc",
+            "Past credit balances collected from customers during this shift. These reduce the customer's outstanding balance when the shift is locked.",
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Amount (₹)</TableHead>
-              <TableHead>Channel</TableHead>
-              <TableHead>Reference</TableHead>
+              <TableHead>{t("shift.outstanding.customer", "Customer")}</TableHead>
+              <TableHead>{t("shift.outstanding.amount", "Amount (₹)")}</TableHead>
+              <TableHead>{t("shift.outstanding.channel", "Channel")}</TableHead>
+              <TableHead>{t("shift.outstanding.reference", "Reference")}</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
@@ -100,9 +104,9 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
                     }
                     disabled={disabled}
                   >
-                    <SelectTrigger className="min-w-[180px]"><SelectValue placeholder="Customer" /></SelectTrigger>
+                    <SelectTrigger className="min-w-[180px]"><SelectValue placeholder={t("shift.outstanding.customer", "Customer")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="raw">— Walk-in / unlisted —</SelectItem>
+                      <SelectItem value="raw">{t("shift.outstanding.walkIn", "— Walk-in / unlisted —")}</SelectItem>
                       {customers.filter((c) => c.isActive).map((c) => {
                         const summary = vehicleSummary(c.vehicles);
                         return (
@@ -115,7 +119,7 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
                   </Select>
                   {!r.customerId && (
                     <Input
-                      placeholder="Customer name"
+                      placeholder={t("shift.outstanding.customerName", "Customer name")}
                       className="mt-2"
                       disabled={disabled}
                       value={r.customerNameRaw}
@@ -151,7 +155,7 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
                   >
                     <SelectTrigger className="min-w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">— None —</SelectItem>
+                      <SelectItem value="none">{t("shift.outstanding.none", "— None —")}</SelectItem>
                       {channels.map((c: any) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
@@ -185,16 +189,16 @@ export function OutstandingTab({ shift, disabled }: { shift: any; disabled: bool
               size="sm"
               onClick={() => setRows((rs) => [...rs, { customerNameRaw: "", amountPaise: "0" }])}
             >
-              <Plus className="h-4 w-4 mr-1" /> Add row
+              <Plus className="h-4 w-4 mr-1" /> {t("common.addRow", "Add row")}
             </Button>
           )}
           <div className="text-sm">
-            Total received: <span className="font-semibold">{formatINR(total)}</span>
+            {t("shift.outstanding.total", "Total received")}: <span className="font-semibold">{formatINR(total)}</span>
           </div>
         </div>
         {!disabled && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save outstanding"}
+            {save.isPending ? t("common.saving", "Saving…") : t("shift.outstanding.save", "Save outstanding")}
           </Button>
         )}
       </CardContent>

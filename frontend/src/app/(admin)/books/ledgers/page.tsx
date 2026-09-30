@@ -29,33 +29,48 @@ import {
 } from "@/components/ui/table";
 import { formatINR } from "@/lib/utils";
 import { format } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import {
-  ACCOUNT_PLAIN,
   ACCOUNT_SUBJECT,
-  ACCOUNT_TYPE_LABELS,
   AccountLedger,
   AccountRow,
   Range,
-  SOURCE_LABELS,
   SubjectKind,
   defaultRange,
   normalSide,
   paise,
 } from "@/lib/books";
-import { DateRangeBar, EmptyBooks, SideBadge, StatCard } from "../_components/controls";
+import {
+  DateRangeBar,
+  EmptyBooks,
+  SideBadge,
+  StatCard,
+  acctName,
+  acctPlain,
+  sourceLabel,
+  typeLabel,
+} from "../_components/controls";
 import { EntryDetailDialog } from "../_components/entry-detail";
 
 const ALL = "ALL";
 
 export default function LedgersPage() {
+  const { t } = useT();
   return (
-    <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
+    <Suspense
+      fallback={
+        <div className="text-sm text-muted-foreground">{t("common.loading", "Loading…")}</div>
+      }
+    >
       <LedgersInner />
     </Suspense>
   );
 }
 
 function LedgersInner() {
+  const { t } = useT();
+  const locale = useDateLocale();
   const search = useSearchParams();
   const initialCode = search.get("code") ?? "";
   const initialRange: Range = {
@@ -120,15 +135,15 @@ function LedgersInner() {
       <Card>
         <CardContent className="p-4 flex flex-wrap items-end gap-3">
           <div>
-            <Label className="text-xs">Account</Label>
+            <Label className="text-xs">{t("books.col.account", "Account")}</Label>
             <Select value={code || undefined} onValueChange={setCode}>
               <SelectTrigger className="w-[22rem] max-w-full">
-                <SelectValue placeholder="Pick an account" />
+                <SelectValue placeholder={t("books.lg.pickAccount", "Pick an account")} />
               </SelectTrigger>
               <SelectContent>
                 {accounts.map((a) => (
                   <SelectItem key={a.code} value={a.code}>
-                    {a.code} · {a.name}
+                    {a.code} · {acctName(t, a.code, a.name)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -141,22 +156,22 @@ function LedgersInner() {
       {account && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
-            label="Opening balance"
+            label={t("books.lg.opening", "Opening balance")}
             value={formatINR(data?.openingBalancePaise ?? 0)}
-            hint={`Before ${range.from}`}
+            hint={t("books.lg.before", "Before {date}", { date: range.from })}
           />
           <StatCard
-            label="Total in (Dr)"
+            label={t("books.lg.totalIn", "Total in (Dr)")}
             value={formatINR(rows.reduce((s, r) => s + paise(r.debitPaise), 0))}
           />
           <StatCard
-            label="Total out (Cr)"
+            label={t("books.lg.totalOut", "Total out (Cr)")}
             value={formatINR(rows.reduce((s, r) => s + paise(r.creditPaise), 0))}
           />
           <StatCard
-            label="Closing balance"
+            label={t("books.lg.closing", "Closing balance")}
             value={formatINR(data?.closingBalancePaise ?? 0)}
-            hint={`As on ${range.to}`}
+            hint={t("books.lg.asOn", "As on {date}", { date: range.to })}
             accent="primary"
           />
         </div>
@@ -168,50 +183,62 @@ function LedgersInner() {
             {account ? (
               <>
                 <span className="font-mono text-xs text-muted-foreground">{account.code}</span>
-                {account.name}
-                <Badge variant="outline">{ACCOUNT_TYPE_LABELS[account.type]}</Badge>
+                {acctName(t, account.code, account.name)}
+                <Badge variant="outline">{typeLabel(t, account.type)}</Badge>
                 <SideBadge side={normalSide(account.type)} />
               </>
             ) : (
-              "Account statement"
+              t("books.lg.statement", "Account statement")
             )}
           </CardTitle>
           <CardDescription>
             {account
-              ? `${ACCOUNT_PLAIN[account.code] ?? ""} — running balance after every entry. Click a row to open the full journal entry.`
-              : "Pick an account above to see its statement."}
+              ? t(
+                  "books.lg.desc",
+                  "{plain} — running balance after every entry. Click a row to open the full journal entry.",
+                  { plain: acctPlain(t, account.code) },
+                )
+              : t("books.lg.descEmpty", "Pick an account above to see its statement.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!code ? (
             <EmptyBooks
-              title="Pick an account"
-              body="Choose an account above to see every entry that touched it, with a running balance."
+              title={t("books.lg.pickAccount", "Pick an account")}
+              body={t(
+                "books.lg.pickBody",
+                "Choose an account above to see every entry that touched it, with a running balance.",
+              )}
             />
           ) : isLoading ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">Loading…</div>
+            <div className="text-sm text-muted-foreground py-6 text-center">
+              {t("common.loading", "Loading…")}
+            </div>
           ) : rows.length === 0 ? (
             <EmptyBooks
-              title="Nothing moved through this account"
-              body="There were no entries on this account in the selected range. Try a wider date range, or a different account."
+              title={t("books.lg.emptyTitle", "Nothing moved through this account")}
+              body={t(
+                "books.lg.emptyBody",
+                "There were no entries on this account in the selected range. Try a wider date range, or a different account.",
+              )}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-28">Date</TableHead>
-                    <TableHead>What happened</TableHead>
-                    <TableHead>Tagged to</TableHead>
-                    <TableHead className="text-right">Dr</TableHead>
-                    <TableHead className="text-right">Cr</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="w-28">{t("common.date", "Date")}</TableHead>
+                    <TableHead>{t("books.jr.colWhat", "What happened")}</TableHead>
+                    <TableHead>{t("books.col.taggedTo", "Tagged to")}</TableHead>
+                    <TableHead className="text-right">{t("books.lg.colDr", "Dr")}</TableHead>
+                    <TableHead className="text-right">{t("books.lg.colCr", "Cr")}</TableHead>
+                    <TableHead className="text-right">{t("books.col.balance", "Balance")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   <TableRow className="bg-slate-50">
                     <TableCell colSpan={5} className="text-xs font-medium">
-                      Opening balance
+                      {t("books.lg.opening", "Opening balance")}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs font-medium">
                       {formatINR(data?.openingBalancePaise ?? 0)}
@@ -231,12 +258,12 @@ function LedgersInner() {
                         onClick={() => setOpenId(r.entryId)}
                       >
                         <TableCell className="whitespace-nowrap">
-                          {format(new Date(r.entryDate), "dd MMM yy")}
+                          {format(new Date(r.entryDate), "dd MMM yy", { locale })}
                         </TableCell>
                         <TableCell>
                           <div>{r.narration}</div>
                           <div className="text-xs text-muted-foreground">
-                            {SOURCE_LABELS[r.source] ?? r.source}
+                            {sourceLabel(t, r.source)}
                             {r.memo ? ` · ${r.memo}` : ""}
                           </div>
                         </TableCell>
@@ -257,7 +284,7 @@ function LedgersInner() {
                   })}
                   <TableRow className="bg-slate-50">
                     <TableCell colSpan={5} className="text-xs font-semibold">
-                      Closing balance
+                      {t("books.lg.closing", "Closing balance")}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs font-semibold">
                       {formatINR(data?.closingBalancePaise ?? 0)}
@@ -275,25 +302,37 @@ function LedgersInner() {
   );
 }
 
-const SUBJECT_META: Record<SubjectKind, { label: string; url: string; allLabel: string }> = {
+type TFn = ReturnType<typeof useT>["t"];
+
+const subjectMeta = (
+  t: TFn,
+): Record<SubjectKind, { label: string; url: string; allLabel: string }> => ({
   customer: {
-    label: "Customer",
+    label: t("books.lg.subjCustomer", "Customer"),
     url: "/api/credit/customers",
-    allLabel: "All customers",
+    allLabel: t("books.lg.allCustomers", "All customers"),
   },
-  employee: { label: "Employee", url: "/api/employees", allLabel: "All employees" },
+  employee: {
+    label: t("books.lg.subjEmployee", "Employee"),
+    url: "/api/employees",
+    allLabel: t("books.lg.allEmployees", "All employees"),
+  },
   channel: {
-    label: "Payment channel",
+    label: t("books.lg.subjChannel", "Payment channel"),
     url: "/api/setup/payment-channels",
-    allLabel: "All channels",
+    allLabel: t("books.lg.allChannels", "All channels"),
   },
-  tank: { label: "Tank", url: "/api/setup/tanks", allLabel: "All tanks" },
+  tank: {
+    label: t("books.lg.subjTank", "Tank"),
+    url: "/api/setup/tanks",
+    allLabel: t("books.lg.allTanks", "All tanks"),
+  },
   expenseCategory: {
-    label: "Expense category",
+    label: t("books.lg.subjCategory", "Expense category"),
     url: "/api/setup/expense-categories",
-    allLabel: "All categories",
+    allLabel: t("books.lg.allCategories", "All categories"),
   },
-};
+});
 
 /**
  * Some accounts are kept per subject — receivables per customer, staff shortages per
@@ -308,7 +347,8 @@ function SubjectFilter({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const meta = SUBJECT_META[kind];
+  const { t } = useT();
+  const meta = subjectMeta(t)[kind];
   const { data: options = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["books-subjects", kind],
     queryFn: async () => (await api.get(meta.url)).data,

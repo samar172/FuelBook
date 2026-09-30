@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { CheckCheck, Save } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import {
   ATTENDANCE_CELL_CLASS,
   ATTENDANCE_LABELS,
@@ -43,6 +44,9 @@ type Draft = { status: AttendanceStatus; overtimeMinutes: string };
 export default function AttendanceSection() {
   const qc = useQueryClient();
   const canManage = can("canManageEmployees");
+  const { t } = useT();
+  const attName = (s: AttendanceStatus) => t(`compliance.att.${s}`, ATTENDANCE_LABELS[s]);
+  const attShort = (s: AttendanceStatus) => t(`compliance.attShort.${s}`, ATTENDANCE_SHORT[s]);
 
   const today = format(new Date(), "yyyy-MM-dd");
   const [date, setDate] = useState(today);
@@ -137,7 +141,12 @@ export default function AttendanceSection() {
         })
       ).data as { created: number; updated: number },
     onSuccess: (r) => {
-      toast.success(`Attendance saved — ${r.created} new, ${r.updated} updated`);
+      toast.success(
+        t("compliance.att.saved", "Attendance saved — {created} new, {updated} updated", {
+          created: r.created,
+          updated: r.updated,
+        })
+      );
       qc.invalidateQueries({ queryKey: ["compliance"] });
     },
     onError: (e) => toast.error(apiError(e)),
@@ -148,47 +157,49 @@ export default function AttendanceSection() {
       {/* ===== Marker ===== */}
       <Card>
         <CardHeader>
-          <CardTitle>Mark attendance</CardTitle>
+          <CardTitle>{t("compliance.att.markTitle", "Mark attendance")}</CardTitle>
           <CardDescription>
-            Pick the date and shift, then tap a letter against each person. Tap the same letter
-            again to clear it. Leave the shift as &ldquo;Whole day&rdquo; for a single daily mark.
+            {t(
+              "compliance.att.markDesc",
+              "Pick the date and shift, then tap a letter against each person. Tap the same letter again to clear it. Leave the shift as “Whole day” for a single daily mark."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs">Date</Label>
+              <Label className="text-xs">{t("common.date", "Date")}</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">Shift</Label>
+              <Label className="text-xs">{t("compliance.att.shift", "Shift")}</Label>
               <Select value={shift} onValueChange={setShift}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={WHOLE_DAY}>Whole day</SelectItem>
-                  <SelectItem value="DAY">Day shift</SelectItem>
-                  <SelectItem value="NIGHT">Night shift</SelectItem>
+                  <SelectItem value={WHOLE_DAY}>{t("compliance.att.wholeDay", "Whole day")}</SelectItem>
+                  <SelectItem value="DAY">{t("compliance.att.dayShift", "Day shift")}</SelectItem>
+                  <SelectItem value="NIGHT">{t("compliance.att.nightShift", "Night shift")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {canManage && (
               <div className="flex items-end">
                 <Button variant="outline" className="w-full" onClick={markAllPresent} disabled={staff.length === 0}>
-                  <CheckCheck className="h-4 w-4 mr-1" /> All present
+                  <CheckCheck className="h-4 w-4 mr-1" /> {t("compliance.att.allPresent", "All present")}
                 </Button>
               </div>
             )}
           </div>
 
           {employees.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading staff…</p>
+            <p className="text-sm text-muted-foreground">{t("compliance.att.loadingStaff", "Loading staff…")}</p>
           ) : employees.isError ? (
             <p className="text-sm text-destructive">{apiError(employees.error)}</p>
           ) : staff.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No active employees yet. Add staff under Employees first.
+              {t("compliance.att.noStaff", "No active employees yet. Add staff under Employees first.")}
             </p>
           ) : (
             <div className="space-y-2">
@@ -202,8 +213,12 @@ export default function AttendanceSection() {
                         <div className="font-medium truncate">{e.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {e.code ? `${e.code} · ` : ""}
-                          {e.designation || "Attendant"}
-                          {saved ? ` · saved as ${ATTENDANCE_LABELS[saved.status]}` : ""}
+                          {e.designation || t("compliance.att.attendant", "Attendant")}
+                          {saved
+                            ? t("compliance.att.savedAs", " · saved as {status}", {
+                                status: attName(saved.status),
+                              })
+                            : ""}
                         </div>
                       </div>
                       {draft && (
@@ -213,7 +228,7 @@ export default function AttendanceSection() {
                             min={0}
                             max={1440}
                             inputMode="numeric"
-                            placeholder="OT mins"
+                            placeholder={t("compliance.att.otPh", "OT mins")}
                             value={draft.overtimeMinutes}
                             onChange={(ev) => setOvertime(e.id, ev.target.value)}
                           />
@@ -233,13 +248,13 @@ export default function AttendanceSection() {
                               ? ATTENDANCE_CELL_CLASS[s] + " border-transparent ring-2 ring-offset-1 ring-foreground/20"
                               : "bg-background hover:bg-muted"
                           )}
-                          title={ATTENDANCE_LABELS[s]}
+                          title={attName(s)}
                         >
                           <span className="block text-base leading-none">
-                            {ATTENDANCE_SHORT[s]}
+                            {attShort(s)}
                           </span>
                           <span className="block text-[10px] font-normal mt-0.5 truncate">
-                            {ATTENDANCE_LABELS[s]}
+                            {attName(s)}
                           </span>
                         </button>
                       ))}
@@ -258,14 +273,16 @@ export default function AttendanceSection() {
             >
               <Save className="h-4 w-4 mr-1" />
               {save.isPending
-                ? "Saving…"
-                : `Save ${markedCount} mark${markedCount === 1 ? "" : "s"}`}
+                ? t("common.saving", "Saving…")
+                : t("compliance.att.saveMarks", "Save {count} mark(s)", { count: markedCount })}
             </Button>
           )}
           {!canManage && (
             <p className="text-xs text-muted-foreground">
-              You can view attendance but not change it (needs the &ldquo;manage employees&rdquo;
-              permission).
+              {t(
+                "compliance.att.viewOnly",
+                "You can view attendance but not change it (needs the “manage employees” permission)."
+              )}
             </p>
           )}
         </CardContent>
@@ -276,26 +293,31 @@ export default function AttendanceSection() {
         <CardHeader className="gap-2">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <CardTitle>Monthly register</CardTitle>
+              <CardTitle>{t("compliance.att.registerTitle", "Monthly register")}</CardTitle>
               <CardDescription>
-                P present · A absent · H half day · L leave · W weekly off. Two letters in a cell
-                means both shifts were marked.
+                {t(
+                  "compliance.att.legend",
+                  "P present · A absent · H half day · L leave · W weekly off. Two letters in a cell means both shifts were marked."
+                )}
               </CardDescription>
             </div>
             <div className="w-40">
-              <Label className="text-xs">Month</Label>
+              <Label className="text-xs">{t("compliance.att.month", "Month")}</Label>
               <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {register.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading register…</p>
+            <p className="text-sm text-muted-foreground">{t("compliance.att.loadingRegister", "Loading register…")}</p>
           ) : register.isError ? (
             <p className="text-sm text-destructive">{apiError(register.error)}</p>
           ) : !register.data || register.data.register.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nothing to show for this month — no staff on the roll and no attendance marked.
+              {t(
+                "compliance.att.emptyRegister",
+                "Nothing to show for this month — no staff on the roll and no attendance marked."
+              )}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -303,19 +325,21 @@ export default function AttendanceSection() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-10 min-w-[140px]">
-                      Employee
+                      {t("compliance.att.employee", "Employee")}
                     </TableHead>
                     {register.data.days.map((d) => (
                       <TableHead key={d} className="text-center px-1 text-[10px]">
                         {d.slice(8)}
                       </TableHead>
                     ))}
-                    <TableHead className="text-center px-2">P</TableHead>
-                    <TableHead className="text-center px-2">A</TableHead>
-                    <TableHead className="text-center px-2">H</TableHead>
-                    <TableHead className="text-center px-2">L</TableHead>
-                    <TableHead className="text-center px-2">W</TableHead>
-                    <TableHead className="text-center px-2">OT mins</TableHead>
+                    {STATUSES.map((s) => (
+                      <TableHead key={s} className="text-center px-2" title={attName(s)}>
+                        {attShort(s)}
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-center px-2">
+                      {t("compliance.att.otMinsHead", "OT mins")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -325,7 +349,7 @@ export default function AttendanceSection() {
                         <div className="font-medium text-sm">{r.employee.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {r.employee.code || r.employee.designation || ""}
-                          {r.employee.isActive ? "" : " · inactive"}
+                          {r.employee.isActive ? "" : t("compliance.att.inactiveSuffix", " · inactive")}
                         </div>
                       </TableCell>
                       {r.cells.map((c) => (
@@ -337,13 +361,28 @@ export default function AttendanceSection() {
                               {c.marks.map((m) => (
                                 <span
                                   key={m.id}
-                                  title={`${ATTENDANCE_LABELS[m.status]}${m.shiftType ? ` (${m.shiftType.toLowerCase()})` : ""}${m.overtimeMinutes ? ` · ${m.overtimeMinutes} OT mins` : ""}`}
+                                  title={`${attName(m.status)}${
+                                    m.shiftType
+                                      ? t("compliance.att.cellShift", " ({shift})", {
+                                          shift:
+                                            m.shiftType === "DAY"
+                                              ? t("compliance.att.dayShift", "Day shift")
+                                              : t("compliance.att.nightShift", "Night shift"),
+                                        })
+                                      : ""
+                                  }${
+                                    m.overtimeMinutes
+                                      ? t("compliance.att.cellOt", " · {mins} OT mins", {
+                                          mins: m.overtimeMinutes,
+                                        })
+                                      : ""
+                                  }`}
                                   className={cn(
                                     "inline-block rounded px-1 text-[10px] font-bold",
                                     ATTENDANCE_CELL_CLASS[m.status]
                                   )}
                                 >
-                                  {ATTENDANCE_SHORT[m.status]}
+                                  {attShort(m.status)}
                                 </span>
                               ))}
                             </div>
@@ -371,7 +410,9 @@ export default function AttendanceSection() {
                     </TableRow>
                   ))}
                   <TableRow className="font-semibold bg-muted/50">
-                    <TableCell className="sticky left-0 bg-muted/50 z-10">All staff</TableCell>
+                    <TableCell className="sticky left-0 bg-muted/50 z-10">
+                      {t("compliance.att.allStaff", "All staff")}
+                    </TableCell>
                     <TableCell colSpan={register.data.days.length} />
                     <TableCell className="text-center tabular-nums">
                       {register.data.grandTotals.present}

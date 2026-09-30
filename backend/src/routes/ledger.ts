@@ -12,6 +12,8 @@ import { AppError } from '../middleware/error';
 import { manualJournalSchema } from '../schemas';
 import { ensureChartOfAccounts, postEntry } from '../services/ledger';
 import { countPending, postPendingEntries } from '../services/ledgerBridge';
+import { findCurrentOpening, postOpeningBalances, summarise } from '../services/openingBalances';
+import { openingBalancesSchema } from '../schemas';
 import {
   accountLedger,
   balanceSheet,
@@ -336,6 +338,126 @@ router.post('/post-pending', requireRole(Role.OWNER), async (req, res, next) => 
   try {
     const pumpId = requirePump(req);
     res.json(await postPendingEntries(pumpId, (req as any).user.userId));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ===================== OPENING BALANCES =====================
+
+// Everything the form needs: what the pump already has on file, plus whatever
+// opening entry is currently in force so the figures can be edited rather than
+// re-typed.
+router.get('/opening-balances', requirePermission('canViewReports'), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const [customers, tanks, products, bankAccounts, employees, current, firstShift] =
+      await Promise.all([
+        prisma.creditCustomer.findMany({
+          where: { pumpId, isActive: true },
+          select: { id: true, name: true, code: true, currentBalancePaise: true },
+          orderBy: { name: 'asc' },
+        }),
+        prisma.tank.findMany({
+          where: { pumpId, isActive: true },
+          select: { id: true, name: true, fuelType: true, capacityMl: true },
+          orderBy: { name: 'asc' },
+        }),
+        prisma.product.findMany({
+          where: { pumpId, isActive: true },
+          select: { id: true, sku: true, name: true, unit: true, purchasePricePaise: true },
+          orderBy: { name: 'asc' },
+        }),
+        prisma.bankAccount.findMany({
+          where: { pumpId, isActive: true },
+          select: { id: true, bankName: true, accountNoLast4: true, nickname: true },
+        }),
+        prisma.employee.findMany({
+          where: { pumpId, isActive: true },
+          select: { id: true, name: true, code: true },
+          orderBy: { name: 'asc' },
+        }),
+        findCurrentOpening(pumpId),
+        prisma.shiftReport.findFirst({
+          where: { pumpId },
+          orderBy: { reportDate: 'asc' },
+          select: { reportDate: true, status: true },
+        }),
+      ]);
+
+    // Decompose the entry in force back into the shape of the form.
+    const existing = current
+      ? {
+          entryId: current.id,
+          asOnDate: current.entryDate.toISOString().slice(0, 10),
+          narration: current.narration,
+          cashInHandPaise: current.lines
+            .filter((l) => l.account.code === '1000')
+            .reduce((s, l) => s + l.debitPaise, 0n),
+          supplierPayablePaise: current.lines
+            .filter((l) => l.account.code === '2000')
+            .reduce((s, l) => s + l.creditPaise, 0n),
+          bankPaise: current.lines
+            .filter((l) => l.account.code === '1050')
+            .reduce((s, l) => s + l.debitPaise, 0n),
+          customerDues: current.lines
+            .filter((l) => l.account.code === '1200' && l.customerId)
+            .map((l) => ({ customerId: l.customerId, amountPaise: l.debitPaise })),
+          fuelStock: current.lines
+            .filter((l) => l.account.code === '1400' && l.tankId)
+            .map((l) => ({
+              tankId: l.tankId,
+              quantityMl: l.quantityMl ?? 0n,
+              valuePaise: l.debitPaise,
+            })),
+          staffAdvances: current.lines
+            .filter((l) => l.account.code === '1310' && l.employeeId)
+            .map((l) => ({ employeeId: l.employeeId, amountPaise: l.debitPaise })),
+          staffShortages: current.lines
+            .filter((l) => l.account.code === '1300' && l.employeeId)
+            .map((l) => ({ employeeId: l.employeeId, amountPaise: l.debitPaise })),
+        }
+      : null;
+
+    res.json({
+      customers,
+      tanks,
+      products,
+      bankAccounts,
+      employees,
+      existing,
+      // Opening balances belong the day before trading starts here.
+      suggestedAsOnDate: firstShift
+        ? new Date(firstShift.reportDate.getTime() - 86400000).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
+      hasTraded: Boolean(firstShift),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Preview the totals and the balancing capital figure without posting anything.
+router.post('/opening-balances/preview', requirePermission('canViewReports'), async (req, res, next) => {
+  try {
+    requirePump(req);
+    const data = openingBalancesSchema.parse(req.body);
+    res.json(summarise({ ...data, asOnDate: new Date(data.asOnDate + 'T00:00:00Z') }));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Post them. Owner only: this writes the business's starting position.
+router.post('/opening-balances', requireRole(Role.OWNER), async (req, res, next) => {
+  try {
+    const pumpId = requirePump(req);
+    const data = openingBalancesSchema.parse(req.body);
+    const result = await postOpeningBalances(pumpId, (req as any).user.userId, {
+      ...data,
+      asOnDate: new Date(data.asOnDate + 'T00:00:00Z'),
+    });
+    res.status(201).json(result);
   } catch (e) {
     next(e);
   }

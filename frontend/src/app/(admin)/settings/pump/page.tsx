@@ -38,34 +38,39 @@ import {
 } from "@/lib/books";
 import { toast } from "sonner";
 import { Pencil, Plus, Power } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 const FUEL_TYPES = ["HSD", "MS", "MS_POWER", "CNG"] as const;
 const CHANNEL_KINDS = ["CASH", "CARD", "UPI", "BANK_DEPOSIT", "WALLET", "OTHER"] as const;
 
-const onError = (e: any) =>
-  toast.error(
-    e?.response?.data?.error?.message ||
-      e?.response?.data?.error ||
-      e?.message ||
-      "Failed",
-  );
+function useOnError() {
+  const { t } = useT();
+  return (e: any) =>
+    toast.error(
+      e?.response?.data?.error?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        t("settings.failed", "Failed"),
+    );
+}
 
 export default function PumpSetupPage() {
+  const { t } = useT();
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Pump Setup</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("settings.pumpSetup", "Pump Setup")}</h1>
         <p className="text-muted-foreground">
-          Configure pump details, tanks, nozzles, payment channels and time slots.
+          {t("settings.pumpSetupDesc", "Configure pump details, tanks, nozzles, payment channels and time slots.")}
         </p>
       </div>
       <Tabs defaultValue="pump" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="pump">Pump Info</TabsTrigger>
-          <TabsTrigger value="tanks">Tanks</TabsTrigger>
-          <TabsTrigger value="nozzles">Nozzles</TabsTrigger>
-          <TabsTrigger value="channels">Payment Channels</TabsTrigger>
-          <TabsTrigger value="slots">Time Slots</TabsTrigger>
+          <TabsTrigger value="pump">{t("settings.tabPumpInfo", "Pump Info")}</TabsTrigger>
+          <TabsTrigger value="tanks">{t("settings.tabTanks", "Tanks")}</TabsTrigger>
+          <TabsTrigger value="nozzles">{t("settings.tabNozzles", "Nozzles")}</TabsTrigger>
+          <TabsTrigger value="channels">{t("settings.tabChannels", "Payment Channels")}</TabsTrigger>
+          <TabsTrigger value="slots">{t("settings.tabSlots", "Time Slots")}</TabsTrigger>
         </TabsList>
         <TabsContent value="pump"><PumpInfoSection /></TabsContent>
         <TabsContent value="tanks"><TanksSection /></TabsContent>
@@ -79,6 +84,8 @@ export default function PumpSetupPage() {
 
 // ===================== PUMP INFO =====================
 function PumpInfoSection() {
+  const { t } = useT();
+  const onError = useOnError();
   const qc = useQueryClient();
   const { data: pump } = useQuery({
     queryKey: ["pump"],
@@ -105,43 +112,47 @@ function PumpInfoSection() {
   const save = useMutation({
     mutationFn: async () => (await api.patch("/api/setup/pump", form)).data,
     onSuccess: () => {
-      toast.success("Pump details updated");
+      toast.success(t("settings.pumpUpdated", "Pump details updated"));
       qc.invalidateQueries({ queryKey: ["pump"] });
     },
     onError,
   });
 
-  if (!pump) return <div className="text-muted-foreground">Loading…</div>;
+  const codeParts = t("settings.codeCannotChange", "Code: {code} (cannot be changed)").split("{code}");
+
+  if (!pump) return <div className="text-muted-foreground">{t("common.loading", "Loading…")}</div>;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{pump.name}</CardTitle>
         <CardDescription>
-          Code: <span className="font-mono">{pump.code}</span> (cannot be changed)
+          {codeParts[0]}
+          <span className="font-mono">{pump.code}</span>
+          {codeParts[1]}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
-          <Field label="Pump name">
+          <Field label={t("settings.pumpName", "Pump name")}>
             <Input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </Field>
-          <Field label="State">
+          <Field label={t("settings.state", "State")}>
             <Input
               value={form.state}
               onChange={(e) => setForm({ ...form, state: e.target.value })}
             />
           </Field>
-          <Field label="Address" className="md:col-span-2">
+          <Field label={t("settings.address", "Address")} className="md:col-span-2">
             <Input
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
             />
           </Field>
-          <Field label="City">
+          <Field label={t("settings.city", "City")}>
             <Input
               value={form.city}
               onChange={(e) => setForm({ ...form, city: e.target.value })}
@@ -150,10 +161,12 @@ function PumpInfoSection() {
         </div>
 
         <div className="mt-6 max-w-2xl">
-          <h3 className="text-sm font-semibold">How shift cash is handed over</h3>
+          <h3 className="text-sm font-semibold">{t("settings.cashHandoverHeading", "How shift cash is handed over")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            This decides who is held accountable for a cash shortage at the end of a shift, and
-            how the Cash Handover tab on each shift report is laid out.
+            {t(
+              "settings.cashHandoverHelp",
+              "This decides who is held accountable for a cash shortage at the end of a shift, and how the Cash Handover tab on each shift report is laid out."
+            )}
           </p>
           <div className="mt-2 space-y-2">
             {(["PER_ATTENDANT", "POOLED_CASHIER"] as CashHandoverMode[]).map((mode) => (
@@ -174,9 +187,9 @@ function PumpInfoSection() {
                   onChange={() => setForm({ ...form, cashHandoverMode: mode })}
                 />
                 <span>
-                  <span className="block text-sm font-medium">{CASH_MODE_LABELS[mode]}</span>
+                  <span className="block text-sm font-medium">{t(mode === "PER_ATTENDANT" ? "settings.cashModePerAttendant" : "settings.cashModePooled", CASH_MODE_LABELS[mode])}</span>
                   <span className="block text-xs text-muted-foreground mt-0.5">
-                    {CASH_MODE_HELP[mode]}
+                    {t(mode === "PER_ATTENDANT" ? "settings.cashModePerAttendantHelp" : "settings.cashModePooledHelp", CASH_MODE_HELP[mode])}
                   </span>
                 </span>
               </label>
@@ -185,7 +198,7 @@ function PumpInfoSection() {
         </div>
         <div className="mt-4">
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save changes"}
+            {save.isPending ? t("common.saving", "Saving…") : t("settings.saveChanges", "Save changes")}
           </Button>
         </div>
       </CardContent>
@@ -195,6 +208,8 @@ function PumpInfoSection() {
 
 // ===================== TANKS =====================
 function TanksSection() {
+  const { t } = useT();
+  const onError = useOnError();
   const qc = useQueryClient();
   const { data: tanks = [] } = useQuery({
     queryKey: ["tanks"],
@@ -218,52 +233,52 @@ function TanksSection() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base">Tanks</CardTitle>
+          <CardTitle className="text-base">{t("settings.tanks", "Tanks")}</CardTitle>
           <CardDescription>
-            Each tank holds a single fuel type. Capacity is in litres.
+            {t("settings.tanksDesc", "Each tank holds a single fuel type. Capacity is in litres.")}
           </CardDescription>
         </div>
         <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Add tank
+          <Plus className="h-4 w-4 mr-1" /> {t("settings.addTank", "Add tank")}
         </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Fuel</TableHead>
-              <TableHead className="text-right">Capacity</TableHead>
-              <TableHead>Nozzles</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("common.name", "Name")}</TableHead>
+              <TableHead>{t("settings.colFuel", "Fuel")}</TableHead>
+              <TableHead className="text-right">{t("settings.colCapacity", "Capacity")}</TableHead>
+              <TableHead>{t("settings.colNozzles", "Nozzles")}</TableHead>
+              <TableHead>{t("common.status", "Status")}</TableHead>
+              <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tanks.map((t: any) => (
-              <TableRow key={t.id} className={!t.isActive ? "opacity-60" : ""}>
-                <TableCell className="font-medium">{t.name}</TableCell>
-                <TableCell>{FUEL_LABELS[t.fuelType] || t.fuelType}</TableCell>
+            {tanks.map((tk: any) => (
+              <TableRow key={tk.id} className={!tk.isActive ? "opacity-60" : ""}>
+                <TableCell className="font-medium">{tk.name}</TableCell>
+                <TableCell>{FUEL_LABELS[tk.fuelType] || tk.fuelType}</TableCell>
                 <TableCell className="text-right">
-                  {formatLitres(t.capacityMl)} L
+                  {formatLitres(tk.capacityMl)} L
                 </TableCell>
-                <TableCell>{t.nozzles?.length || 0}</TableCell>
+                <TableCell>{tk.nozzles?.length || 0}</TableCell>
                 <TableCell>
-                  {t.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                  {tk.isActive ? <Badge variant="success">{t("common.active", "Active")}</Badge> : <Badge variant="secondary">{t("common.inactive", "Inactive")}</Badge>}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(tk)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() =>
-                      setActive.mutate({ id: t.id, isActive: !t.isActive })
+                      setActive.mutate({ id: tk.id, isActive: !tk.isActive })
                     }
-                    title={t.isActive ? "Deactivate" : "Activate"}
+                    title={tk.isActive ? t("settings.deactivate", "Deactivate") : t("settings.activate", "Activate")}
                   >
-                    <Power className={`h-3.5 w-3.5 ${t.isActive ? "" : "text-muted-foreground"}`} />
+                    <Power className={`h-3.5 w-3.5 ${tk.isActive ? "" : "text-muted-foreground"}`} />
                   </Button>
                 </TableCell>
               </TableRow>
@@ -271,7 +286,7 @@ function TanksSection() {
             {tanks.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  No tanks yet.
+                  {t("settings.noTanks", "No tanks yet.")}
                 </TableCell>
               </TableRow>
             )}
@@ -308,6 +323,8 @@ function TankFormDialog({
   tank?: any;
   onDone: () => void;
 }) {
+  const { t } = useT();
+  const onError = useOnError();
   const isEdit = !!tank;
   const [form, setForm] = useState({
     name: "",
@@ -328,7 +345,7 @@ function TankFormDialog({
     mutationFn: async () => {
       const capacity = parseFloat(form.capacityLitres);
       if (!form.name || !capacity || capacity <= 0) {
-        throw new Error("Name and capacity are required");
+        throw new Error(t("settings.nameAndCapacityRequired", "Name and capacity are required"));
       }
       if (isEdit) {
         return (
@@ -347,7 +364,7 @@ function TankFormDialog({
       ).data;
     },
     onSuccess: () => {
-      toast.success(isEdit ? "Tank updated" : "Tank added");
+      toast.success(isEdit ? t("settings.tankUpdated", "Tank updated") : t("settings.tankAdded", "Tank added"));
       onOpenChange(false);
       onDone();
     },
@@ -358,23 +375,23 @@ function TankFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit tank" : "Add tank"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("settings.editTank", "Edit tank") : t("settings.addTank", "Add tank")}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Fuel type can't be changed once a tank is created."
-              : "Tank capacity is the maximum litres it can hold."}
+              ? t("settings.tankEditHelp", "Fuel type can't be changed once a tank is created.")
+              : t("settings.tankAddHelp", "Tank capacity is the maximum litres it can hold.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="Name">
+          <Field label={t("common.name", "Name")}>
             <Input
-              placeholder="e.g. HSD-1"
+              placeholder={t("settings.tankNamePlaceholder", "e.g. HSD-1")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </Field>
           {!isEdit && (
-            <Field label="Fuel type">
+            <Field label={t("settings.fuelType", "Fuel type")}>
               <Select
                 value={form.fuelType}
                 onValueChange={(v) => setForm({ ...form, fuelType: v })}
@@ -392,12 +409,12 @@ function TankFormDialog({
               </Select>
             </Field>
           )}
-          <Field label="Capacity (litres)">
+          <Field label={t("settings.capacityLitres", "Capacity (litres)")}>
             <Input
               type="number"
               min={0}
               step="0.001"
-              placeholder="e.g. 20000"
+              placeholder={t("settings.capacityPlaceholder", "e.g. 20000")}
               value={form.capacityLitres}
               onChange={(e) => setForm({ ...form, capacityLitres: e.target.value })}
             />
@@ -405,10 +422,10 @@ function TankFormDialog({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : isEdit ? "Save" : "Add"}
+            {save.isPending ? t("common.saving", "Saving…") : isEdit ? t("common.save", "Save") : t("common.add", "Add")}
           </Button>
         </div>
       </DialogContent>
@@ -418,6 +435,8 @@ function TankFormDialog({
 
 // ===================== NOZZLES =====================
 function NozzlesSection() {
+  const { t } = useT();
+  const onError = useOnError();
   const qc = useQueryClient();
   const { data: nozzles = [] } = useQuery({
     queryKey: ["nozzles"],
@@ -438,35 +457,35 @@ function NozzlesSection() {
     onError,
   });
 
-  const activeTanks = tanks.filter((t: any) => t.isActive);
+  const activeTanks = tanks.filter((tk: any) => tk.isActive);
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base">Nozzles</CardTitle>
+          <CardTitle className="text-base">{t("settings.nozzles", "Nozzles")}</CardTitle>
           <CardDescription>
-            A nozzle belongs to one tank — its fuel type comes from that tank.
+            {t("settings.nozzlesDesc", "A nozzle belongs to one tank — its fuel type comes from that tank.")}
           </CardDescription>
         </div>
         <Button size="sm" onClick={() => setAdding(true)} disabled={activeTanks.length === 0}>
-          <Plus className="h-4 w-4 mr-1" /> Add nozzle
+          <Plus className="h-4 w-4 mr-1" /> {t("settings.addNozzle", "Add nozzle")}
         </Button>
       </CardHeader>
       <CardContent>
         {activeTanks.length === 0 && (
           <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mb-3">
-            Add at least one active tank before adding nozzles.
+            {t("settings.needActiveTank", "Add at least one active tank before adding nozzles.")}
           </div>
         )}
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Code</TableHead>
-              <TableHead>Tank</TableHead>
-              <TableHead>Fuel</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("settings.colCode", "Code")}</TableHead>
+              <TableHead>{t("settings.colTank", "Tank")}</TableHead>
+              <TableHead>{t("settings.colFuel", "Fuel")}</TableHead>
+              <TableHead>{t("common.status", "Status")}</TableHead>
+              <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -476,7 +495,7 @@ function NozzlesSection() {
                 <TableCell>{n.tank?.name}</TableCell>
                 <TableCell>{FUEL_LABELS[n.fuelType] || n.fuelType}</TableCell>
                 <TableCell>
-                  {n.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                  {n.isActive ? <Badge variant="success">{t("common.active", "Active")}</Badge> : <Badge variant="secondary">{t("common.inactive", "Inactive")}</Badge>}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="ghost" onClick={() => setEditing(n)}>
@@ -488,7 +507,7 @@ function NozzlesSection() {
                     onClick={() =>
                       setActive.mutate({ id: n.id, isActive: !n.isActive })
                     }
-                    title={n.isActive ? "Deactivate" : "Activate"}
+                    title={n.isActive ? t("settings.deactivate", "Deactivate") : t("settings.activate", "Activate")}
                   >
                     <Power className={`h-3.5 w-3.5 ${n.isActive ? "" : "text-muted-foreground"}`} />
                   </Button>
@@ -498,7 +517,7 @@ function NozzlesSection() {
             {nozzles.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  No nozzles yet.
+                  {t("settings.noNozzles", "No nozzles yet.")}
                 </TableCell>
               </TableRow>
             )}
@@ -539,6 +558,8 @@ function NozzleFormDialog({
   tanks: any[];
   onDone: () => void;
 }) {
+  const { t } = useT();
+  const onError = useOnError();
   const isEdit = !!nozzle;
   const [form, setForm] = useState({ code: "", tankId: "" });
   useEffect(() => {
@@ -552,13 +573,13 @@ function NozzleFormDialog({
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!form.code) throw new Error("Code is required");
+      if (!form.code) throw new Error(t("settings.codeRequired", "Code is required"));
       if (isEdit) {
         return (
           await api.patch(`/api/setup/nozzles/${nozzle.id}`, { code: form.code })
         ).data;
       }
-      if (!form.tankId) throw new Error("Pick a tank");
+      if (!form.tankId) throw new Error(t("settings.pickTank", "Pick a tank"));
       return (
         await api.post(`/api/setup/nozzles`, {
           code: form.code,
@@ -567,7 +588,7 @@ function NozzleFormDialog({
       ).data;
     },
     onSuccess: () => {
-      toast.success(isEdit ? "Nozzle updated" : "Nozzle added");
+      toast.success(isEdit ? t("settings.nozzleUpdated", "Nozzle updated") : t("settings.nozzleAdded", "Nozzle added"));
       onOpenChange(false);
       onDone();
     },
@@ -578,34 +599,34 @@ function NozzleFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit nozzle" : "Add nozzle"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("settings.editNozzle", "Edit nozzle") : t("settings.addNozzle", "Add nozzle")}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Tank can't be changed once a nozzle is created."
-              : "Pick the tank this nozzle dispenses from."}
+              ? t("settings.nozzleEditHelp", "Tank can't be changed once a nozzle is created.")
+              : t("settings.nozzleAddHelp", "Pick the tank this nozzle dispenses from.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="Code">
+          <Field label={t("settings.colCode", "Code")}>
             <Input
-              placeholder="e.g. N1, HSD-1A"
+              placeholder={t("settings.nozzleCodePlaceholder", "e.g. N1, HSD-1A")}
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value })}
             />
           </Field>
           {!isEdit && (
-            <Field label="Tank">
+            <Field label={t("settings.colTank", "Tank")}>
               <Select
                 value={form.tankId}
                 onValueChange={(v) => setForm({ ...form, tankId: v })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a tank" />
+                  <SelectValue placeholder={t("settings.selectTank", "Select a tank")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {tanks.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name} — {FUEL_LABELS[t.fuelType] || t.fuelType}
+                  {tanks.map((tk) => (
+                    <SelectItem key={tk.id} value={tk.id}>
+                      {tk.name} — {FUEL_LABELS[tk.fuelType] || tk.fuelType}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -615,10 +636,10 @@ function NozzleFormDialog({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : isEdit ? "Save" : "Add"}
+            {save.isPending ? t("common.saving", "Saving…") : isEdit ? t("common.save", "Save") : t("common.add", "Add")}
           </Button>
         </div>
       </DialogContent>
@@ -628,6 +649,8 @@ function NozzleFormDialog({
 
 // ===================== PAYMENT CHANNELS =====================
 function ChannelsSection() {
+  const { t } = useT();
+  const onError = useOnError();
   const qc = useQueryClient();
   const { data: channels = [] } = useQuery({
     queryKey: ["payment-channels"],
@@ -653,24 +676,24 @@ function ChannelsSection() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base">Payment Channels</CardTitle>
+          <CardTitle className="text-base">{t("settings.channels", "Payment Channels")}</CardTitle>
           <CardDescription>
-            Cash, card, UPI accounts, bank deposits — anywhere money lands.
+            {t("settings.channelsDesc", "Cash, card, UPI accounts, bank deposits — anywhere money lands.")}
           </CardDescription>
         </div>
         <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Add channel
+          <Plus className="h-4 w-4 mr-1" /> {t("settings.addChannel", "Add channel")}
         </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Kind</TableHead>
-              <TableHead>Sort</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("common.name", "Name")}</TableHead>
+              <TableHead>{t("settings.colKind", "Kind")}</TableHead>
+              <TableHead>{t("settings.colSort", "Sort")}</TableHead>
+              <TableHead>{t("common.status", "Status")}</TableHead>
+              <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -680,7 +703,7 @@ function ChannelsSection() {
                 <TableCell><Badge variant="outline">{c.kind}</Badge></TableCell>
                 <TableCell>{c.sortOrder}</TableCell>
                 <TableCell>
-                  {c.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                  {c.isActive ? <Badge variant="success">{t("common.active", "Active")}</Badge> : <Badge variant="secondary">{t("common.inactive", "Inactive")}</Badge>}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
@@ -701,7 +724,7 @@ function ChannelsSection() {
             {channels.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  No channels yet.
+                  {t("settings.noChannels", "No channels yet.")}
                 </TableCell>
               </TableRow>
             )}
@@ -738,6 +761,8 @@ function ChannelFormDialog({
   channel?: any;
   onDone: () => void;
 }) {
+  const { t } = useT();
+  const onError = useOnError();
   const isEdit = !!channel;
   const [form, setForm] = useState({ name: "", kind: "CASH", sortOrder: "0" });
   useEffect(() => {
@@ -752,7 +777,7 @@ function ChannelFormDialog({
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!form.name) throw new Error("Name is required");
+      if (!form.name) throw new Error(t("settings.nameRequired", "Name is required"));
       const body = {
         name: form.name,
         kind: form.kind,
@@ -764,7 +789,7 @@ function ChannelFormDialog({
       return (await api.post(`/api/setup/payment-channels`, body)).data;
     },
     onSuccess: () => {
-      toast.success(isEdit ? "Channel updated" : "Channel added");
+      toast.success(isEdit ? t("settings.channelUpdated", "Channel updated") : t("settings.channelAdded", "Channel added"));
       onOpenChange(false);
       onDone();
     },
@@ -775,20 +800,20 @@ function ChannelFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit channel" : "Add channel"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("settings.editChannel", "Edit channel") : t("settings.addChannel", "Add channel")}</DialogTitle>
           <DialogDescription>
-            Used in shift collections and outstanding receipts.
+            {t("settings.channelHelp", "Used in shift collections and outstanding receipts.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="Name">
+          <Field label={t("common.name", "Name")}>
             <Input
-              placeholder="e.g. HDFC POS, Paytm"
+              placeholder={t("settings.channelNamePlaceholder", "e.g. HDFC POS, Paytm")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </Field>
-          <Field label="Kind">
+          <Field label={t("settings.kind", "Kind")}>
             <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -798,7 +823,7 @@ function ChannelFormDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Sort order">
+          <Field label={t("settings.sortOrder", "Sort order")}>
             <Input
               type="number"
               value={form.sortOrder}
@@ -807,9 +832,9 @@ function ChannelFormDialog({
           </Field>
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel", "Cancel")}</Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : isEdit ? "Save" : "Add"}
+            {save.isPending ? t("common.saving", "Saving…") : isEdit ? t("common.save", "Save") : t("common.add", "Add")}
           </Button>
         </div>
       </DialogContent>
@@ -819,6 +844,8 @@ function ChannelFormDialog({
 
 // ===================== TIME SLOTS =====================
 function TimeSlotsSection() {
+  const { t } = useT();
+  const onError = useOnError();
   const qc = useQueryClient();
   const { data: slots = [] } = useQuery({
     queryKey: ["payment-time-slots"],
@@ -844,25 +871,27 @@ function TimeSlotsSection() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base">Time Slots</CardTitle>
+          <CardTitle className="text-base">{t("settings.slots", "Time Slots")}</CardTitle>
           <CardDescription>
-            Used to bucket collections (e.g. Before 12, After 12). Tag a slot Day or Night and it
-            only appears on that kind of shift&apos;s Collections tab.
+            {t(
+              "settings.slotsDesc",
+              "Used to bucket collections (e.g. Before 12, After 12). Tag a slot Day or Night and it only appears on that kind of shift's Collections tab."
+            )}
           </CardDescription>
         </div>
         <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Add slot
+          <Plus className="h-4 w-4 mr-1" /> {t("settings.addSlot", "Add slot")}
         </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Shown on</TableHead>
-              <TableHead>Sort</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("common.name", "Name")}</TableHead>
+              <TableHead>{t("settings.colShownOn", "Shown on")}</TableHead>
+              <TableHead>{t("settings.colSort", "Sort")}</TableHead>
+              <TableHead>{t("common.status", "Status")}</TableHead>
+              <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -872,30 +901,30 @@ function TimeSlotsSection() {
                 <TableCell>
                   {s.shiftType === "DAY" ? (
                     <div>
-                      <Badge>Day</Badge>
+                      <Badge>{t("settings.slotDay", "Day")}</Badge>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Shown only on day shifts
+                        {t("settings.shownDayOnly", "Shown only on day shifts")}
                       </div>
                     </div>
                   ) : s.shiftType === "NIGHT" ? (
                     <div>
-                      <Badge variant="secondary">Night</Badge>
+                      <Badge variant="secondary">{t("settings.slotNight", "Night")}</Badge>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Shown only on night shifts
+                        {t("settings.shownNightOnly", "Shown only on night shifts")}
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <Badge variant="outline">Both</Badge>
+                      <Badge variant="outline">{t("settings.slotBoth", "Both")}</Badge>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Shown on every shift
+                        {t("settings.shownEvery", "Shown on every shift")}
                       </div>
                     </div>
                   )}
                 </TableCell>
                 <TableCell>{s.sortOrder}</TableCell>
                 <TableCell>
-                  {s.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                  {s.isActive ? <Badge variant="success">{t("common.active", "Active")}</Badge> : <Badge variant="secondary">{t("common.inactive", "Inactive")}</Badge>}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
@@ -916,7 +945,7 @@ function TimeSlotsSection() {
             {slots.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  No time slots yet.
+                  {t("settings.noSlots", "No time slots yet.")}
                 </TableCell>
               </TableRow>
             )}
@@ -953,6 +982,8 @@ function SlotFormDialog({
   slot?: any;
   onDone: () => void;
 }) {
+  const { t } = useT();
+  const onError = useOnError();
   const isEdit = !!slot;
   const [form, setForm] = useState({ name: "", sortOrder: "0", shiftType: "BOTH" });
   useEffect(() => {
@@ -967,7 +998,7 @@ function SlotFormDialog({
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!form.name) throw new Error("Name is required");
+      if (!form.name) throw new Error(t("settings.nameRequired", "Name is required"));
       const body = {
         name: form.name,
         sortOrder: Number(form.sortOrder) || 0,
@@ -980,7 +1011,7 @@ function SlotFormDialog({
       return (await api.post(`/api/setup/payment-time-slots`, body)).data;
     },
     onSuccess: () => {
-      toast.success(isEdit ? "Slot updated" : "Slot added");
+      toast.success(isEdit ? t("settings.slotUpdated", "Slot updated") : t("settings.slotAdded", "Slot added"));
       onOpenChange(false);
       onDone();
     },
@@ -991,20 +1022,20 @@ function SlotFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit slot" : "Add slot"}</DialogTitle>
+          <DialogTitle>{isEdit ? t("settings.editSlot", "Edit slot") : t("settings.addSlot", "Add slot")}</DialogTitle>
           <DialogDescription>
-            Time slots are used to break down collections during a shift.
+            {t("settings.slotHelp", "Time slots are used to break down collections during a shift.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="Name">
+          <Field label={t("common.name", "Name")}>
             <Input
-              placeholder="e.g. 6 AM - 6 PM, Before 12, Full Shift"
+              placeholder={t("settings.slotNamePlaceholder", "e.g. 6 AM - 6 PM, Before 12, Full Shift")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </Field>
-          <Field label="Shown on">
+          <Field label={t("settings.colShownOn", "Shown on")}>
             <Select
               value={form.shiftType}
               onValueChange={(v) => setForm({ ...form, shiftType: v })}
@@ -1013,20 +1044,20 @@ function SlotFormDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="BOTH">Both shifts</SelectItem>
-                <SelectItem value="DAY">Day shifts only</SelectItem>
-                <SelectItem value="NIGHT">Night shifts only</SelectItem>
+                <SelectItem value="BOTH">{t("settings.bothShifts", "Both shifts")}</SelectItem>
+                <SelectItem value="DAY">{t("settings.dayShiftsOnly", "Day shifts only")}</SelectItem>
+                <SelectItem value="NIGHT">{t("settings.nightShiftsOnly", "Night shifts only")}</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground mt-1">
               {form.shiftType === "DAY"
-                ? "Shown only on day shifts — night shifts will not offer this slot."
+                ? t("settings.slotDayHint", "Shown only on day shifts — night shifts will not offer this slot.")
                 : form.shiftType === "NIGHT"
-                  ? "Shown only on night shifts — day shifts will not offer this slot."
-                  : "Shown on every shift, day and night."}
+                  ? t("settings.slotNightHint", "Shown only on night shifts — day shifts will not offer this slot.")
+                  : t("settings.slotBothHint", "Shown on every shift, day and night.")}
             </p>
           </Field>
-          <Field label="Sort order">
+          <Field label={t("settings.sortOrder", "Sort order")}>
             <Input
               type="number"
               value={form.sortOrder}
@@ -1035,9 +1066,9 @@ function SlotFormDialog({
           </Field>
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel", "Cancel")}</Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : isEdit ? "Save" : "Add"}
+            {save.isPending ? t("common.saving", "Saving…") : isEdit ? t("common.save", "Save") : t("common.add", "Add")}
           </Button>
         </div>
       </DialogContent>

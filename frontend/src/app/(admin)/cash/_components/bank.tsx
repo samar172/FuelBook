@@ -33,7 +33,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatINR, rupeesToPaise } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import {
+  type TFn,
   EmptyState,
   Loading,
   Money,
@@ -54,6 +56,7 @@ const ALL = "__all__";
 // ===================== BANK ACCOUNTS =====================
 
 export function BankAccountsSection() {
+  const { t } = useT();
   const qc = useQueryClient();
   const owner = isOwner();
   const accountsQ = useBankAccounts();
@@ -78,7 +81,7 @@ export function BankAccountsSection() {
         })
       ).data,
     onSuccess: () => {
-      toast.success("Bank account added");
+      toast.success(t("cash.bank.added", "Bank account added"));
       setOpen(false);
       setBankName("");
       setLast4("");
@@ -87,7 +90,7 @@ export function BankAccountsSection() {
       setOpening("");
       qc.invalidateQueries({ queryKey: ["cash-bank-accounts"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not add the account")),
+    onError: (e) => toast.error(apiError(e, t("cash.bank.addFailed", "Could not add the account"))),
   });
 
   return (
@@ -95,15 +98,17 @@ export function BankAccountsSection() {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <CardTitle>Bank accounts</CardTitle>
+            <CardTitle>{t("cash.bank.accountsTitle", "Bank accounts")}</CardTitle>
             <CardDescription>
-              Only the last four digits are ever stored. The balance is the opening balance plus
-              every imported credit, less every debit.
+              {t(
+                "cash.bank.accountsDesc",
+                "Only the last four digits are ever stored. The balance is the opening balance plus every imported credit, less every debit.",
+              )}
             </CardDescription>
           </div>
           {owner ? (
             <Button onClick={() => setOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Add account
+              <Plus className="h-4 w-4 mr-1" /> {t("cash.bank.addAccount", "Add account")}
             </Button>
           ) : null}
         </div>
@@ -112,14 +117,17 @@ export function BankAccountsSection() {
         {accountsQ.isLoading ? (
           <Loading />
         ) : accountsQ.error ? (
-          <EmptyState title="Could not load bank accounts" hint={apiError(accountsQ.error)} />
+          <EmptyState title={t("cash.bank.loadFailed", "Could not load bank accounts")} hint={apiError(accountsQ.error)} />
         ) : accounts.length === 0 ? (
           <EmptyState
-            title="No bank accounts yet"
+            title={t("cash.bank.noAccounts", "No bank accounts yet")}
             hint={
               owner
-                ? "Add the account the pump banks into — deposits and settlements hang off it."
-                : "Ask the owner to add the pump's bank account."
+                ? t(
+                    "cash.bank.noAccountsOwner",
+                    "Add the account the pump banks into — deposits and settlements hang off it.",
+                  )
+                : t("cash.bank.noAccountsStaff", "Ask the owner to add the pump's bank account.")
             }
           />
         ) : (
@@ -130,31 +138,43 @@ export function BankAccountsSection() {
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{a.nickname || a.bankName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {a.bankName} · account ending {a.accountNoLast4}
+                      {t("cash.bank.accountEnding", "{bank} · account ending {last4}", {
+                        bank: a.bankName,
+                        last4: a.accountNoLast4,
+                      })}
                       {a.ifsc ? ` · ${a.ifsc}` : ""}
                     </p>
                   </div>
-                  {!a.isActive ? <Badge variant="secondary">inactive</Badge> : null}
+                  {!a.isActive ? <Badge variant="secondary">{t("cash.bank.inactive", "inactive")}</Badge> : null}
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <p className="text-xs text-muted-foreground">Balance</p>
+                    <p className="text-xs text-muted-foreground">{t("cash.bank.balance", "Balance")}</p>
                     <p className="font-semibold">
                       <Money paise={a.currentBalancePaise} emphasise />
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Deposits recorded</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("cash.bank.depositsRecorded", "Deposits recorded")}
+                    </p>
                     <p className="font-semibold tabular-nums">
                       {formatINR(a.depositsPaise)}{" "}
                       <span className="text-xs text-muted-foreground">({a.depositCount})</span>
                     </p>
                   </div>
                   <div className="col-span-2 text-xs text-muted-foreground">
-                    Opening {formatINR(a.openingBalancePaise)} · credits{" "}
-                    {formatINR(a.creditsPaise)} · debits {formatINR(a.debitsPaise)} ·{" "}
-                    {a.transactionCount} statement lines · {formatINR(a.depositsPendingPaise)} of
-                    deposits still pending
+                    {t(
+                      "cash.bank.accountFoot",
+                      "Opening {opening} · credits {credits} · debits {debits} · {lines} statement lines · {pending} of deposits still pending",
+                      {
+                        opening: formatINR(a.openingBalancePaise),
+                        credits: formatINR(a.creditsPaise),
+                        debits: formatINR(a.debitsPaise),
+                        lines: a.transactionCount,
+                        pending: formatINR(a.depositsPendingPaise),
+                      },
+                    )}
                   </div>
                 </div>
               </div>
@@ -166,20 +186,22 @@ export function BankAccountsSection() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add a bank account</DialogTitle>
+            <DialogTitle>{t("cash.bank.addTitle", "Add a bank account")}</DialogTitle>
             <DialogDescription>
-              Enter only the last four digits of the account number — the full number is never
-              stored.
+              {t(
+                "cash.bank.addDesc",
+                "Enter only the last four digits of the account number — the full number is never stored.",
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">Bank name</Label>
+              <Label className="text-xs">{t("cash.bank.bankName", "Bank name")}</Label>
               <Input value={bankName} onChange={(e) => setBankName(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">Last 4 digits</Label>
+                <Label className="text-xs">{t("cash.bank.last4", "Last 4 digits")}</Label>
                 <Input
                   value={last4}
                   inputMode="numeric"
@@ -188,17 +210,17 @@ export function BankAccountsSection() {
                 />
               </div>
               <div>
-                <Label className="text-xs">IFSC (optional)</Label>
+                <Label className="text-xs">{t("cash.bank.ifsc", "IFSC (optional)")}</Label>
                 <Input value={ifsc} onChange={(e) => setIfsc(e.target.value.toUpperCase())} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">Nickname (optional)</Label>
+                <Label className="text-xs">{t("cash.bank.nickname", "Nickname (optional)")}</Label>
                 <Input value={nickname} onChange={(e) => setNickname(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">Opening balance (₹)</Label>
+                <Label className="text-xs">{t("cash.bank.opening", "Opening balance (₹)")}</Label>
                 <Input
                   type="number"
                   inputMode="decimal"
@@ -210,13 +232,15 @@ export function BankAccountsSection() {
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setOpen(false)}>
-                Cancel
+                {t("common.cancel", "Cancel")}
               </Button>
               <Button
                 onClick={() => create.mutate()}
                 disabled={!bankName.trim() || last4.length !== 4 || create.isPending}
               >
-                {create.isPending ? "Saving…" : "Add account"}
+                {create.isPending
+                  ? t("common.saving", "Saving…")
+                  : t("cash.bank.addAccount", "Add account")}
               </Button>
             </div>
           </div>
@@ -242,10 +266,13 @@ const findHeader = (headers: string[], names: string[]) =>
 
 // The pasted statement is parsed here in the browser. Nothing is fetched from a
 // bank, and the parsed rows are posted to the API as plain numbers.
-function mapStatement(text: string): { rows: ParsedRow[]; errors: string[]; headers: string[] } {
+function mapStatement(
+  text: string,
+  t: TFn,
+): { rows: ParsedRow[]; errors: string[]; headers: string[] } {
   const table = parseCsv(text);
   const errors: string[] = [];
-  if (table.length === 0) return { rows: [], errors: ["Nothing to parse"], headers: [] };
+  if (table.length === 0) return { rows: [], errors: [t("cash.import.errNothing", "Nothing to parse")], headers: [] };
 
   const headers = table[0].map((h) => h.trim().toLowerCase());
   const iDate = findHeader(headers, ["date"]);
@@ -257,10 +284,12 @@ function mapStatement(text: string): { rows: ParsedRow[]; errors: string[]; head
   const iBalance = findHeader(headers, ["balance"]);
   const iRef = findHeader(headers, ["ref", "chq", "cheque", "utr"]);
 
-  if (iDate < 0) errors.push("No date column found — the first row must be a header row");
-  if (iDesc < 0) errors.push("No description/narration column found");
+  if (iDate < 0) errors.push(
+      t("cash.import.errNoDate", "No date column found — the first row must be a header row"),
+    );
+  if (iDesc < 0) errors.push(t("cash.import.errNoDesc", "No description/narration column found"));
   if (iDebit < 0 && iCredit < 0 && iAmount < 0) {
-    errors.push("No debit/credit or amount column found");
+    errors.push(t("cash.import.errNoAmountCol", "No debit/credit or amount column found"));
   }
   if (errors.length > 0) return { rows: [], errors, headers };
 
@@ -271,7 +300,14 @@ function mapStatement(text: string): { rows: ParsedRow[]; errors: string[]; head
     const date = toIsoDate(at(iDate));
     if (!date) {
       // A totals or footer line, not a transaction.
-      if (at(iDate)) errors.push(`Row ${r + 1}: could not read the date "${at(iDate)}" — skipped`);
+      if (at(iDate)) {
+        errors.push(
+          t("cash.import.errBadDate", 'Row {row}: could not read the date "{value}" — skipped', {
+            row: r + 1,
+            value: at(iDate),
+          }),
+        );
+      }
       continue;
     }
     const debit = iDebit >= 0 ? toPaise(at(iDebit)) : null;
@@ -298,7 +334,7 @@ function mapStatement(text: string): { rows: ParsedRow[]; errors: string[]; head
     }
 
     if (!direction || !amountPaise || BigInt(amountPaise) === 0n) {
-      errors.push(`Row ${r + 1}: no amount — skipped`);
+      errors.push(t("cash.import.errNoAmount", "Row {row}: no amount — skipped", { row: r + 1 }));
       continue;
     }
     const balance = iBalance >= 0 ? toPaise(at(iBalance)) : null;
@@ -311,17 +347,18 @@ function mapStatement(text: string): { rows: ParsedRow[]; errors: string[]; head
       reference: at(iRef) || null,
     });
   }
-  if (rows.length === 0) errors.push("No usable transaction rows were found");
+  if (rows.length === 0) errors.push(t("cash.import.errNoRows", "No usable transaction rows were found"));
   return { rows, errors, headers };
 }
 
 function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [bankAccountId, setBankAccountId] = useState("");
   const [text, setText] = useState("");
   const [batchLabel, setBatchLabel] = useState("");
 
-  const parsed = useMemo(() => (text.trim() ? mapStatement(text) : null), [text]);
+  const parsed = useMemo(() => (text.trim() ? mapStatement(text, t) : null), [text, t]);
 
   const doImport = useMutation({
     mutationFn: async () =>
@@ -333,36 +370,44 @@ function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
       ).data,
     onSuccess: (d: { imported: number; skipped: number; received: number }) => {
       toast.success(
-        `Imported ${d.imported} of ${d.received} lines${d.skipped ? ` · ${d.skipped} already present` : ""}`,
+        t("cash.import.done", "Imported {imported} of {received} lines{skipped}", {
+          imported: d.imported,
+          received: d.received,
+          skipped: d.skipped
+            ? t("cash.import.doneSkipped", " · {n} already present", { n: d.skipped })
+            : "",
+        }),
       );
       setText("");
       qc.invalidateQueries({ queryKey: ["cash-bank-transactions"] });
       qc.invalidateQueries({ queryKey: ["cash-bank-accounts"] });
       qc.invalidateQueries({ queryKey: ["cash-reconciliation"] });
     },
-    onError: (e) => toast.error(apiError(e, "Import failed")),
+    onError: (e) => toast.error(apiError(e, t("cash.import.failed", "Import failed"))),
   });
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle>Import a bank statement</CardTitle>
+        <CardTitle>{t("cash.import.title", "Import a bank statement")}</CardTitle>
         <CardDescription>
-          Paste the CSV your bank gives you. It is parsed here on your phone or computer — nothing
-          is sent anywhere except to FuelBook. Lines already imported are skipped.
+          {t(
+            "cash.import.desc",
+            "Paste the CSV your bank gives you. It is parsed here on your phone or computer — nothing is sent anywhere except to FuelBook. Lines already imported are skipped.",
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {accounts.length === 0 ? (
-          <EmptyState title="Add a bank account first" />
+          <EmptyState title={t("cash.import.addAccountFirst", "Add a bank account first")} />
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">Into account</Label>
+                <Label className="text-xs">{t("cash.import.intoAccount", "Into account")}</Label>
                 <Select value={bankAccountId} onValueChange={setBankAccountId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pick an account" />
+                    <SelectValue placeholder={t("cash.import.pickAccount", "Pick an account")} />
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((a) => (
@@ -374,17 +419,19 @@ function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Label for this import</Label>
+                <Label className="text-xs">{t("cash.import.label", "Label for this import")}</Label>
                 <Input
                   value={batchLabel}
                   onChange={(e) => setBatchLabel(e.target.value)}
-                  placeholder="e.g. April statement"
+                  placeholder={t("cash.import.labelPh", "e.g. April statement")}
                 />
               </div>
             </div>
 
             <div>
-              <Label className="text-xs">Paste CSV (first row must be the header)</Label>
+              <Label className="text-xs">
+                {t("cash.import.paste", "Paste CSV (first row must be the header)")}
+              </Label>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -403,7 +450,7 @@ function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
                       <li key={i}>{err}</li>
                     ))}
                     {parsed.errors.length > 8 ? (
-                      <li>…and {parsed.errors.length - 8} more</li>
+                      <li>{t("cash.import.andMore", "…and {n} more", { n: parsed.errors.length - 8 })}</li>
                     ) : null}
                   </ul>
                 ) : null}
@@ -411,16 +458,18 @@ function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
                 {parsed.rows.length > 0 ? (
                   <>
                     <p className="text-sm font-medium">
-                      {parsed.rows.length} line{parsed.rows.length === 1 ? "" : "s"} ready
+                      {parsed.rows.length === 1
+                        ? t("cash.import.readyOne", "{n} line ready", { n: parsed.rows.length })
+                        : t("cash.import.readyMany", "{n} lines ready", { n: parsed.rows.length })}
                     </p>
                     <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-md border">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                            <TableHead>Dr/Cr</TableHead>
+                            <TableHead>{t("common.date", "Date")}</TableHead>
+                            <TableHead>{t("cash.import.colDesc", "Description")}</TableHead>
+                            <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
+                            <TableHead>{t("cash.import.colDrCr", "Dr/Cr")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -435,7 +484,7 @@ function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
                               </TableCell>
                               <TableCell>
                                 <Badge variant={r.direction === "CREDIT" ? "default" : "secondary"}>
-                                  {r.direction}
+                                  {t(`cash.dir.${r.direction}`, r.direction)}
                                 </Badge>
                               </TableCell>
                             </TableRow>
@@ -445,7 +494,9 @@ function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
                     </div>
                     {parsed.rows.length > 50 ? (
                       <p className="text-xs text-muted-foreground">
-                        Showing the first 50 of {parsed.rows.length}.
+                        {t("cash.import.showingFirst", "Showing the first 50 of {n}.", {
+                          n: parsed.rows.length,
+                        })}
                       </p>
                     ) : null}
                   </>
@@ -456,7 +507,9 @@ function ImportSection({ accounts }: { accounts: BankAccountRow[] }) {
                     onClick={() => doImport.mutate()}
                     disabled={!bankAccountId || parsed.rows.length === 0 || doImport.isPending}
                   >
-                    {doImport.isPending ? "Importing…" : `Import ${parsed.rows.length} lines`}
+                    {doImport.isPending
+                      ? t("cash.import.importing", "Importing…")
+                      : t("cash.import.importBtn", "Import {n} lines", { n: parsed.rows.length })}
                   </Button>
                 </div>
               </div>
@@ -486,6 +539,7 @@ type TxnRow = {
 };
 
 function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const owner = isOwner();
   const [bankAccountId, setBankAccountId] = useState(ALL);
@@ -529,11 +583,11 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
     mutationFn: async (id: string) =>
       (await api.post(`/api/cash-bank/transactions/${id}/unmatch`)).data,
     onSuccess: () => {
-      toast.success("Match removed");
+      toast.success(t("cash.match.removed", "Match removed"));
       qc.invalidateQueries({ queryKey: ["cash-bank-transactions"] });
       qc.invalidateQueries({ queryKey: ["cash-reconciliation"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not unmatch")),
+    onError: (e) => toast.error(apiError(e, t("cash.match.removeFailed", "Could not unmatch"))),
   });
 
   const rows = txnsQ.data?.transactions ?? [];
@@ -542,10 +596,12 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle>Match the statement</CardTitle>
+        <CardTitle>{t("cash.match.title", "Match the statement")}</CardTitle>
         <CardDescription>
-          Tie each bank line to the deposit slip or settlement it belongs to. What stays unmatched is
-          what nobody can explain.
+          {t(
+            "cash.match.desc",
+            "Tie each bank line to the deposit slip or settlement it belongs to. What stays unmatched is what nobody can explain.",
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -560,13 +616,13 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div>
-            <Label className="text-xs">Account</Label>
+            <Label className="text-xs">{t("cash.match.account", "Account")}</Label>
             <Select value={bankAccountId} onValueChange={setBankAccountId}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All accounts</SelectItem>
+                <SelectItem value={ALL}>{t("cash.match.allAccounts", "All accounts")}</SelectItem>
                 {accounts.map((a) => (
                   <SelectItem key={a.id} value={a.id}>
                     {accountLabel(a)}
@@ -576,11 +632,11 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">From</Label>
+            <Label className="text-xs">{t("common.from", "From")}</Label>
             <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
           </div>
           <div>
-            <Label className="text-xs">To</Label>
+            <Label className="text-xs">{t("common.to", "To")}</Label>
             <Input
               type="date"
               value={to}
@@ -590,15 +646,15 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
             />
           </div>
           <div>
-            <Label className="text-xs">Show</Label>
+            <Label className="text-xs">{t("cash.match.show", "Show")}</Label>
             <Select value={matched} onValueChange={setMatched}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="unmatched">Unmatched only</SelectItem>
-                <SelectItem value="matched">Matched only</SelectItem>
-                <SelectItem value="all">Everything</SelectItem>
+                <SelectItem value="unmatched">{t("cash.match.unmatchedOnly", "Unmatched only")}</SelectItem>
+                <SelectItem value="matched">{t("cash.match.matchedOnly", "Matched only")}</SelectItem>
+                <SelectItem value="all">{t("cash.match.everything", "Everything")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -606,22 +662,29 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
 
         {s ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatTile label="Matched lines" value={s.matchedCount} tone="good" />
             <StatTile
-              label="Unmatched lines"
+              label={t("cash.match.matchedLines", "Matched lines")}
+              value={s.matchedCount}
+              tone="good"
+            />
+            <StatTile
+              label={t("cash.match.unmatchedLines", "Unmatched lines")}
               value={s.unmatchedCount}
-              hint={`in ${formatINR(s.unmatchedCreditPaise)} · out ${formatINR(s.unmatchedDebitPaise)}`}
+              hint={t("cash.match.inOut", "in {in} · out {out}", {
+                in: formatINR(s.unmatchedCreditPaise),
+                out: formatINR(s.unmatchedDebitPaise),
+              })}
               tone={s.unmatchedCount > 0 ? "warn" : "good"}
             />
             <StatTile
-              label="Deposits not cleared"
+              label={t("cash.match.openDeposits", "Deposits not cleared")}
               value={formatINR(s.openDepositsPaise)}
-              hint="Slips the bank has not confirmed"
+              hint={t("cash.match.openDepositsHint", "Slips the bank has not confirmed")}
             />
             <StatTile
-              label="Settlements awaiting"
+              label={t("cash.match.openSettlements", "Settlements awaiting")}
               value={formatINR(s.openSettlementsExpectedPaise)}
-              hint="Card/UPI money not yet credited"
+              hint={t("cash.match.openSettlementsHint", "Card/UPI money not yet credited")}
             />
           </div>
         ) : null}
@@ -629,14 +692,21 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
         {txnsQ.isLoading ? (
           <Loading />
         ) : txnsQ.error ? (
-          <EmptyState title="Could not load statement lines" hint={apiError(txnsQ.error)} />
+          <EmptyState title={t("cash.match.loadFailed", "Could not load statement lines")} hint={apiError(txnsQ.error)} />
         ) : rows.length === 0 ? (
           <EmptyState
-            title={matched === "unmatched" ? "Nothing unmatched" : "No statement lines here"}
+            title={
+              matched === "unmatched"
+                ? t("cash.match.emptyUnmatched", "Nothing unmatched")
+                : t("cash.match.emptyAll", "No statement lines here")
+            }
             hint={
               matched === "unmatched"
-                ? "Every imported line in this range is accounted for."
-                : "Import a statement above to start matching."
+                ? t(
+                    "cash.match.emptyUnmatchedHint",
+                    "Every imported line in this range is accounted for.",
+                  )
+                : t("cash.match.emptyAllHint", "Import a statement above to start matching.")
             }
           />
         ) : (
@@ -644,49 +714,53 @@ function MatchingSection({ accounts }: { accounts: BankAccountRow[] }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Dr/Cr</TableHead>
-                  <TableHead>Matched to</TableHead>
+                  <TableHead>{t("common.date", "Date")}</TableHead>
+                  <TableHead>{t("cash.import.colDesc", "Description")}</TableHead>
+                  <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
+                  <TableHead>{t("cash.import.colDrCr", "Dr/Cr")}</TableHead>
+                  <TableHead>{t("cash.match.colMatchedTo", "Matched to")}</TableHead>
                   {owner ? <TableHead /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="whitespace-nowrap">{t.txnDate.slice(0, 10)}</TableCell>
-                    <TableCell className="max-w-[16rem] truncate" title={t.description}>
-                      {t.description}
-                      {t.reference ? (
-                        <span className="block text-xs text-muted-foreground">{t.reference}</span>
+                {rows.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell className="whitespace-nowrap">{tx.txnDate.slice(0, 10)}</TableCell>
+                    <TableCell className="max-w-[16rem] truncate" title={tx.description}>
+                      {tx.description}
+                      {tx.reference ? (
+                        <span className="block text-xs text-muted-foreground">{tx.reference}</span>
                       ) : null}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatINR(t.amountPaise)}
+                      {formatINR(tx.amountPaise)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={t.direction === "CREDIT" ? "default" : "secondary"}>
-                        {t.direction}
+                      <Badge variant={tx.direction === "CREDIT" ? "default" : "secondary"}>
+                        {t(`cash.dir.${tx.direction}`, tx.direction)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs">
-                      {t.isMatched ? (t.matchedKind ?? "matched") : "—"}
+                      {tx.isMatched
+                        ? tx.matchedKind
+                          ? t(`cash.match.short.${tx.matchedKind}`, tx.matchedKind)
+                          : t("cash.match.matched", "matched")
+                        : "—"}
                     </TableCell>
                     {owner ? (
                       <TableCell className="whitespace-nowrap">
-                        {t.isMatched ? (
+                        {tx.isMatched ? (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => unmatch.mutate(t.id)}
+                            onClick={() => unmatch.mutate(tx.id)}
                             disabled={unmatch.isPending}
                           >
-                            <Unlink className="h-4 w-4 mr-1" /> Unmatch
+                            <Unlink className="h-4 w-4 mr-1" /> {t("cash.match.unmatchBtn", "Unmatch")}
                           </Button>
                         ) : (
-                          <Button variant="ghost" size="sm" onClick={() => setMatching(t)}>
-                            <Link2 className="h-4 w-4 mr-1" /> Match
+                          <Button variant="ghost" size="sm" onClick={() => setMatching(tx)}>
+                            <Link2 className="h-4 w-4 mr-1" /> {t("cash.match.matchBtn", "Match")}
                           </Button>
                         )}
                       </TableCell>
@@ -721,6 +795,7 @@ function MatchDialog({
   to: string;
   onClose: () => void;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [kind, setKind] = useState<"CASH_DEPOSIT" | "SETTLEMENT" | "OTHER">("CASH_DEPOSIT");
   const [targetId, setTargetId] = useState(NONE);
@@ -744,12 +819,12 @@ function MatchDialog({
       ).data as { warnings: string[] },
     onSuccess: (d) => {
       if (d.warnings?.length) d.warnings.forEach((w) => toast.warning(w));
-      else toast.success("Matched");
+      else toast.success(t("cash.match.done", "Matched"));
       qc.invalidateQueries({ queryKey: ["cash-bank-transactions"] });
       qc.invalidateQueries({ queryKey: ["cash-reconciliation"] });
       onClose();
     },
-    onError: (e) => toast.error(apiError(e, "Could not match this line")),
+    onError: (e) => toast.error(apiError(e, t("cash.match.failed", "Could not match this line"))),
   });
 
   const deposits = depositsQ.data?.deposits ?? [];
@@ -760,39 +835,47 @@ function MatchDialog({
     <Dialog open onOpenChange={(v) => (!v ? onClose() : undefined)}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Match this bank line</DialogTitle>
+          <DialogTitle>{t("cash.match.dialogTitle", "Match this bank line")}</DialogTitle>
           <DialogDescription>
-            {txn.txnDate.slice(0, 10)} · {txn.direction} · {formatINR(txn.amountPaise)} ·{" "}
+            {txn.txnDate.slice(0, 10)} · {t(`cash.dir.${txn.direction}`, txn.direction)} · {formatINR(txn.amountPaise)} ·{" "}
             {txn.description}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">This line is</Label>
+            <Label className="text-xs">{t("cash.match.thisLineIs", "This line is")}</Label>
             <Select value={kind} onValueChange={(v) => { setKind(v as typeof kind); setTargetId(NONE); }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="CASH_DEPOSIT">A cash deposit we made</SelectItem>
-                <SelectItem value="SETTLEMENT">A card/UPI settlement</SelectItem>
-                <SelectItem value="OTHER">Something else (just mark it seen)</SelectItem>
+                <SelectItem value="CASH_DEPOSIT">
+                  {t("cash.match.kindDeposit", "A cash deposit we made")}
+                </SelectItem>
+                <SelectItem value="SETTLEMENT">
+                  {t("cash.match.kindSettlement", "A card/UPI settlement")}
+                </SelectItem>
+                <SelectItem value="OTHER">
+                  {t("cash.match.kindOther", "Something else (just mark it seen)")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {kind === "CASH_DEPOSIT" ? (
             deposits.length === 0 ? (
-              <EmptyState title="No deposits in this range to match against" />
+              <EmptyState
+                title={t("cash.match.noDeposits", "No deposits in this range to match against")}
+              />
             ) : (
               <div>
-                <Label className="text-xs">Deposit slip</Label>
+                <Label className="text-xs">{t("cash.match.depositSlip", "Deposit slip")}</Label>
                 <Select value={targetId} onValueChange={setTargetId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pick a deposit" />
+                    <SelectValue placeholder={t("cash.match.pickDeposit", "Pick a deposit")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>Pick a deposit…</SelectItem>
+                    <SelectItem value={NONE}>{t("cash.match.pickDepositItem", "Pick a deposit…")}</SelectItem>
                     {deposits.map((d) => (
                       <SelectItem key={d.id} value={d.id}>
                         {d.depositedOn.slice(0, 10)} · {formatINR(d.amountPaise)}
@@ -807,16 +890,21 @@ function MatchDialog({
 
           {kind === "SETTLEMENT" ? (
             settlements.length === 0 ? (
-              <EmptyState title="No settlement batches in this range to match against" />
+              <EmptyState
+                title={t(
+                  "cash.match.noBatches",
+                  "No settlement batches in this range to match against",
+                )}
+              />
             ) : (
               <div>
-                <Label className="text-xs">Settlement batch</Label>
+                <Label className="text-xs">{t("cash.match.batch", "Settlement batch")}</Label>
                 <Select value={targetId} onValueChange={setTargetId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pick a batch" />
+                    <SelectValue placeholder={t("cash.match.pickBatch", "Pick a batch")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>Pick a batch…</SelectItem>
+                    <SelectItem value={NONE}>{t("cash.match.pickBatchItem", "Pick a batch…")}</SelectItem>
                     {settlements.map((b) => (
                       <SelectItem key={b.id} value={b.id}>
                         {b.businessDate.slice(0, 10)} · {b.channel.name} ·{" "}
@@ -830,16 +918,20 @@ function MatchDialog({
           ) : null}
 
           <p className="text-xs text-muted-foreground">
-            If the amounts differ the match is still recorded, with a warning — a part-payment or a
-            netted-off fee is usually the reason, and it needs a human to look.
+            {t(
+              "cash.match.note",
+              "If the amounts differ the match is still recorded, with a warning — a part-payment or a netted-off fee is usually the reason, and it needs a human to look.",
+            )}
           </p>
 
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="outline" onClick={onClose}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button onClick={() => match.mutate()} disabled={blocked || match.isPending}>
-              {match.isPending ? "Matching…" : "Match"}
+              {match.isPending
+                ? t("cash.match.matching", "Matching…")
+                : t("cash.match.matchBtn", "Match")}
             </Button>
           </div>
         </div>

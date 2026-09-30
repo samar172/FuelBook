@@ -516,6 +516,8 @@ router.get('/onboarding', async (req, res, next) => {
     const tanksWithDipChart = dipPoints.length;
 
     type Status = 'DONE' | 'TODO' | 'ATTENTION';
+    // Each step carries stable translation keys and the raw values, so the UI can
+    // render the sentence in Hindi instead of trying to translate English prose.
     const step = (
       id: string,
       title: string,
@@ -524,7 +526,21 @@ router.get('/onboarding', async (req, res, next) => {
       href: string,
       required: boolean,
       why: string,
-    ) => ({ id, title, status, detail, href, required, why });
+      detailKey?: string,
+      detailVars?: Record<string, string | number>,
+    ) => ({
+      id,
+      title,
+      titleKey: `guide.step.${id}.title`,
+      status,
+      detail,
+      detailKey: detailKey ?? null,
+      detailVars: detailVars ?? null,
+      href,
+      required,
+      why,
+      whyKey: `guide.step.${id}.why`,
+    });
 
     const steps = [
       step(
@@ -535,6 +551,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/settings/pump',
         true,
         'Your pump name and address appear on statements you give customers.',
+        pump.name ? 'guide.detail.pump.set' : 'guide.detail.pump.none',
+        { name: pump.name ?? '', city: pump.city ?? '', state: pump.state ?? '' },
       ),
       step(
         'tanks',
@@ -544,6 +562,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/settings/pump',
         true,
         'Stock, dips and fuel purchases are all tracked per tank.',
+        tanks.length > 0 ? 'guide.detail.tanks.some' : 'guide.detail.tanks.none',
+        { count: tanks.length, names: tanks.map((t) => t.name).join(', ') },
       ),
       step(
         'nozzles',
@@ -557,6 +577,16 @@ router.get('/onboarding', async (req, res, next) => {
         '/settings/pump',
         true,
         'Meter readings are per nozzle — this is how sales are measured.',
+        nozzles.length === 0
+          ? 'guide.detail.nozzles.none'
+          : tanksWithoutNozzle.length > 0
+            ? 'guide.detail.nozzles.gap'
+            : 'guide.detail.nozzles.ok',
+        {
+          count: nozzles.length,
+          tanks: tanks.length,
+          missing: tanksWithoutNozzle.map((t) => t.name).join(', '),
+        },
       ),
       step(
         'rates',
@@ -570,6 +600,12 @@ router.get('/onboarding', async (req, res, next) => {
         '/rates',
         true,
         'Sales value = litres sold x the rate, so nothing can be valued without it.',
+        rates.length === 0
+          ? 'guide.detail.rates.none'
+          : unpriced.length > 0
+            ? 'guide.detail.rates.gap'
+            : 'guide.detail.rates.ok',
+        { unpriced: unpriced.join(', '), priced: [...pricedFuels].join(', ') },
       ),
       step(
         'channels',
@@ -583,6 +619,12 @@ router.get('/onboarding', async (req, res, next) => {
         '/settings/pump',
         true,
         'Cash, card, UPI and bank deposits are reconciled separately.',
+        channels.length === 0
+          ? 'guide.detail.channels.none'
+          : hasCashChannel
+            ? 'guide.detail.channels.ok'
+            : 'guide.detail.channels.noCash',
+        { count: channels.length },
       ),
       step(
         'timeslots',
@@ -596,6 +638,12 @@ router.get('/onboarding', async (req, res, next) => {
         '/settings/pump',
         false,
         'Tagging a slot Day or Night keeps a night slot off your day shift.',
+        timeSlots.length === 0
+          ? 'guide.detail.timeslots.none'
+          : untaggedSlots > 0
+            ? 'guide.detail.timeslots.untagged'
+            : 'guide.detail.timeslots.ok',
+        { count: timeSlots.length, untagged: untaggedSlots },
       ),
       step(
         'categories',
@@ -605,6 +653,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/expenses',
         true,
         'Daily expenses are grouped by these on every shift and in the P&L.',
+        categories > 0 ? 'guide.detail.categories.some' : 'guide.detail.categories.none',
+        { count: categories },
       ),
       step(
         'employees',
@@ -614,6 +664,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/employees',
         true,
         'Sales and cash are pinned to the attendant who worked each nozzle.',
+        employees > 0 ? 'guide.detail.employees.some' : 'guide.detail.employees.none',
+        { count: employees },
       ),
       step(
         'customers',
@@ -623,6 +675,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/credit',
         false,
         'Needed only if you sell fuel on udhaar. Each customer can hold many vehicles.',
+        customers > 0 ? 'guide.detail.customers.some' : 'guide.detail.customers.none',
+        { count: customers },
       ),
       step(
         'firstshift',
@@ -632,6 +686,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/shifts/new',
         true,
         'A shift is the day\'s book: readings, collections, credit, expenses and cash.',
+        shifts > 0 ? 'guide.detail.firstshift.some' : 'guide.detail.firstshift.none',
+        { count: shifts },
       ),
       step(
         'lockshift',
@@ -643,6 +699,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/shifts',
         true,
         'Locking freezes the shift and posts it to the double-entry ledger.',
+        lockedShifts > 0 ? 'guide.detail.lockshift.some' : 'guide.detail.lockshift.none',
+        { count: lockedShifts, entries: journalEntries },
       ),
       step(
         'opening',
@@ -654,6 +712,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/books/new-entry',
         false,
         'Without this the balance sheet starts from zero and understates what you own.',
+        openingEntries > 0 ? 'guide.detail.opening.some' : 'guide.detail.opening.none',
+        { count: openingEntries },
       ),
       step(
         'dipcharts',
@@ -665,6 +725,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/wet-stock',
         false,
         'Turns a dipstick reading into litres, which is what wet-stock variance needs.',
+        tanks.length === 0 ? 'guide.detail.dipcharts.noTanks' : 'guide.detail.dipcharts.some',
+        { done: tanksWithDipChart, total: tanks.length },
       ),
       step(
         'bank',
@@ -674,6 +736,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/cash',
         false,
         'Needed to record deposits and reconcile card and UPI settlement.',
+        bankAccounts > 0 ? 'guide.detail.bank.some' : 'guide.detail.bank.none',
+        { count: bankAccounts },
       ),
       step(
         'licences',
@@ -683,6 +747,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/compliance',
         false,
         'A lapsed licence or unstamped nozzle can stop you trading.',
+        licences > 0 ? 'guide.detail.licences.some' : 'guide.detail.licences.none',
+        { count: licences },
       ),
       step(
         'products',
@@ -692,6 +758,8 @@ router.get('/onboarding', async (req, res, next) => {
         '/products',
         false,
         'Fuel margins are fixed; lubes are where the real margin is.',
+        products > 0 ? 'guide.detail.products.some' : 'guide.detail.products.none',
+        { count: products },
       ),
     ];
 

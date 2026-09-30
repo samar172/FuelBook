@@ -28,6 +28,9 @@ import {
 import { formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
 import { apiError } from "@/lib/types";
 import { format, parseISO } from "date-fns";
+import type { Locale } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { toast } from "sonner";
 import { ArrowLeft, Printer, Send, Undo2 } from "lucide-react";
 
@@ -114,8 +117,8 @@ type StatementDetail = {
 
 const SENT_VIA = ["WhatsApp", "Email", "Printed", "Hand delivered", "SMS"];
 
-const day = (iso: string | null | undefined) =>
-  iso ? format(parseISO(iso), "dd MMM yyyy") : "—";
+const fmtDay = (iso: string | null | undefined, locale: Locale) =>
+  iso ? format(parseISO(iso), "dd MMM yyyy", { locale }) : "—";
 
 const statusVariant = (
   status: string,
@@ -154,6 +157,9 @@ const PRINT_CSS = `
 
 export default function StatementDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const { t } = useT();
+  const locale = useDateLocale();
+  const day = (iso: string | null | undefined) => fmtDay(iso, locale);
   const qc = useQueryClient();
   const canManage = can("canManageCreditCustomers");
   const [sendOpen, setSendOpen] = useState(false);
@@ -169,22 +175,22 @@ export default function StatementDetailPage({ params }: { params: { id: string }
     mutationFn: async (body: Record<string, unknown>) =>
       (await api.patch(`/api/credit-lifecycle/statements/${id}`, body)).data,
     onSuccess: () => {
-      toast.success("Statement updated");
+      toast.success(t("receivables.statementUpdated", "Statement updated"));
       setSendOpen(false);
       qc.invalidateQueries({ queryKey: ["cl-statement", id] });
       qc.invalidateQueries({ queryKey: ["cl-statements"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not update the statement")),
+    onError: (e) => toast.error(apiError(e, t("receivables.updateStatementFailed", "Could not update the statement"))),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading statement…</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">{t("receivables.loadingStatement", "Loading statement…")}</p>;
   if (error)
     return (
       <div className="space-y-3">
-        <p className="text-sm text-destructive">{apiError(error, "Could not load the statement")}</p>
+        <p className="text-sm text-destructive">{apiError(error, t("receivables.loadStatementFailed", "Could not load the statement"))}</p>
         <Button asChild variant="outline">
           <Link href="/receivables">
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back to receivables
+            <ArrowLeft className="h-4 w-4 mr-1" /> {t("receivables.backToReceivables", "Back to receivables")}
           </Link>
         </Button>
       </div>
@@ -202,21 +208,21 @@ export default function StatementDetailPage({ params }: { params: { id: string }
       <div className="flex flex-wrap items-center justify-between gap-3 no-print">
         <Button asChild variant="outline" size="sm">
           <Link href="/receivables">
-            <ArrowLeft className="h-4 w-4 mr-1" /> Receivables
+            <ArrowLeft className="h-4 w-4 mr-1" /> {t("receivables.title", "Receivables")}
           </Link>
         </Button>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => window.print()}>
-            <Printer className="h-4 w-4 mr-1" /> Print
+            <Printer className="h-4 w-4 mr-1" /> {t("common.print", "Print")}
           </Button>
           {canManage && s.status === "DRAFT" ? (
             <Button onClick={() => setSendOpen(true)}>
-              <Send className="h-4 w-4 mr-1" /> Mark sent
+              <Send className="h-4 w-4 mr-1" /> {t("receivables.markSent", "Mark sent")}
             </Button>
           ) : null}
           {canManage && s.status === "SENT" && Number(s.derived.paidAgainstPaise) === 0 ? (
             <Button variant="outline" onClick={() => patch.mutate({ status: "DRAFT" })}>
-              <Undo2 className="h-4 w-4 mr-1" /> Back to draft
+              <Undo2 className="h-4 w-4 mr-1" /> {t("receivables.backToDraft", "Back to draft")}
             </Button>
           ) : null}
         </div>
@@ -227,7 +233,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
         <CardContent className="pt-6 space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-lg font-bold leading-tight">{s.pump?.name || "Fuel station"}</p>
+              <p className="text-lg font-bold leading-tight">{s.pump?.name || t("receivables.fuelStation", "Fuel station")}</p>
               {s.pump ? (
                 <p className="text-sm text-muted-foreground leading-snug">
                   {s.pump.address}
@@ -238,11 +244,11 @@ export default function StatementDetailPage({ params }: { params: { id: string }
             </div>
             <div className="text-right">
               <p className="text-sm uppercase tracking-wide text-muted-foreground">
-                Statement of account
+                {t("receivables.statementOfAccount", "Statement of account")}
               </p>
               <p className="text-xl font-bold">{s.statementNo}</p>
               <Badge variant={statusVariant(s.derived.status)}>
-                {s.derived.status.replace("_", " ")}
+                {t(`receivables.status.${s.derived.status}`, s.derived.status.replace("_", " "))}
               </Badge>
             </div>
           </div>
@@ -251,9 +257,9 @@ export default function StatementDetailPage({ params }: { params: { id: string }
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Billed to</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("receivables.billedTo", "Billed to")}</p>
               <p className="font-semibold">{c.name}</p>
-              {c.code ? <p className="text-muted-foreground">Customer code {c.code}</p> : null}
+              {c.code ? <p className="text-muted-foreground">{t("receivables.customerCodeValue", "Customer code {code}", { code: c.code })}</p> : null}
               {c.contactPerson ? <p>{c.contactPerson}</p> : null}
               {c.phone ? <p>{c.phone}</p> : null}
               {c.addressLine ? <p>{c.addressLine}</p> : null}
@@ -262,30 +268,31 @@ export default function StatementDetailPage({ params }: { params: { id: string }
                   {[c.city, c.state, c.pincode].filter(Boolean).join(", ")}
                 </p>
               ) : null}
-              {c.gstin ? <p>GSTIN {c.gstin}</p> : null}
+              {c.gstin ? <p>{t("receivables.gstinValue", "GSTIN {gstin}", { gstin: c.gstin })}</p> : null}
             </div>
             <div className="sm:text-right space-y-1">
               <p>
-                <span className="text-muted-foreground">Period: </span>
+                <span className="text-muted-foreground">{t("receivables.periodLabel", "Period: ")}</span>
                 {day(s.periodFrom)} – {day(s.periodTo)}
               </p>
               <p>
-                <span className="text-muted-foreground">Credit terms: </span>
-                {c.paymentTermsDays} days
+                <span className="text-muted-foreground">{t("receivables.creditTermsLabel", "Credit terms: ")}</span>
+                {t("receivables.daysValue", "{n} days", { n: c.paymentTermsDays })}
               </p>
               <p className="font-semibold">
-                <span className="text-muted-foreground font-normal">Payment due: </span>
+                <span className="text-muted-foreground font-normal">{t("receivables.paymentDueLabel", "Payment due: ")}</span>
                 {day(s.dueDate)}
               </p>
               {s.derived.isOverdue ? (
                 <p className="text-destructive font-semibold">
-                  {s.derived.daysPastDue} days past due
+                  {t("receivables.daysPastDue", "{n} days past due", { n: s.derived.daysPastDue })}
                 </p>
               ) : null}
               {s.sentAt ? (
                 <p className="text-muted-foreground">
-                  Sent {day(s.sentAt)}
-                  {s.sentVia ? ` via ${s.sentVia}` : ""}
+                  {s.sentVia
+                    ? t("receivables.sentOnVia", "Sent {date} via {via}", { date: day(s.sentAt), via: t(`receivables.via.${s.sentVia}`, s.sentVia) })
+                    : t("receivables.sentOn", "Sent {date}", { date: day(s.sentAt) })}
                 </p>
               ) : null}
             </div>
@@ -294,29 +301,29 @@ export default function StatementDetailPage({ params }: { params: { id: string }
           {/* summary box */}
           <div className="rounded-md border divide-y text-sm">
             <div className="flex justify-between px-4 py-2">
-              <span>Opening balance as on {day(s.periodFrom)}</span>
+              <span>{t("receivables.openingBalanceOn", "Opening balance as on {date}", { date: day(s.periodFrom) })}</span>
               <span className="tabular-nums">{formatINR(s.openingBalancePaise)}</span>
             </div>
             <div className="flex justify-between px-4 py-2">
-              <span>Fuel taken on credit during the period</span>
+              <span>{t("receivables.fuelOnCreditInPeriod", "Fuel taken on credit during the period")}</span>
               <span className="tabular-nums">+ {formatINR(s.salesPaise)}</span>
             </div>
             <div className="flex justify-between px-4 py-2">
-              <span>Payments received during the period</span>
+              <span>{t("receivables.paymentsInPeriod", "Payments received during the period")}</span>
               <span className="tabular-nums">− {formatINR(s.receiptsPaise)}</span>
             </div>
             <div className="flex justify-between px-4 py-3 bg-muted font-bold">
-              <span>Closing balance payable</span>
+              <span>{t("receivables.closingPayable", "Closing balance payable")}</span>
               <span className="tabular-nums">{formatINR(s.closingBalancePaise)}</span>
             </div>
             {Number(s.derived.paidAgainstPaise) > 0 ? (
               <>
                 <div className="flex justify-between px-4 py-2">
-                  <span>Received since {day(s.periodTo)}</span>
+                  <span>{t("receivables.receivedSince", "Received since {date}", { date: day(s.periodTo) })}</span>
                   <span className="tabular-nums">− {formatINR(s.derived.paidAgainstPaise)}</span>
                 </div>
                 <div className="flex justify-between px-4 py-2 font-semibold">
-                  <span>Still unpaid</span>
+                  <span>{t("receivables.stillUnpaid", "Still unpaid")}</span>
                   <span className="tabular-nums">{formatINR(s.derived.unpaidPaise)}</span>
                 </div>
               </>
@@ -325,23 +332,23 @@ export default function StatementDetailPage({ params }: { params: { id: string }
 
           {/* fuel taken */}
           <div>
-            <p className="font-semibold mb-2">Fuel taken on credit</p>
+            <p className="font-semibold mb-2">{t("receivables.fuelTakenOnCredit", "Fuel taken on credit")}</p>
             {s.lines.sales.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No credit sales from locked shifts in this period.
+                {t("receivables.noLockedCreditSales", "No credit sales from locked shifts in this period.")}
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Vehicle</TableHead>
-                      <TableHead>Fuel</TableHead>
-                      <TableHead className="text-right">Litres</TableHead>
-                      <TableHead className="text-right">Rate</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">On credit</TableHead>
+                      <TableHead>{t("common.date", "Date")}</TableHead>
+                      <TableHead>{t("credit.vehicle", "Vehicle")}</TableHead>
+                      <TableHead>{t("credit.fuel", "Fuel")}</TableHead>
+                      <TableHead className="text-right">{t("common.litres", "Litres")}</TableHead>
+                      <TableHead className="text-right">{t("common.rate", "Rate")}</TableHead>
+                      <TableHead className="text-right">{t("common.total", "Total")}</TableHead>
+                      <TableHead className="text-right">{t("receivables.onCredit", "On credit")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -349,7 +356,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
                       <TableRow key={l.id}>
                         <TableCell className="whitespace-nowrap">{day(l.saleAt)}</TableCell>
                         <TableCell>{l.vehicleNo || "—"}</TableCell>
-                        <TableCell>{FUEL_LABELS[l.fuelType] || l.fuelType}</TableCell>
+                        <TableCell>{t(`receivables.fuelType.${l.fuelType}`, FUEL_LABELS[l.fuelType] || l.fuelType)}</TableCell>
                         <TableCell className="text-right tabular-nums">
                           {formatLitres(l.quantityMl)}
                         </TableCell>
@@ -372,17 +379,17 @@ export default function StatementDetailPage({ params }: { params: { id: string }
 
           {/* receipts */}
           <div>
-            <p className="font-semibold mb-2">Payments received in the period</p>
+            <p className="font-semibold mb-2">{t("receivables.paymentsReceivedInPeriod", "Payments received in the period")}</p>
             {s.lines.receipts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No payments received in this period.</p>
+              <p className="text-sm text-muted-foreground">{t("receivables.noPaymentsInPeriod", "No payments received in this period.")}</p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>{t("common.date", "Date")}</TableHead>
+                      <TableHead>{t("credit.reference", "Reference")}</TableHead>
+                      <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -402,9 +409,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Amounts are in Indian rupees. Please quote {s.statementNo} with your payment. Cheques
-            are subject to realisation; a returned cheque is added back to the outstanding balance
-            along with any bank charge.
+            {t("receivables.footerNote", "Amounts are in Indian rupees. Please quote {no} with your payment. Cheques are subject to realisation; a returned cheque is added back to the outstanding balance along with any bank charge.", { no: s.statementNo })}
           </p>
         </CardContent>
       </Card>
@@ -412,47 +417,47 @@ export default function StatementDetailPage({ params }: { params: { id: string }
       {/* ---------------- working notes (not part of the printed bill) ---------------- */}
       <Card className="no-print">
         <CardHeader>
-          <CardTitle>Instruments against this account</CardTitle>
+          <CardTitle>{t("receivables.instrumentsAgainst", "Instruments against this account")}</CardTitle>
           <CardDescription>
-            Cheques and transfers recorded from {day(s.periodFrom)} onwards
+            {t("receivables.instrumentsAgainstHint", "Cheques and transfers recorded from {date} onwards", { date: day(s.periodFrom) })}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {s.lines.instruments.length === 0 ? (
             <p className="py-6 text-center text-muted-foreground">
-              Nothing recorded in the cheque register for this customer yet.
+              {t("receivables.noInstruments", "Nothing recorded in the cheque register for this customer yet.")}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Received</TableHead>
-                  <TableHead>Kind</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>When</TableHead>
+                  <TableHead>{t("receivables.received", "Received")}</TableHead>
+                  <TableHead>{t("receivables.kind", "Kind")}</TableHead>
+                  <TableHead>{t("receivables.details", "Details")}</TableHead>
+                  <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
+                  <TableHead>{t("common.status", "Status")}</TableHead>
+                  <TableHead>{t("receivables.when", "When")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {s.lines.instruments.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell className="whitespace-nowrap">{day(i.receivedOn)}</TableCell>
-                    <TableCell>{i.kind}</TableCell>
+                    <TableCell>{t(`receivables.instKind.${i.kind}`, i.kind)}</TableCell>
                     <TableCell className="text-sm">
-                      {i.chequeNo ? <div>Cheque {i.chequeNo}</div> : null}
+                      {i.chequeNo ? <div>{t("receivables.chequeNoValue", "Cheque {no}", { no: i.chequeNo })}</div> : null}
                       {i.chequeDate ? (
                         <div className="text-xs text-muted-foreground">
-                          dated {day(i.chequeDate)}
+                          {t("receivables.datedOn", "dated {date}", { date: day(i.chequeDate) })}
                         </div>
                       ) : null}
-                      {i.utrNo ? <div>UTR {i.utrNo}</div> : null}
+                      {i.utrNo ? <div>{t("receivables.utrValue", "UTR {no}", { no: i.utrNo })}</div> : null}
                       {i.bankName ? (
                         <div className="text-xs text-muted-foreground">{i.bankName}</div>
                       ) : null}
                       {i.bounceReason ? (
                         <div className="text-destructive text-xs">
-                          Bounced {day(i.bouncedOn)}: {i.bounceReason}
+                          {t("receivables.bouncedOnReason", "Bounced {date}: {reason}", { date: day(i.bouncedOn), reason: i.bounceReason })}
                         </div>
                       ) : null}
                     </TableCell>
@@ -460,10 +465,10 @@ export default function StatementDetailPage({ params }: { params: { id: string }
                       {formatINR(i.amountPaise)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(i.status)}>{i.status}</Badge>
+                      <Badge variant={statusVariant(i.status)}>{t(`receivables.instStatus.${i.status}`, i.status)}</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {i.afterPeriod ? "After the period" : "In the period"}
+                      {i.afterPeriod ? t("receivables.afterPeriod", "After the period") : t("receivables.inPeriod", "In the period")}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -475,16 +480,16 @@ export default function StatementDetailPage({ params }: { params: { id: string }
 
       <Card className="no-print">
         <CardHeader>
-          <CardTitle>Internal notes</CardTitle>
+          <CardTitle>{t("receivables.internalNotes", "Internal notes")}</CardTitle>
           <CardDescription>
-            For your own records — not shown on the printed statement
+            {t("receivables.internalNotesHint", "For your own records — not shown on the printed statement")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Input
             value={notesValue}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Promised payment by 10th, spoke to accounts…"
+            placeholder={t("receivables.notesPlaceholder", "Promised payment by 10th, spoke to accounts…")}
             disabled={!canManage}
           />
           {canManage ? (
@@ -493,12 +498,12 @@ export default function StatementDetailPage({ params }: { params: { id: string }
               disabled={patch.isPending || notes === null}
               onClick={() => patch.mutate({ notes: notesValue })}
             >
-              {patch.isPending ? "Saving…" : "Save note"}
+              {patch.isPending ? t("common.saving", "Saving…") : t("receivables.saveNote", "Save note")}
             </Button>
           ) : null}
           {s.nextStatement ? (
             <p className="text-xs text-muted-foreground">
-              This balance was rolled forward into{" "}
+              {t("receivables.rolledForwardInto", "This balance was rolled forward into")}{" "}
               <Link
                 href={`/receivables/statements/${s.nextStatement.id}`}
                 className="underline"
@@ -514,11 +519,11 @@ export default function StatementDetailPage({ params }: { params: { id: string }
       <Dialog open={sendOpen} onOpenChange={setSendOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark {s.statementNo} as sent</DialogTitle>
+            <DialogTitle>{t("receivables.markAsSentTitle", "Mark {no} as sent", { no: s.statementNo })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Sent via</Label>
+              <Label>{t("receivables.sentVia", "Sent via")}</Label>
               <Select value={sentVia} onValueChange={setSentVia}>
                 <SelectTrigger>
                   <SelectValue />
@@ -526,7 +531,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
                 <SelectContent>
                   {SENT_VIA.map((v) => (
                     <SelectItem key={v} value={v}>
-                      {v}
+                      {t(`receivables.via.${v}`, v)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -537,7 +542,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
               disabled={patch.isPending}
               onClick={() => patch.mutate({ status: "SENT", sentVia })}
             >
-              {patch.isPending ? "Saving…" : "Mark sent"}
+              {patch.isPending ? t("common.saving", "Saving…") : t("receivables.markSent", "Mark sent")}
             </Button>
           </div>
         </DialogContent>

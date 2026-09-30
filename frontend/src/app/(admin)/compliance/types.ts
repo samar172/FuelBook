@@ -192,12 +192,24 @@ export const STATUS_STYLES: Record<
   VALID: { label: "Valid", badge: "success", row: "" },
 };
 
+type TFn = (key: string, fallback: string, vars?: Record<string, string | number>) => string;
+
 /** "in 42 days" / "12 days overdue" / "expires today". */
-export const daysPhrase = (daysRemaining: number): string => {
-  if (daysRemaining === 0) return "expires today";
+export const daysPhrase = (daysRemaining: number, t: TFn): string => {
+  if (daysRemaining === 0) return t("compliance.days.today", "expires today");
   if (daysRemaining < 0) {
     const n = -daysRemaining;
-    return `${n} day${n === 1 ? "" : "s"} overdue`;
+    return n === 1
+      ? t("compliance.days.overdue.one", "{n} day overdue", { n })
+      : t("compliance.days.overdue.other", "{n} days overdue", { n });
   }
-  return `in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`;
+  return daysRemaining === 1
+    ? t("compliance.days.in.one", "in {n} day", { n: daysRemaining })
+    : t("compliance.days.in.other", "in {n} days", { n: daysRemaining });
+};
+
+/** Licence heading, built here so the kind name follows the language. "PESO … — DU-2". */
+export const licenceTitle = (t: TFn, kind: LicenceKind, label: string | null): string => {
+  const name = t(`compliance.kind.${kind}`, LICENCE_KIND_LABELS[kind]);
+  return label ? `${name} — ${label}` : name;
 };

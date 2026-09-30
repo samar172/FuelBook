@@ -24,6 +24,7 @@ import { FUEL_LABELS } from "@/lib/utils";
 import { apiError, Employee } from "@/lib/types";
 import { toast } from "sonner";
 import { AlertTriangle, Beaker, Plus, Trash2 } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import { ShiftPicker } from "./ShiftPicker";
 import { MeasureTestsResponse, numOrNull } from "./types";
 
@@ -31,10 +32,10 @@ const NO_EMPLOYEE = "NONE";
 
 // Measure cans a pump actually owns. Tolerance scales with the size: ±25 ml per 5 L.
 const MEASURE_SIZES = [
-  { ml: "500", label: "500 ml" },
-  { ml: "5000", label: "5 litre" },
-  { ml: "10000", label: "10 litre" },
-  { ml: "20000", label: "20 litre" },
+  { ml: "500", key: "wetstock.test.measure500", label: "500 ml" },
+  { ml: "5000", key: "wetstock.test.measure5l", label: "5 litre" },
+  { ml: "10000", key: "wetstock.test.measure10l", label: "10 litre" },
+  { ml: "20000", key: "wetstock.test.measure20l", label: "20 litre" },
 ];
 
 type Row = {
@@ -68,6 +69,7 @@ export function MeasureTestsTab({
   setShiftId: (id: string) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const writable = can("canEditStock");
 
   const { data, isLoading, isError, error } = useQuery<MeasureTestsResponse>({
@@ -119,14 +121,24 @@ export function MeasureTestsTab({
     onSuccess: (res: { failedCount: number }) => {
       if (res.failedCount > 0) {
         toast.error(
-          `Saved — ${res.failedCount} nozzle test${res.failedCount > 1 ? "s" : ""} failed tolerance. Seal and recalibrate before dispensing.`,
+          res.failedCount === 1
+            ? t(
+                "wetstock.test.savedFailOne",
+                "Saved — 1 nozzle test failed tolerance. Seal and recalibrate before dispensing."
+              )
+            : t(
+                "wetstock.test.savedFailMany",
+                "Saved — {count} nozzle tests failed tolerance. Seal and recalibrate before dispensing.",
+                { count: res.failedCount }
+              ),
         );
       } else {
-        toast.success("Nozzle tests saved — all within tolerance");
+        toast.success(t("wetstock.test.savedOk", "Nozzle tests saved — all within tolerance"));
       }
       qc.invalidateQueries({ queryKey: ["wet-measure-tests", shiftId] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not save the nozzle tests")),
+    onError: (e) =>
+      toast.error(apiError(e, t("wetstock.test.saveFailed", "Could not save the nozzle tests"))),
   });
 
   const nozzles = data?.nozzles ?? [];
@@ -136,11 +148,14 @@ export function MeasureTestsTab({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Beaker className="h-4 w-4" /> Weights &amp; Measures nozzle tests
+            <Beaker className="h-4 w-4" />{" "}
+            {t("wetstock.test.title", "Weights & Measures nozzle tests")}
           </CardTitle>
           <CardDescription>
-            Deliver into the calibrated measure and record what came out. Tolerance is ±25&nbsp;ml
-            per 5&nbsp;litres, scaled to the can you used.
+            {t(
+              "wetstock.test.desc",
+              "Deliver into the calibrated measure and record what came out. Tolerance is ±25 ml per 5 litres, scaled to the can you used."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -151,17 +166,19 @@ export function MeasureTestsTab({
       {!shiftId ? null : isError ? (
         <Card>
           <CardContent className="py-6 text-sm text-destructive">
-            {apiError(error, "Could not load the nozzle tests")}
+            {apiError(error, t("wetstock.test.loadError", "Could not load the nozzle tests"))}
           </CardContent>
         </Card>
       ) : isLoading ? (
         <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">Loading…</CardContent>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            {t("common.loading", "Loading…")}
+          </CardContent>
         </Card>
       ) : nozzles.length === 0 ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
-            No active nozzles yet. Add nozzles in Settings first.
+            {t("wetstock.test.noNozzles", "No active nozzles yet. Add nozzles in Settings first.")}
           </CardContent>
         </Card>
       ) : (
@@ -170,9 +187,16 @@ export function MeasureTestsTab({
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
-                {data.failedCount} recorded test{data.failedCount > 1 ? "s are" : " is"} outside the
-                statutory tolerance. Those nozzles must be sealed and recalibrated before they
-                dispense again.
+                {data.failedCount === 1
+                  ? t(
+                      "wetstock.test.failedOne",
+                      "1 recorded test is outside the statutory tolerance. That nozzle must be sealed and recalibrated before it dispenses again."
+                    )
+                  : t(
+                      "wetstock.test.failedMany",
+                      "{count} recorded tests are outside the statutory tolerance. Those nozzles must be sealed and recalibrated before they dispense again.",
+                      { count: data.failedCount }
+                    )}
               </span>
             </div>
           ) : null}
@@ -181,7 +205,7 @@ export function MeasureTestsTab({
             {rows.length === 0 ? (
               <Card>
                 <CardContent className="py-6 text-sm text-muted-foreground">
-                  No tests logged for this shift yet.
+                  {t("wetstock.test.none", "No tests logged for this shift yet.")}
                 </CardContent>
               </Card>
             ) : null}
@@ -198,14 +222,14 @@ export function MeasureTestsTab({
                   <CardContent className="space-y-3 pt-6">
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
-                        <Label>Nozzle</Label>
+                        <Label>{t("wetstock.test.nozzle", "Nozzle")}</Label>
                         <Select
                           value={r.nozzleId || undefined}
                           onValueChange={(v) => set(r.key, "nozzleId", v)}
                           disabled={disabled}
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Pick a nozzle" />
+                            <SelectValue placeholder={t("wetstock.test.pickNozzle", "Pick a nozzle")} />
                           </SelectTrigger>
                           <SelectContent>
                             {nozzles.map((n) => (
@@ -217,7 +241,7 @@ export function MeasureTestsTab({
                         </Select>
                       </div>
                       <div>
-                        <Label>Measure</Label>
+                        <Label>{t("wetstock.test.measure", "Measure")}</Label>
                         <Select
                           value={r.measureMl}
                           onValueChange={(v) => set(r.key, "measureMl", v)}
@@ -229,14 +253,14 @@ export function MeasureTestsTab({
                           <SelectContent>
                             {MEASURE_SIZES.map((m) => (
                               <SelectItem key={m.ml} value={m.ml}>
-                                {m.label}
+                                {t(m.key, m.label)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label>Delivered (ml)</Label>
+                        <Label>{t("wetstock.test.delivered", "Delivered (ml)")}</Label>
                         <Input
                           inputMode="numeric"
                           value={r.deliveredMl}
@@ -249,7 +273,7 @@ export function MeasureTestsTab({
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
-                        <Label>Tested by</Label>
+                        <Label>{t("wetstock.test.testedBy", "Tested by")}</Label>
                         <Select
                           value={r.testedById}
                           onValueChange={(v) => set(r.key, "testedById", v)}
@@ -259,7 +283,9 @@ export function MeasureTestsTab({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={NO_EMPLOYEE}>Not recorded</SelectItem>
+                            <SelectItem value={NO_EMPLOYEE}>
+                              {t("wetstock.notRecorded", "Not recorded")}
+                            </SelectItem>
                             {employees.map((e) => (
                               <SelectItem key={e.id} value={e.id}>
                                 {e.name}
@@ -269,11 +295,14 @@ export function MeasureTestsTab({
                         </Select>
                       </div>
                       <div className="sm:col-span-2">
-                        <Label>Notes</Label>
+                        <Label>{t("common.notes", "Notes")}</Label>
                         <Input
                           value={r.notes}
                           disabled={disabled}
-                          placeholder="Re-tested after calibration, etc."
+                          placeholder={t(
+                            "wetstock.test.notesPlaceholder",
+                            "Re-tested after calibration, etc."
+                          )}
                           onChange={(e) => set(r.key, "notes", e.target.value)}
                           className="mt-1"
                         />
@@ -282,7 +311,7 @@ export function MeasureTestsTab({
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted/40 p-3 text-sm">
                       <div className="flex flex-wrap items-center gap-3">
                         <span>
-                          Variance:{" "}
+                          {t("wetstock.test.variance", "Variance:")}{" "}
                           <strong>
                             {variance === null
                               ? "—"
@@ -290,13 +319,15 @@ export function MeasureTestsTab({
                           </strong>
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          tolerance ±{tol} ml
+                          {t("wetstock.test.tolerance", "tolerance ±{ml} ml", { ml: tol })}
                         </span>
                         {pass === null ? null : pass ? (
-                          <Badge variant="success">Pass</Badge>
+                          <Badge variant="success">{t("wetstock.test.pass", "Pass")}</Badge>
                         ) : (
                           <Badge variant="destructive">
-                            FAIL — {variance !== null && variance < 0 ? "short" : "excess"} delivery
+                            {variance !== null && variance < 0
+                              ? t("wetstock.test.failShort", "FAIL — short delivery")
+                              : t("wetstock.test.failExcess", "FAIL — excess delivery")}
                           </Badge>
                         )}
                         {nozzle ? (
@@ -309,7 +340,7 @@ export function MeasureTestsTab({
                           size="sm"
                           onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
                         >
-                          <Trash2 className="mr-1 h-3.5 w-3.5" /> Remove
+                          <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("common.remove", "Remove")}
                         </Button>
                       ) : null}
                     </div>
@@ -321,20 +352,28 @@ export function MeasureTestsTab({
 
           {locked ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <AlertTriangle className="h-4 w-4" /> This shift is locked, so its test log can no
-              longer be edited.
+              <AlertTriangle className="h-4 w-4" />{" "}
+              {t(
+                "wetstock.test.lockedNote",
+                "This shift is locked, so its test log can no longer be edited."
+              )}
             </p>
           ) : !writable ? (
             <p className="text-sm text-muted-foreground">
-              You do not have permission to edit stock readings.
+              {t(
+                "wetstock.noStockPermission",
+                "You do not have permission to edit stock readings."
+              )}
             </p>
           ) : (
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button variant="outline" onClick={() => setRows((rs) => [...rs, newRow()])}>
-                <Plus className="mr-1 h-4 w-4" /> Add a test
+                <Plus className="mr-1 h-4 w-4" /> {t("wetstock.test.add", "Add a test")}
               </Button>
               <Button onClick={() => save.mutate()} disabled={save.isPending}>
-                {save.isPending ? "Saving…" : "Save test log"}
+                {save.isPending
+                  ? t("common.saving", "Saving…")
+                  : t("wetstock.test.save", "Save test log")}
               </Button>
             </div>
           )}

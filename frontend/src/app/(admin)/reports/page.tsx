@@ -47,6 +47,8 @@ import {
 import { FileSpreadsheet } from "lucide-react";
 import { format, parseISO, subDays } from "date-fns";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 
 type Range = { from: string; to: string };
 
@@ -77,11 +79,11 @@ const EMPTY_AGING: AgingFilters = { bucket: ALL, minBalance: "", q: "" };
 
 const FUELS = ["HSD", "MS", "MS_POWER", "CNG"] as const;
 
-const BUCKET_LABELS: Record<string, string> = {
-  d0_30: "0–30 days",
-  d31_60: "31–60 days",
-  d61_90: "61–90 days",
-  d90_plus: "90+ days",
+const BUCKET_KEYS: Record<string, { key: string; en: string }> = {
+  d0_30: { key: "reports.bucket0_30", en: "0–30 days" },
+  d31_60: { key: "reports.bucket31_60", en: "31–60 days" },
+  d61_90: { key: "reports.bucket61_90", en: "61–90 days" },
+  d90_plus: { key: "reports.bucket90plus", en: "90+ days" },
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -99,6 +101,20 @@ const PIE_COLORS = [
 ];
 
 export default function ReportsPage() {
+  const { t } = useT();
+  const dateLocale = useDateLocale();
+  const bucketLabel = (b: string) =>
+    BUCKET_KEYS[b] ? t(BUCKET_KEYS[b].key, BUCKET_KEYS[b].en) : b;
+  const shiftLabel = (v: string) =>
+    v === "DAY" ? t("reports.day", "Day") : v === "NIGHT" ? t("reports.night", "Night") : v;
+  const statusLabel = (v: string) =>
+    v === "DRAFT"
+      ? t("reports.draft", "Draft")
+      : v === "SUBMITTED"
+        ? t("reports.submitted", "Submitted")
+        : v === "LOCKED"
+          ? t("reports.locked", "Locked")
+          : v;
   const [range, setRange] = useState<Range>({
     from: daysAgoStr(29),
     to: todayStr(),
@@ -110,8 +126,8 @@ export default function ReportsPage() {
   // Keystrokes in the customer search shouldn't hammer the API.
   const [agingQ, setAgingQ] = useState("");
   useEffect(() => {
-    const t = setTimeout(() => setAgingQ(aging.q.trim()), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setAgingQ(aging.q.trim()), 300);
+    return () => clearTimeout(timer);
   }, [aging.q]);
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
@@ -214,11 +230,11 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    if (rangeQuery.error) toast.error("Could not load the report for these filters");
-  }, [rangeQuery.error]);
+    if (rangeQuery.error) toast.error(t("reports.loadFailed", "Could not load the report for these filters"));
+  }, [rangeQuery.error, t]);
   useEffect(() => {
-    if (agingQuery.error) toast.error("Could not load customer aging");
-  }, [agingQuery.error]);
+    if (agingQuery.error) toast.error(t("reports.agingLoadFailed", "Could not load customer aging"));
+  }, [agingQuery.error, t]);
 
   const r = rangeQuery.data;
   const exp = expenseQuery.data;
@@ -230,48 +246,48 @@ export default function ReportsPage() {
     if (filters.shiftType !== ALL)
       out.push({
         key: "shiftType",
-        label: `Shift: ${filters.shiftType}`,
+        label: t("reports.chipShift", "Shift: {value}", { value: shiftLabel(filters.shiftType) }),
         clear: () => set("shiftType", ALL),
       });
     if (filters.status !== ALL)
       out.push({
         key: "status",
-        label: `Status: ${filters.status}`,
+        label: t("reports.chipStatus", "Status: {value}", { value: statusLabel(filters.status) }),
         clear: () => set("status", ALL),
       });
     for (const f of filters.fuelType)
       out.push({
         key: `fuel-${f}`,
-        label: `Fuel: ${FUEL_LABELS[f] || f}`,
+        label: t("reports.chipFuel", "Fuel: {value}", { value: FUEL_LABELS[f] || f }),
         clear: () => toggleFuel(f),
       });
     if (filters.employeeId !== ALL)
       out.push({
         key: "employeeId",
-        label: `Attendant: ${employees.find((e) => e.id === filters.employeeId)?.name || filters.employeeId}`,
+        label: t("reports.chipAttendant", "Attendant: {value}", { value: employees.find((e) => e.id === filters.employeeId)?.name || filters.employeeId }),
         clear: () => set("employeeId", ALL),
       });
     if (filters.nozzleId !== ALL)
       out.push({
         key: "nozzleId",
-        label: `Nozzle: ${nozzles.find((n) => n.id === filters.nozzleId)?.code || filters.nozzleId}`,
+        label: t("reports.chipNozzle", "Nozzle: {value}", { value: nozzles.find((n) => n.id === filters.nozzleId)?.code || filters.nozzleId }),
         clear: () => set("nozzleId", ALL),
       });
     if (filters.channelId !== ALL)
       out.push({
         key: "channelId",
-        label: `Channel: ${nameOf(channels, filters.channelId)}`,
+        label: t("reports.chipChannel", "Channel: {value}", { value: nameOf(channels, filters.channelId) }),
         clear: () => set("channelId", ALL),
       });
     if (filters.categoryId !== ALL)
       out.push({
         key: "categoryId",
-        label: `Expense: ${nameOf(categories, filters.categoryId)}`,
+        label: t("reports.chipExpense", "Expense: {value}", { value: nameOf(categories, filters.categoryId) }),
         clear: () => set("categoryId", ALL),
       });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, employees, nozzles, channels, categories]);
+  }, [filters, employees, nozzles, channels, categories, t]);
 
   const filtersActive = chips.length > 0;
   const clearAll = () => setFilters(EMPTY_FILTERS);
@@ -286,12 +302,12 @@ export default function ReportsPage() {
   >(() => {
     if (!r) return [];
     return r.byDate.map((d: any) => ({
-      date: format(parseISO(d.date), "dd MMM"),
+      date: format(parseISO(d.date), "dd MMM", { locale: dateLocale }),
       sales: Number(d.salesPaise) / 100,
       collections: Number(d.collectionsPaise) / 100,
       expenses: Number(d.expensesPaise) / 100,
     }));
-  }, [r]);
+  }, [r, dateLocale]);
 
   const fuelMixData = useMemo<
     { name: string; value: number; qty: number }[]
@@ -394,7 +410,7 @@ export default function ReportsPage() {
         `fuelbook-${range.from}-to-${range.to}.xlsx`,
       );
     } catch (e: any) {
-      toast.error(e?.message || "Export failed");
+      toast.error(e?.message || t("reports.exportFailed", "Export failed"));
     }
   };
 
@@ -402,13 +418,13 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("reports.title", "Reports")}</h1>
           <p className="text-muted-foreground">
-            Sales, collections, expenses and credit aging across a date range.
+            {t("reports.subtitle", "Sales, collections, expenses and credit aging across a date range.")}
           </p>
         </div>
         <Button onClick={handleExport} disabled={!r}>
-          <FileSpreadsheet className="h-4 w-4 mr-2" /> Export Excel
+          <FileSpreadsheet className="h-4 w-4 mr-2" /> {t("common.export", "Export Excel")}
         </Button>
       </div>
 
@@ -417,7 +433,7 @@ export default function ReportsPage() {
         <CardContent className="p-4 space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <Label className="text-xs">From</Label>
+              <Label className="text-xs">{t("common.from", "From")}</Label>
               <Input
                 type="date"
                 value={draft.from}
@@ -427,7 +443,7 @@ export default function ReportsPage() {
               />
             </div>
             <div>
-              <Label className="text-xs">To</Label>
+              <Label className="text-xs">{t("common.to", "To")}</Label>
               <Input
                 type="date"
                 value={draft.to}
@@ -437,77 +453,77 @@ export default function ReportsPage() {
                 className="w-40"
               />
             </div>
-            <Button onClick={handleApply}>Apply</Button>
+            <Button onClick={handleApply}>{t("common.apply", "Apply")}</Button>
             <div className="flex gap-1 sm:ml-auto">
               <Button size="sm" variant="outline" onClick={() => handleQuick(7)}>
-                7d
+                {t("reports.quick7", "7d")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => handleQuick(30)}>
-                30d
+                {t("reports.quick30", "30d")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => handleQuick(90)}>
-                90d
+                {t("reports.quick90", "90d")}
               </Button>
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <FilterSelect
-              label="Shift type"
+              label={t("reports.shiftType", "Shift type")}
               value={filters.shiftType}
               onChange={(v) => set("shiftType", v)}
-              allLabel="All shifts"
+              allLabel={t("reports.allShifts", "All shifts")}
               options={[
-                { value: "DAY", label: "Day" },
-                { value: "NIGHT", label: "Night" },
+                { value: "DAY", label: t("reports.day", "Day") },
+                { value: "NIGHT", label: t("reports.night", "Night") },
               ]}
             />
             <FilterSelect
-              label="Status"
+              label={t("common.status", "Status")}
               value={filters.status}
               onChange={(v) => set("status", v)}
-              allLabel="All statuses"
+              allLabel={t("reports.allStatuses", "All statuses")}
               options={[
-                { value: "DRAFT", label: "Draft" },
-                { value: "SUBMITTED", label: "Submitted" },
-                { value: "LOCKED", label: "Locked" },
+                { value: "DRAFT", label: t("reports.draft", "Draft") },
+                { value: "SUBMITTED", label: t("reports.submitted", "Submitted") },
+                { value: "LOCKED", label: t("reports.locked", "Locked") },
               ]}
             />
             <FilterSelect
-              label="Attendant"
+              label={t("reports.attendant", "Attendant")}
               value={filters.employeeId}
               onChange={(v) => set("employeeId", v)}
-              allLabel="All attendants"
+              allLabel={t("reports.allAttendants", "All attendants")}
               options={employees.map((e) => ({ value: e.id, label: e.name }))}
             />
             <FilterSelect
-              label="Nozzle"
+              label={t("reports.nozzle", "Nozzle")}
               value={filters.nozzleId}
               onChange={(v) => set("nozzleId", v)}
-              allLabel="All nozzles"
+              allLabel={t("reports.allNozzles", "All nozzles")}
               options={nozzles.map((n) => ({
                 value: n.id,
                 label: `${n.code} · ${FUEL_LABELS[n.fuelType] || n.fuelType}`,
               }))}
             />
             <FilterSelect
-              label="Payment channel"
+              label={t("reports.paymentChannel", "Payment channel")}
               value={filters.channelId}
               onChange={(v) => set("channelId", v)}
-              allLabel="All channels"
+              allLabel={t("reports.allChannels", "All channels")}
               options={channels.map((c) => ({ value: c.id, label: c.name }))}
             />
             <FilterSelect
-              label="Expense category"
+              label={t("reports.expenseCategory", "Expense category")}
               value={filters.categoryId}
               onChange={(v) => set("categoryId", v)}
-              allLabel="All categories"
+              allLabel={t("reports.allCategories", "All categories")}
               options={categories.map((c) => ({ value: c.id, label: c.name }))}
             />
           </div>
 
           <div>
-            <Label className="text-xs">Fuel type</Label>
+            <Label className="text-xs">{t("reports.fuelType", "Fuel type")}</Label>
             <div className="flex flex-wrap gap-2 mt-1">
               {FUELS.map((f) => {
                 const on = filters.fuelType.includes(f);
@@ -528,21 +544,23 @@ export default function ReportsPage() {
 
           {filtersActive && (
             <div className="flex flex-wrap items-center gap-2 pt-1 border-t">
-              <span className="text-xs text-muted-foreground pt-2">Active:</span>
+              <span className="text-xs text-muted-foreground pt-2">{t("reports.activeFilters", "Active:")}</span>
               <div className="flex flex-wrap gap-2 pt-2">
                 {chips.map((c) => (
                   <FilterChip key={c.key} label={c.label} onRemove={c.clear} />
                 ))}
               </div>
               <Button size="sm" variant="ghost" className="mt-2" onClick={clearAll}>
-                Clear all
+                {t("common.clearAll", "Clear all")}
               </Button>
             </div>
           )}
           {filtersActive && r?.appliedFilters?.recomputedSalesFromReadings && (
             <p className="text-xs text-muted-foreground">
-              Sales figures recomputed from nozzle readings to match the active
-              fuel / nozzle / attendant filters.
+              {t(
+                "reports.recomputedNote",
+                "Sales figures recomputed from nozzle readings to match the active fuel / nozzle / attendant filters."
+              )}
             </p>
           )}
         </CardContent>
@@ -550,28 +568,28 @@ export default function ReportsPage() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <Kpi label="Total Sales" value={formatINR(r?.totals?.salesPaise || 0)} />
+        <Kpi label={t("reports.kpiSales", "Total Sales")} value={formatINR(r?.totals?.salesPaise || 0)} />
         <Kpi
-          label="Credit Issued"
+          label={t("reports.kpiCredit", "Credit Issued")}
           value={formatINR(r?.totals?.creditIssuedPaise || 0)}
           accent="amber"
         />
         <Kpi
-          label="Outstanding Recv"
+          label={t("reports.kpiOutstandingRecv", "Outstanding Recv")}
           value={formatINR(r?.totals?.outstandingReceivedPaise || 0)}
           accent="green"
         />
         <Kpi
-          label="Collections"
+          label={t("reports.kpiCollections", "Collections")}
           value={formatINR(r?.totals?.collectionsPaise || 0)}
         />
         <Kpi
-          label="Expenses"
+          label={t("reports.kpiExpenses", "Expenses")}
           value={formatINR(r?.totals?.expensesPaise || 0)}
           accent="red"
         />
         <Kpi
-          label="Net Cash Flow"
+          label={t("reports.kpiNetCash", "Net Cash Flow")}
           value={formatINR(r?.totals?.netCashPaise || 0)}
           accent="primary"
         />
@@ -580,15 +598,15 @@ export default function ReportsPage() {
       {/* Sales / Collections / Expenses trend */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Daily Trend</CardTitle>
+          <CardTitle className="text-base">{t("reports.dailyTrend", "Daily Trend")}</CardTitle>
           <CardDescription>
-            Sales, collections and expenses for each day in the range.
+            {t("reports.dailyTrendDesc", "Sales, collections and expenses for each day in the range.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {chartData.length === 0 ? (
             <div className="text-sm text-muted-foreground py-8 text-center">
-              {filtersActive ? "No data matches these filters." : "No data in this range."}
+              {filtersActive ? t("common.noMatch", "No data matches these filters") : t("reports.noDataInRange", "No data in this range.")}
             </div>
           ) : (
             <div style={{ width: "100%", height: 320 }}>
@@ -617,9 +635,9 @@ export default function ReportsPage() {
                     }
                   />
                   <Legend />
-                  <Bar dataKey="sales" fill="#0f172a" name="Sales" />
-                  <Bar dataKey="collections" fill="#10b981" name="Collections" />
-                  <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
+                  <Bar dataKey="sales" fill="#0f172a" name={t("reports.legendSales", "Sales")} />
+                  <Bar dataKey="collections" fill="#10b981" name={t("reports.legendCollections", "Collections")} />
+                  <Bar dataKey="expenses" fill="#ef4444" name={t("reports.legendExpenses", "Expenses")} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -630,30 +648,30 @@ export default function ReportsPage() {
       {/* Day-by-day table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Day by Day</CardTitle>
+          <CardTitle className="text-base">{t("reports.dayByDay", "Day by Day")}</CardTitle>
           <CardDescription>
-            Every day in the range — click any column heading to sort.
+            {t("reports.dayByDayDesc", "Every day in the range — click any column heading to sort.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead {...dailySort.sortProps("date")}>Date</SortableHead>
+                <SortableHead {...dailySort.sortProps("date")}>{t("common.date", "Date")}</SortableHead>
                 <SortableHead {...dailySort.sortProps("sales")} align="right">
-                  Sales
+                  {t("reports.colSales", "Sales")}
                 </SortableHead>
                 <SortableHead {...dailySort.sortProps("credit")} align="right">
-                  Credit
+                  {t("reports.colCredit", "Credit")}
                 </SortableHead>
                 <SortableHead {...dailySort.sortProps("collections")} align="right">
-                  Collections
+                  {t("reports.colCollections", "Collections")}
                 </SortableHead>
                 <SortableHead {...dailySort.sortProps("expenses")} align="right">
-                  Expenses
+                  {t("reports.colExpenses", "Expenses")}
                 </SortableHead>
                 <SortableHead {...dailySort.sortProps("shifts")} align="right">
-                  Shifts
+                  {t("reports.colShifts", "Shifts")}
                 </SortableHead>
               </TableRow>
             </TableHeader>
@@ -663,13 +681,13 @@ export default function ReportsPage() {
                   colSpan={6}
                   filtered={filtersActive}
                   onClear={clearAll}
-                  emptyMessage="No data in this range."
+                  emptyMessage={t("reports.noDataInRange", "No data in this range.")}
                 />
               ) : (
                 dailySort.rows.map((d: any) => (
                   <TableRow key={d.date}>
                     <TableCell className="font-medium">
-                      {format(parseISO(d.date), "dd MMM yyyy")}
+                      {format(parseISO(d.date), "dd MMM yyyy", { locale: dateLocale })}
                     </TableCell>
                     <TableCell className="text-right">{formatINR(d.salesPaise)}</TableCell>
                     <TableCell className="text-right">
@@ -692,13 +710,13 @@ export default function ReportsPage() {
         {/* Fuel mix */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Fuel Mix</CardTitle>
-            <CardDescription>By revenue across the range.</CardDescription>
+            <CardTitle className="text-base">{t("reports.fuelMix", "Fuel Mix")}</CardTitle>
+            <CardDescription>{t("reports.fuelMixDesc", "By revenue across the range.")}</CardDescription>
           </CardHeader>
           <CardContent>
             {fuelMixData.length === 0 ? (
               <div className="text-sm text-muted-foreground py-8 text-center">
-                {filtersActive ? "No data matches these filters." : "No fuel sales."}
+                {filtersActive ? t("common.noMatch", "No data matches these filters") : t("reports.noFuelSales", "No fuel sales.")}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
@@ -760,15 +778,15 @@ export default function ReportsPage() {
         {/* Channel mix */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Collections by Channel</CardTitle>
+            <CardTitle className="text-base">{t("reports.collectionsByChannel", "Collections by Channel")}</CardTitle>
             <CardDescription>
-              How customers paid across the range.
+              {t("reports.collectionsByChannelDesc", "How customers paid across the range.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {channelData.length === 0 ? (
               <div className="text-sm text-muted-foreground py-8 text-center">
-                {filtersActive ? "No data matches these filters." : "No collections."}
+                {filtersActive ? t("common.noMatch", "No data matches these filters") : t("reports.noCollections", "No collections.")}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
@@ -827,17 +845,17 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Sales by Shift Type</CardTitle>
-            <CardDescription>Day vs night across the range.</CardDescription>
+            <CardTitle className="text-base">{t("reports.salesByShiftType", "Sales by Shift Type")}</CardTitle>
+            <CardDescription>{t("reports.salesByShiftTypeDesc", "Day vs night across the range.")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Shift</TableHead>
-                  <TableHead className="text-right">Shifts</TableHead>
-                  <TableHead className="text-right">Litres</TableHead>
-                  <TableHead className="text-right">Sales</TableHead>
+                  <TableHead>{t("reports.colShift", "Shift")}</TableHead>
+                  <TableHead className="text-right">{t("reports.colShifts", "Shifts")}</TableHead>
+                  <TableHead className="text-right">{t("common.litres", "Litres")}</TableHead>
+                  <TableHead className="text-right">{t("reports.colSales", "Sales")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -846,14 +864,14 @@ export default function ReportsPage() {
                     colSpan={4}
                     filtered={filtersActive}
                     onClear={clearAll}
-                    emptyMessage="No shifts in this range."
+                    emptyMessage={t("reports.noShiftsInRange", "No shifts in this range.")}
                   />
                 ) : (
                   (r?.byShiftType || []).map((s: any) => (
                     <TableRow key={s.shiftType}>
                       <TableCell>
                         <Badge variant={s.shiftType === "DAY" ? "default" : "secondary"}>
-                          {s.shiftType}
+                          {shiftLabel(s.shiftType)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">{s.shifts}</TableCell>
@@ -874,20 +892,20 @@ export default function ReportsPage() {
         {/* Sales by nozzle */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Sales by Nozzle</CardTitle>
-            <CardDescription>Meter-derived volume and revenue.</CardDescription>
+            <CardTitle className="text-base">{t("reports.salesByNozzle", "Sales by Nozzle")}</CardTitle>
+            <CardDescription>{t("reports.salesByNozzleDesc", "Meter-derived volume and revenue.")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <SortableHead {...nozzleSort.sortProps("code")}>Nozzle</SortableHead>
-                  <SortableHead {...nozzleSort.sortProps("fuelType")}>Fuel</SortableHead>
+                  <SortableHead {...nozzleSort.sortProps("code")}>{t("reports.nozzle", "Nozzle")}</SortableHead>
+                  <SortableHead {...nozzleSort.sortProps("fuelType")}>{t("reports.colFuel", "Fuel")}</SortableHead>
                   <SortableHead {...nozzleSort.sortProps("qty")} align="right">
-                    Litres
+                    {t("common.litres", "Litres")}
                   </SortableHead>
                   <SortableHead {...nozzleSort.sortProps("amount")} align="right">
-                    Sales
+                    {t("reports.colSales", "Sales")}
                   </SortableHead>
                 </TableRow>
               </TableHeader>
@@ -897,7 +915,7 @@ export default function ReportsPage() {
                     colSpan={4}
                     filtered={filtersActive}
                     onClear={clearAll}
-                    emptyMessage="No nozzle readings in this range."
+                    emptyMessage={t("reports.noNozzleReadings", "No nozzle readings in this range.")}
                   />
                 ) : (
                   nozzleSort.rows.map((n: any) => (
@@ -922,22 +940,24 @@ export default function ReportsPage() {
       {/* Sales by attendant */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Sales by Attendant</CardTitle>
+          <CardTitle className="text-base">{t("reports.salesByAttendant", "Sales by Attendant")}</CardTitle>
           <CardDescription>
-            Attributed from the nozzles each attendant was assigned to; split evenly
-            when a nozzle was shared.
+            {t(
+              "reports.salesByAttendantDesc",
+              "Attributed from the nozzles each attendant was assigned to; split evenly when a nozzle was shared."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead {...employeeSort.sortProps("name")}>Attendant</SortableHead>
+                <SortableHead {...employeeSort.sortProps("name")}>{t("reports.attendant", "Attendant")}</SortableHead>
                 <SortableHead {...employeeSort.sortProps("qty")} align="right">
-                  Litres
+                  {t("common.litres", "Litres")}
                 </SortableHead>
                 <SortableHead {...employeeSort.sortProps("amount")} align="right">
-                  Sales
+                  {t("reports.colSales", "Sales")}
                 </SortableHead>
               </TableRow>
             </TableHeader>
@@ -947,7 +967,7 @@ export default function ReportsPage() {
                   colSpan={3}
                   filtered={filtersActive}
                   onClear={clearAll}
-                  emptyMessage="No attendant assignments in this range."
+                  emptyMessage={t("reports.noAttendantRows", "No attendant assignments in this range.")}
                 />
               ) : (
                 employeeSort.rows.map((e: any) => (
@@ -970,23 +990,23 @@ export default function ReportsPage() {
       {/* Expense breakdown */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Expenses by Category</CardTitle>
+          <CardTitle className="text-base">{t("reports.expensesByCategory", "Expenses by Category")}</CardTitle>
           <CardDescription>
-            Across the selected range — {formatINR(exp?.totalPaise || 0)} total.
+            {t("reports.expensesByCategoryDesc", "Across the selected range — {total} total.", { total: formatINR(exp?.totalPaise || 0) })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead {...expenseSort.sortProps("name")}>Category</SortableHead>
+                <SortableHead {...expenseSort.sortProps("name")}>{t("reports.colCategory", "Category")}</SortableHead>
                 <SortableHead {...expenseSort.sortProps("amount")} align="right">
-                  Amount
+                  {t("common.amount", "Amount")}
                 </SortableHead>
                 <SortableHead {...expenseSort.sortProps("count")} align="right">
-                  Entries
+                  {t("reports.colEntries", "Entries")}
                 </SortableHead>
-                <TableHead className="w-1/3">% of total</TableHead>
+                <TableHead className="w-1/3">{t("reports.colPercentOfTotal", "% of total")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -995,7 +1015,7 @@ export default function ReportsPage() {
                   colSpan={4}
                   filtered={filtersActive}
                   onClear={clearAll}
-                  emptyMessage="No expenses in this range."
+                  emptyMessage={t("reports.noExpensesInRange", "No expenses in this range.")}
                 />
               ) : (
                 expenseSort.rows.map((c: any) => {
@@ -1035,30 +1055,30 @@ export default function ReportsPage() {
       {/* Customer aging */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Customer Outstanding — Aging</CardTitle>
+          <CardTitle className="text-base">{t("reports.aging", "Customer Outstanding — Aging")}</CardTitle>
           <CardDescription>
-            Buckets based on FIFO of credit sales vs payments received.
+            {t("reports.agingDesc", "Buckets based on FIFO of credit sales vs payments received.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <BucketCard
-              label="0–30 days"
+              label={t("reports.bucket0_30", "0–30 days")}
               amount={agingData?.buckets?.d0_30}
               tone="green"
             />
             <BucketCard
-              label="31–60 days"
+              label={t("reports.bucket31_60", "31–60 days")}
               amount={agingData?.buckets?.d31_60}
               tone="yellow"
             />
             <BucketCard
-              label="61–90 days"
+              label={t("reports.bucket61_90", "61–90 days")}
               amount={agingData?.buckets?.d61_90}
               tone="orange"
             />
             <BucketCard
-              label="90+ days"
+              label={t("reports.bucket90plus", "90+ days")}
               amount={agingData?.buckets?.d90_plus}
               tone="red"
             />
@@ -1066,25 +1086,25 @@ export default function ReportsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-1">
-              <Label className="text-xs">Customer / vehicle</Label>
+              <Label className="text-xs">{t("reports.customerOrVehicle", "Customer / vehicle")}</Label>
               <Input
-                placeholder="Name, code or vehicle no"
+                placeholder={t("reports.customerSearchPlaceholder", "Name, code or vehicle no")}
                 value={aging.q}
                 onChange={(e) => setAging((a) => ({ ...a, q: e.target.value }))}
               />
             </div>
             <FilterSelect
-              label="Bucket"
+              label={t("reports.bucket", "Bucket")}
               value={aging.bucket}
               onChange={(v) => setAging((a) => ({ ...a, bucket: v }))}
-              allLabel="All buckets"
-              options={Object.entries(BUCKET_LABELS).map(([value, label]) => ({
+              allLabel={t("reports.allBuckets", "All buckets")}
+              options={Object.keys(BUCKET_KEYS).map((value) => ({
                 value,
-                label,
+                label: bucketLabel(value),
               }))}
             />
             <div>
-              <Label className="text-xs">Min balance (₹)</Label>
+              <Label className="text-xs">{t("reports.minBalance", "Min balance (₹)")}</Label>
               <Input
                 type="number"
                 min="0"
@@ -1100,24 +1120,24 @@ export default function ReportsPage() {
             <div className="flex flex-wrap items-center gap-2">
               {aging.q.trim() !== "" && (
                 <FilterChip
-                  label={`Search: ${aging.q.trim()}`}
+                  label={t("reports.chipSearch", "Search: {value}", { value: aging.q.trim() })}
                   onRemove={() => setAging((a) => ({ ...a, q: "" }))}
                 />
               )}
               {aging.bucket !== ALL && (
                 <FilterChip
-                  label={`Bucket: ${BUCKET_LABELS[aging.bucket]}`}
+                  label={t("reports.chipBucket", "Bucket: {value}", { value: bucketLabel(aging.bucket) })}
                   onRemove={() => setAging((a) => ({ ...a, bucket: ALL }))}
                 />
               )}
               {aging.minBalance.trim() !== "" && (
                 <FilterChip
-                  label={`Min ₹${aging.minBalance}`}
+                  label={t("reports.chipMin", "Min ₹{value}", { value: aging.minBalance })}
                   onRemove={() => setAging((a) => ({ ...a, minBalance: "" }))}
                 />
               )}
               <Button size="sm" variant="ghost" onClick={clearAging}>
-                Clear all
+                {t("common.clearAll", "Clear all")}
               </Button>
             </div>
           )}
@@ -1125,15 +1145,15 @@ export default function ReportsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead {...agingSort.sortProps("name")}>Customer</SortableHead>
-                <SortableHead {...agingSort.sortProps("vehicle")}>Vehicle</SortableHead>
+                <SortableHead {...agingSort.sortProps("name")}>{t("reports.colCustomer", "Customer")}</SortableHead>
+                <SortableHead {...agingSort.sortProps("vehicle")}>{t("reports.colVehicle", "Vehicle")}</SortableHead>
                 <SortableHead {...agingSort.sortProps("balance")} align="right">
-                  Balance
+                  {t("reports.colBalance", "Balance")}
                 </SortableHead>
                 <SortableHead {...agingSort.sortProps("age")} align="right">
-                  Oldest age
+                  {t("reports.colOldestAge", "Oldest age")}
                 </SortableHead>
-                <SortableHead {...agingSort.sortProps("bucket")}>Bucket</SortableHead>
+                <SortableHead {...agingSort.sortProps("bucket")}>{t("reports.colBucket", "Bucket")}</SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1142,7 +1162,7 @@ export default function ReportsPage() {
                   colSpan={5}
                   filtered={agingFiltersActive}
                   onClear={clearAging}
-                  emptyMessage="No outstanding balances."
+                  emptyMessage={t("reports.noOutstanding", "No outstanding balances.")}
                 />
               ) : (
                 agingSort.rows.map((c: any) => (
@@ -1166,7 +1186,9 @@ export default function ReportsPage() {
                       {formatINR(c.balancePaise)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {c.ageDays} {c.ageDays === 1 ? "day" : "days"}
+                      {c.ageDays === 1
+                        ? t("reports.day_one", "{count} day", { count: c.ageDays })
+                        : t("reports.day_other", "{count} days", { count: c.ageDays })}
                     </TableCell>
                     <TableCell>
                       <Badge

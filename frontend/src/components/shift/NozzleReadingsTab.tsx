@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatLitres, FUEL_LABELS, litresToMl, mlToLitres } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 
 export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: boolean }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [readings, setReadings] = useState(() =>
     shift.nozzleReadings.map((r: any) => ({
@@ -46,10 +48,10 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
       })).data;
     },
     onSuccess: () => {
-      toast.success("Nozzle readings saved");
+      toast.success(t("shift.nozzles.saved", "Nozzle readings saved"));
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("common.failed", "Something went wrong")),
   });
 
   // Keep the field empty while the user is typing/clearing it — only ever
@@ -71,24 +73,26 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Nozzle Readings</CardTitle>
+        <CardTitle>{t("shift.nozzles.title", "Nozzle Readings")}</CardTitle>
         <CardDescription>
-          Opening readings are auto-filled from the previous shift. Enter closing reading and any testing
-          deduction.
+          {t(
+            "shift.nozzles.desc",
+            "Opening readings are auto-filled from the previous shift. Enter closing reading and any testing deduction.",
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {Object.entries(byFuel).map(([fuel, items]) => (
           <div key={fuel}>
-            <div className="text-sm font-semibold mb-2">{FUEL_LABELS[fuel] || fuel}</div>
+            <div className="text-sm font-semibold mb-2">{t(`shift.fuel.${fuel}`, FUEL_LABELS[fuel] || fuel)}</div>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nozzle</TableHead>
-                  <TableHead>Opening (L)</TableHead>
-                  <TableHead>Closing (L)</TableHead>
-                  <TableHead>Testing (L)</TableHead>
-                  <TableHead className="text-right">Sale (L)</TableHead>
+                  <TableHead>{t("shift.nozzles.nozzle", "Nozzle")}</TableHead>
+                  <TableHead>{t("shift.nozzles.opening", "Opening (L)")}</TableHead>
+                  <TableHead>{t("shift.nozzles.closing", "Closing (L)")}</TableHead>
+                  <TableHead>{t("shift.nozzles.testing", "Testing (L)")}</TableHead>
+                  <TableHead className="text-right">{t("shift.nozzles.sale", "Sale (L)")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -136,13 +140,16 @@ export function NozzleReadingsTab({ shift, disabled }: { shift: any; disabled: b
               </TableBody>
             </Table>
             <div className="text-right text-sm font-semibold mt-1 pr-4">
-              Net sale: {formatLitres(totals[fuel]?.sale || 0)} L (testing {formatLitres(totals[fuel]?.testing || 0)} L)
+              {t("shift.nozzles.netSale", "Net sale: {sale} L (testing {testing} L)", {
+                sale: formatLitres(totals[fuel]?.sale || 0),
+                testing: formatLitres(totals[fuel]?.testing || 0),
+              })}
             </div>
           </div>
         ))}
         {!disabled && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save readings"}
+            {save.isPending ? t("common.saving", "Saving…") : t("shift.nozzles.save", "Save readings")}
           </Button>
         )}
       </CardContent>

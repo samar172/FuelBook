@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatINR } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { EmptyState, Loading, Money, StatTile, bigOf } from "./shared";
 import { useEmployees } from "./movements";
 
@@ -65,6 +66,7 @@ type CountResponse = {
 };
 
 export function CashCountSection() {
+  const { t } = useT();
   const qc = useQueryClient();
   const employeesQ = useEmployees();
   const employees = employeesQ.data ?? [];
@@ -135,23 +137,26 @@ export function CashCountSection() {
       return (await api.put(`/api/cash-bank/shifts/${shiftId}/denomination-count`, body)).data;
     },
     onSuccess: () => {
-      toast.success("Cash count saved");
+      toast.success(t("cash.count.saved", "Cash count saved"));
       qc.invalidateQueries({ queryKey: ["cash-count", shiftId] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not save the count")),
+    onError: (e) => toast.error(apiError(e, t("cash.count.saveFailed", "Could not save the count"))),
   });
 
   const locked = countQ.data?.shift.status === "LOCKED";
   const editable = can("canEditCollections") && !locked;
 
-  if (shiftsQ.isLoading) return <Loading label="Loading shifts…" />;
+  if (shiftsQ.isLoading) return <Loading label={t("cash.count.loadingShifts", "Loading shifts…")} />;
   if (shiftsQ.error)
-    return <EmptyState title="Could not load shifts" hint={apiError(shiftsQ.error)} />;
+    return <EmptyState title={t("cash.count.shiftsFailed", "Could not load shifts")} hint={apiError(shiftsQ.error)} />;
   if (shifts.length === 0)
     return (
       <EmptyState
-        title="No shift reports yet"
-        hint="Create a shift report first — a note count belongs to a shift."
+        title={t("cash.count.noShifts", "No shift reports yet")}
+        hint={t(
+          "cash.count.noShiftsHint",
+          "Create a shift report first — a note count belongs to a shift.",
+        )}
       />
     );
 
@@ -159,37 +164,40 @@ export function CashCountSection() {
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Physical note count</CardTitle>
+          <CardTitle>{t("cash.count.title", "Physical note count")}</CardTitle>
           <CardDescription>
-            Count the drawer note by note. The total is worked out for you and checked against what
-            the shift says should be there.
+            {t(
+              "cash.count.desc",
+              "Count the drawer note by note. The total is worked out for you and checked against what the shift says should be there.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Shift</Label>
+              <Label className="text-xs">{t("cash.count.shift", "Shift")}</Label>
               <Select value={shiftId} onValueChange={setShiftId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a shift" />
+                  <SelectValue placeholder={t("cash.count.pickShift", "Pick a shift")} />
                 </SelectTrigger>
                 <SelectContent>
                   {shifts.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
-                      {s.reportDate.slice(0, 10)} · {s.shiftType} · {s.status}
+                      {s.reportDate.slice(0, 10)} · {t(`shift.type.${s.shiftType}`, s.shiftType)} ·{" "}
+                      {t(`shift.status.${s.status}`, s.status)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Counted by</Label>
+              <Label className="text-xs">{t("cash.count.countedBy", "Counted by")}</Label>
               <Select value={countedById} onValueChange={setCountedById} disabled={!editable}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>Not recorded</SelectItem>
+                  <SelectItem value={NONE}>{t("cash.count.notRecorded", "Not recorded")}</SelectItem>
                   {employees.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       {e.name}
@@ -203,46 +211,59 @@ export function CashCountSection() {
           {countQ.isLoading ? (
             <Loading />
           ) : countQ.error ? (
-            <EmptyState title="Could not load this shift's count" hint={apiError(countQ.error)} />
+            <EmptyState title={t("cash.count.loadFailed", "Could not load this shift's count")} hint={apiError(countQ.error)} />
           ) : (
             <>
               {locked ? (
                 <Badge variant="secondary">
-                  This shift is locked — the count can no longer be changed
+                  {t("cash.count.locked", "This shift is locked — the count can no longer be changed")}
                 </Badge>
               ) : null}
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatTile
-                  label="Counted"
+                  label={t("cash.count.counted", "Counted")}
                   value={formatINR(liveTotalPaise)}
-                  hint={`${livePieces} note${livePieces === 1 ? "" : "s"} / coin${livePieces === 1 ? "" : "s"}`}
-                />
-                <StatTile
-                  label="Expected"
-                  value={formatINR(expectedPaise)}
                   hint={
-                    countQ.data?.expectedSource === "HANDOVERS"
-                      ? `From ${countQ.data.handoverCount} hand-over${countQ.data.handoverCount === 1 ? "" : "s"}`
-                      : "From cash collections (no hand-over recorded)"
+                    livePieces === 1
+                      ? t("cash.count.piecesOne", "{n} note / coin", { n: livePieces })
+                      : t("cash.count.piecesMany", "{n} notes / coins", { n: livePieces })
                   }
                 />
                 <StatTile
-                  label="Difference"
+                  label={t("cash.count.expected", "Expected")}
+                  value={formatINR(expectedPaise)}
+                  hint={
+                    countQ.data?.expectedSource === "HANDOVERS"
+                      ? countQ.data.handoverCount === 1
+                        ? t("cash.count.fromHandoversOne", "From {n} hand-over", {
+                            n: countQ.data.handoverCount,
+                          })
+                        : t("cash.count.fromHandoversMany", "From {n} hand-overs", {
+                            n: countQ.data.handoverCount,
+                          })
+                      : t(
+                          "cash.count.fromCollections",
+                          "From cash collections (no hand-over recorded)",
+                        )
+                  }
+                />
+                <StatTile
+                  label={t("cash.count.difference", "Difference")}
                   value={<Money paise={liveDifference} />}
                   hint={
                     liveDifference === 0n
-                      ? "Tallies exactly"
+                      ? t("cash.count.tallies", "Tallies exactly")
                       : liveDifference < 0n
-                        ? "Short — cash is missing"
-                        : "Excess — more cash than accounted for"
+                        ? t("cash.count.short", "Short — cash is missing")
+                        : t("cash.count.excess", "Excess — more cash than accounted for")
                   }
                   tone={liveDifference === 0n ? "good" : liveDifference < 0n ? "danger" : "warn"}
                 />
                 <StatTile
-                  label="Shift closing cash"
+                  label={t("cash.count.closing", "Shift closing cash")}
                   value={formatINR(countQ.data?.closingCashPaise ?? 0)}
-                  hint="As computed on the shift report"
+                  hint={t("cash.count.closingHint", "As computed on the shift report")}
                 />
               </div>
 
@@ -250,7 +271,9 @@ export function CashCountSection() {
                 {(["note", "coin"] as const).map((kind) => (
                   <div key={kind} className="rounded-md border p-3">
                     <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">
-                      {kind === "note" ? "Notes" : "Coins"}
+                      {kind === "note"
+                        ? t("cash.count.notesHead", "Notes")
+                        : t("cash.count.coinsHead", "Coins")}
                     </p>
                     <div className="space-y-2">
                       {DENOMS.filter((d) => d.kind === kind).map((d) => {
@@ -283,20 +306,23 @@ export function CashCountSection() {
               </div>
 
               <div>
-                <Label className="text-xs">Notes</Label>
+                <Label className="text-xs">{t("cash.count.remarks", "Notes")}</Label>
                 <Input
                   value={notes}
                   disabled={!editable}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="e.g. ₹500 short, attendant to bring tomorrow"
+                  placeholder={t("cash.count.remarksPh", "e.g. ₹500 short, attendant to bring tomorrow")}
                 />
               </div>
 
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-sm text-muted-foreground">
                   {countQ.data?.hasCount
-                    ? "A count is already saved for this shift; saving replaces it."
-                    : "No count saved for this shift yet."}
+                    ? t(
+                        "cash.count.hasCount",
+                        "A count is already saved for this shift; saving replaces it.",
+                      )
+                    : t("cash.count.noCount", "No count saved for this shift yet.")}
                 </p>
                 <div className="flex gap-2">
                   {editable ? (
@@ -305,11 +331,13 @@ export function CashCountSection() {
                       onClick={() => setCounts(EMPTY_COUNTS)}
                       disabled={save.isPending}
                     >
-                      Clear
+                      {t("common.clear", "Clear")}
                     </Button>
                   ) : null}
                   <Button onClick={() => save.mutate()} disabled={!editable || save.isPending}>
-                    {save.isPending ? "Saving…" : "Save count"}
+                    {save.isPending
+                      ? t("common.saving", "Saving…")
+                      : t("cash.count.save", "Save count")}
                   </Button>
                 </div>
               </div>

@@ -25,10 +25,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatINR, rupeesToPaise } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import {
   CASH_LOCATIONS,
   EmptyState,
-  LOCATION_SHORT,
+  type TFn,
+  locShort,
   Loading,
   Money,
   PERSONAL_LOCATIONS,
@@ -70,9 +72,10 @@ export const useEmployees = () =>
   });
 
 const partyLabel = (
+  t: TFn,
   location: string,
   employee: { name: string; code: string | null } | null,
-) => (employee ? `${LOCATION_SHORT[location] ?? location} · ${employee.name}` : LOCATION_SHORT[location] ?? location);
+) => (employee ? `${locShort(t, location)} · ${employee.name}` : locShort(t, location));
 
 // ===================== RECORD A MOVEMENT =====================
 
@@ -85,6 +88,7 @@ export function MovementDialog({
   onOpenChange: (v: boolean) => void;
   defaults?: MovementDefaults;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const employeesQ = useEmployees();
   const employees = employeesQ.data ?? [];
@@ -130,12 +134,12 @@ export function MovementDialog({
         })
       ).data,
     onSuccess: () => {
-      toast.success("Cash movement recorded");
+      toast.success(t("cash.movement.saved", "Cash movement recorded"));
       onOpenChange(false);
       qc.invalidateQueries({ queryKey: ["cash-position"] });
       qc.invalidateQueries({ queryKey: ["cash-movements"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not record the movement")),
+    onError: (e) => toast.error(apiError(e, t("cash.movement.saveFailed", "Could not record the movement"))),
   });
 
   const amountValid = Number(amount) > 0;
@@ -150,15 +154,18 @@ export function MovementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Record a cash movement</DialogTitle>
+          <DialogTitle>{t("cash.movement.dialogTitle", "Record a cash movement")}</DialogTitle>
           <DialogDescription>
-            Who handed how much to whom. Recording it here is what keeps the cash position true.
+            {t(
+              "cash.movement.dialogDesc",
+              "Who handed how much to whom. Recording it here is what keeps the cash position true.",
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">Amount (₹)</Label>
+            <Label className="text-xs">{t("cash.movement.amount", "Amount (₹)")}</Label>
             <Input
               type="number"
               inputMode="decimal"
@@ -173,7 +180,9 @@ export function MovementDialog({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2 rounded-md border p-3">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">From</p>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                {t("common.from", "From")}
+              </p>
               <Select value={fromLocation} onValueChange={setFromLocation}>
                 <SelectTrigger>
                   <SelectValue />
@@ -181,7 +190,7 @@ export function MovementDialog({
                 <SelectContent>
                   {CASH_LOCATIONS.filter((l) => l !== "BANK").map((l) => (
                     <SelectItem key={l} value={l}>
-                      {LOCATION_SHORT[l]}
+                      {locShort(t, l)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -205,7 +214,9 @@ export function MovementDialog({
             </div>
 
             <div className="space-y-2 rounded-md border p-3">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">To</p>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                {t("common.to", "To")}
+              </p>
               <Select value={toLocation} onValueChange={setToLocation}>
                 <SelectTrigger>
                   <SelectValue />
@@ -213,7 +224,7 @@ export function MovementDialog({
                 <SelectContent>
                   {CASH_LOCATIONS.map((l) => (
                     <SelectItem key={l} value={l}>
-                      {LOCATION_SHORT[l]}
+                      {locShort(t, l)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -239,14 +250,16 @@ export function MovementDialog({
 
           {toLocation === "BANK" ? (
             <p className="text-xs text-amber-600">
-              For a bank deposit, use the Deposits tab instead — it records the slip number and
-              creates this movement for you.
+              {t(
+                "cash.movement.bankHint",
+                "For a bank deposit, use the Deposits tab instead — it records the slip number and creates this movement for you.",
+              )}
             </p>
           ) : null}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">On</Label>
+              <Label className="text-xs">{t("cash.movement.on", "On")}</Label>
               <Input
                 type="date"
                 max={todayStr()}
@@ -255,25 +268,27 @@ export function MovementDialog({
               />
             </div>
             <div>
-              <Label className="text-xs">Reference (optional)</Label>
+              <Label className="text-xs">{t("cash.movement.reference", "Reference (optional)")}</Label>
               <Input value={reference} onChange={(e) => setReference(e.target.value)} />
             </div>
           </div>
           <div>
-            <Label className="text-xs">Purpose (optional)</Label>
+            <Label className="text-xs">{t("cash.movement.purpose", "Purpose (optional)")}</Label>
             <Input
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
-              placeholder="e.g. shift close hand-over, owner took cash"
+              placeholder={t("cash.movement.purposePh", "e.g. shift close hand-over, owner took cash")}
             />
           </div>
 
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button onClick={() => create.mutate()} disabled={blocked || create.isPending}>
-              {create.isPending ? "Saving…" : "Record movement"}
+              {create.isPending
+                ? t("common.saving", "Saving…")
+                : t("cash.movement.record", "Record movement")}
             </Button>
           </div>
         </div>
@@ -285,6 +300,7 @@ export function MovementDialog({
 // ===================== THE TRAIL =====================
 
 export function MovementsSection() {
+  const { t } = useT();
   const qc = useQueryClient();
   const employeesQ = useEmployees();
   const employees = employeesQ.data ?? [];
@@ -310,11 +326,11 @@ export function MovementsSection() {
   const remove = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/api/cash-bank/movements/${id}`)).data,
     onSuccess: () => {
-      toast.success("Movement deleted");
+      toast.success(t("cash.movement.deleted", "Movement deleted"));
       qc.invalidateQueries({ queryKey: ["cash-movements"] });
       qc.invalidateQueries({ queryKey: ["cash-position"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not delete the movement")),
+    onError: (e) => toast.error(apiError(e, t("cash.movement.deleteFailed", "Could not delete the movement"))),
   });
 
   const editable = can("canEditCollections");
@@ -328,14 +344,14 @@ export function MovementsSection() {
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <CardTitle>Custody trail</CardTitle>
+              <CardTitle>{t("cash.movement.trailTitle", "Custody trail")}</CardTitle>
               <CardDescription>
-                Every recorded hand-over, in the order it happened.
+                {t("cash.movement.trailDesc", "Every recorded hand-over, in the order it happened.")}
               </CardDescription>
             </div>
             {editable ? (
               <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Record movement
+                <Plus className="h-4 w-4 mr-1" /> {t("cash.movement.record", "Record movement")}
               </Button>
             ) : null}
           </div>
@@ -343,11 +359,11 @@ export function MovementsSection() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div>
-              <Label className="text-xs">From</Label>
+              <Label className="text-xs">{t("common.from", "From")}</Label>
               <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">To</Label>
+              <Label className="text-xs">{t("common.to", "To")}</Label>
               <Input
                 type="date"
                 value={to}
@@ -357,13 +373,13 @@ export function MovementsSection() {
               />
             </div>
             <div>
-              <Label className="text-xs">Person</Label>
+              <Label className="text-xs">{t("cash.movement.person", "Person")}</Label>
               <Select value={employeeId} onValueChange={setEmployeeId}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>Everyone</SelectItem>
+                  <SelectItem value={ALL}>{t("cash.movement.everyone", "Everyone")}</SelectItem>
                   {employees.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       {e.name}
@@ -373,16 +389,16 @@ export function MovementsSection() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Location</Label>
+              <Label className="text-xs">{t("cash.movement.location", "Location")}</Label>
               <Select value={location} onValueChange={setLocation}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>Anywhere</SelectItem>
+                  <SelectItem value={ALL}>{t("cash.movement.anywhere", "Anywhere")}</SelectItem>
                   {CASH_LOCATIONS.map((l) => (
                     <SelectItem key={l} value={l}>
-                      {LOCATION_SHORT[l]}
+                      {locShort(t, l)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -394,47 +410,60 @@ export function MovementsSection() {
             <Loading />
           ) : movementsQ.error ? (
             <EmptyState
-              title="Could not load the trail"
-              hint={apiError(movementsQ.error, "Try a shorter date range")}
+              title={t("cash.movement.loadFailed", "Could not load the trail")}
+              hint={apiError(movementsQ.error, t("cash.movement.loadFailedHint", "Try a shorter date range"))}
             />
           ) : rows.length === 0 ? (
             <EmptyState
-              title="No cash movements in this range"
+              title={t("cash.movement.empty", "No cash movements in this range")}
               hint={
                 editable
-                  ? "Record the first hand-over and the cash position starts answering for itself."
-                  : "Nothing has been recorded for these filters."
+                  ? t(
+                      "cash.movement.emptyHintEdit",
+                      "Record the first hand-over and the cash position starts answering for itself.",
+                    )
+                  : t("cash.movement.emptyHintView", "Nothing has been recorded for these filters.")
               }
             />
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                {rows.length} movement{rows.length === 1 ? "" : "s"} ·{" "}
-                <span className="font-medium text-foreground">
-                  {formatINR(movementsQ.data!.totalPaise)}
-                </span>{" "}
-                moved
+                  {rows.length === 1
+                    ? t("cash.movement.summaryOne", "{count} movement · {amount} moved", {
+                        count: rows.length,
+                        amount: formatINR(movementsQ.data!.totalPaise),
+                      })
+                    : t("cash.movement.summaryMany", "{count} movements · {amount} moved", {
+                        count: rows.length,
+                        amount: formatINR(movementsQ.data!.totalPaise),
+                      })}
               </p>
               <ul className="divide-y rounded-md border">
                 {rows.map((m) => (
                   <li key={m.id} className="p-3 flex flex-wrap items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap text-sm font-medium">
-                        <span>{partyLabel(m.fromLocation, m.fromEmployee)}</span>
+                        <span>{partyLabel(t, m.fromLocation, m.fromEmployee)}</span>
                         <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span>{partyLabel(m.toLocation, m.toEmployee)}</span>
+                        <span>{partyLabel(t, m.toLocation, m.toEmployee)}</span>
                         {m.cashDeposit ? (
                           <Badge variant="secondary">
-                            Deposit{m.cashDeposit.slipNo ? ` · ${m.cashDeposit.slipNo}` : ""}
+                            {t("cash.movement.depositBadge", "Deposit")}
+                            {m.cashDeposit.slipNo ? ` · ${m.cashDeposit.slipNo}` : ""}
                           </Badge>
                         ) : null}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {m.occurredAt.slice(0, 10)}
                         {m.purpose ? ` · ${m.purpose}` : ""}
-                        {m.reference ? ` · ref ${m.reference}` : ""}
+                        {m.reference
+                          ? ` · ${t("cash.movement.refPrefix", "ref {ref}", { ref: m.reference })}`
+                          : ""}
                         {m.shiftReport
-                          ? ` · shift ${m.shiftReport.reportDate.slice(0, 10)} ${m.shiftReport.shiftType}`
+                          ? ` · ${t("cash.movement.shiftPrefix", "shift {date} {type}", {
+                              date: m.shiftReport.reportDate.slice(0, 10),
+                              type: m.shiftReport.shiftType,
+                            })}`
                           : ""}
                       </p>
                     </div>
@@ -446,9 +475,9 @@ export function MovementsSection() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label="Delete movement"
+                          aria-label={t("cash.movement.deleteAria", "Delete movement")}
                           onClick={() => {
-                            if (window.confirm("Delete this cash movement?")) remove.mutate(m.id);
+                            if (window.confirm(t("cash.movement.deleteConfirm", "Delete this cash movement?"))) remove.mutate(m.id);
                           }}
                           disabled={remove.isPending}
                         >

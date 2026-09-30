@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatINR } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { AlertTriangle } from "lucide-react";
 import {
   ChannelSubsidiaryRow,
@@ -34,6 +35,7 @@ import {
 import { DateRangeBar, EmptyBooks, StatCard } from "../_components/controls";
 
 export default function WhoOwesPage() {
+  const { t } = useT();
   const [range, setRange] = useState<Range>(defaultRange);
   const qs = `from=${range.from}&to=${range.to}`;
 
@@ -65,21 +67,21 @@ export default function WhoOwesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <StatCard
-          label="Money customers owe you"
+          label={t("books.wo.customersOwe", "Money customers owe you")}
           value={formatINR(totalReceivable)}
-          hint="Fuel sold on credit, not yet paid for"
+          hint={t("books.wo.customersOweHint", "Fuel sold on credit, not yet paid for")}
           accent="amber"
         />
         <StatCard
-          label="Cash short on staff"
+          label={t("books.wo.staffShort", "Cash short on staff")}
           value={formatINR(totalStaffDues)}
-          hint="Shortages recoverable from attendants"
+          hint={t("books.wo.staffShortHint", "Shortages recoverable from attendants")}
           accent={totalStaffDues > 0 ? "red" : "green"}
         />
         <StatCard
-          label="Digital money not yet in the bank"
+          label={t("books.wo.digital", "Digital money not yet in the bank")}
           value={formatINR(totalHeld)}
-          hint="Card / UPI / wallet taken, awaiting settlement"
+          hint={t("books.wo.digitalHint", "Card / UPI / wallet taken, awaiting settlement")}
           accent="primary"
         />
       </div>
@@ -89,14 +91,20 @@ export default function WhoOwesPage() {
           <AlertTriangle className="h-5 w-5 text-red-700 mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold text-red-900">
-              {mismatched.length} customer{mismatched.length > 1 ? "s" : ""} disagree with the
-              ledger
+              {mismatched.length > 1
+                ? t("books.wo.mismatchMany", "{n} customers disagree with the ledger", {
+                    n: mismatched.length,
+                  })
+                : t("books.wo.mismatchOne", "{n} customer disagrees with the ledger", {
+                    n: mismatched.length,
+                  })}
             </div>
             <div className="text-red-800">
-              The balance stored on the customer record does not match what the books say:{" "}
-              {mismatched.map((c) => c.name).join(", ")}. One of the two is wrong — check that
-              customer&apos;s recent credit sales and payments, and whether any shift was
-              unlocked after the balance was posted.
+              {t(
+                "books.wo.mismatchBody",
+                "The balance stored on the customer record does not match what the books say: {names}. One of the two is wrong — check that customer's recent credit sales and payments, and whether any shift was unlocked after the balance was posted.",
+                { names: mismatched.map((c) => c.name).join(", ") },
+              )}
             </div>
           </div>
         </div>
@@ -104,19 +112,22 @@ export default function WhoOwesPage() {
 
       <Tabs defaultValue="customers" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="customers">Customer receivables</TabsTrigger>
-          <TabsTrigger value="staff">Staff cash dues</TabsTrigger>
-          <TabsTrigger value="channels">Digital float</TabsTrigger>
+          <TabsTrigger value="customers">{t("books.wo.tabCustomers", "Customer receivables")}</TabsTrigger>
+          <TabsTrigger value="staff">{t("books.wo.tabStaff", "Staff cash dues")}</TabsTrigger>
+          <TabsTrigger value="channels">{t("books.wo.tabChannels", "Digital float")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="customers">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Money customers owe you</CardTitle>
+              <CardTitle className="text-base">
+                {t("books.wo.customersOwe", "Money customers owe you")}
+              </CardTitle>
               <CardDescription>
-                Account 1200 — Accounts Receivable, broken out per credit customer. &ldquo;Billed&rdquo;
-                is fuel put on credit in this range; &ldquo;received&rdquo; is what they paid against
-                their dues.
+                {t(
+                  "books.wo.customersDesc",
+                  "Account 1200 — Accounts Receivable, broken out per credit customer. “Billed” is fuel put on credit in this range; “received” is what they paid against their dues.",
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -124,20 +135,23 @@ export default function WhoOwesPage() {
                 <Loading />
               ) : customers.length === 0 ? (
                 <EmptyBooks
-                  title="No credit activity"
-                  body="No customer had a credit sale or a payment posted to the books in this range."
+                  title={t("books.wo.noCreditTitle", "No credit activity")}
+                  body={t(
+                    "books.wo.noCreditBody",
+                    "No customer had a credit sale or a payment posted to the books in this range.",
+                  )}
                 />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Customer</TableHead>
-                        <TableHead className="text-right">Billed (Dr)</TableHead>
-                        <TableHead className="text-right">Received (Cr)</TableHead>
-                        <TableHead className="text-right">Owes as per books</TableHead>
-                        <TableHead className="text-right">On their record</TableHead>
-                        <TableHead>Agrees?</TableHead>
+                        <TableHead>{t("books.wo.colCustomer", "Customer")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colBilled", "Billed (Dr)")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colReceived", "Received (Cr)")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colOwesBooks", "Owes as per books")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colOnRecord", "On their record")}</TableHead>
+                        <TableHead>{t("books.wo.colAgrees", "Agrees?")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -170,9 +184,9 @@ export default function WhoOwesPage() {
                           </TableCell>
                           <TableCell>
                             {c.matchesStored ? (
-                              <Badge variant="success">Matches</Badge>
+                              <Badge variant="success">{t("books.wo.matches", "Matches")}</Badge>
                             ) : (
-                              <Badge variant="destructive">Mismatch</Badge>
+                              <Badge variant="destructive">{t("books.wo.mismatch", "Mismatch")}</Badge>
                             )}
                           </TableCell>
                         </TableRow>
@@ -180,7 +194,7 @@ export default function WhoOwesPage() {
                     </TableBody>
                     <TableFooter>
                       <TableRow>
-                        <TableCell className="font-semibold">Total</TableCell>
+                        <TableCell className="font-semibold">{t("common.total", "Total")}</TableCell>
                         <TableCell className="text-right font-mono font-semibold">
                           {formatINR(customers.reduce((s, c) => s + paise(c.billedPaise), 0))}
                         </TableCell>
@@ -203,11 +217,12 @@ export default function WhoOwesPage() {
         <TabsContent value="staff">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Cash short on staff</CardTitle>
+              <CardTitle className="text-base">{t("books.wo.staffShort", "Cash short on staff")}</CardTitle>
               <CardDescription>
-                Account 1300 — when an attendant hands over less cash than their shift accounts
-                for, the shortfall is booked against them. &ldquo;Recovered&rdquo; is what they have
-                since paid back.
+                {t(
+                  "books.wo.staffDesc",
+                  "Account 1300 — when an attendant hands over less cash than their shift accounts for, the shortfall is booked against them. “Recovered” is what they have since paid back.",
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -215,18 +230,21 @@ export default function WhoOwesPage() {
                 <Loading />
               ) : staff.length === 0 ? (
                 <EmptyBooks
-                  title="No staff shortages"
-                  body="Nobody has come up short in this range — or no shift with a cash handover has been locked yet."
+                  title={t("books.wo.noStaffTitle", "No staff shortages")}
+                  body={t(
+                    "books.wo.noStaffBody",
+                    "Nobody has come up short in this range — or no shift with a cash handover has been locked yet.",
+                  )}
                 />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employee</TableHead>
-                        <TableHead className="text-right">Short (Dr)</TableHead>
-                        <TableHead className="text-right">Recovered (Cr)</TableHead>
-                        <TableHead className="text-right">Still owes</TableHead>
+                        <TableHead>{t("books.wo.colEmployee", "Employee")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colShort", "Short (Dr)")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colRecovered", "Recovered (Cr)")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colStillOwes", "Still owes")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -241,7 +259,7 @@ export default function WhoOwesPage() {
                             </Link>
                             <div className="text-xs text-muted-foreground">
                               {e.designation || "—"}
-                              {!e.isActive && " · inactive"}
+                              {!e.isActive && ` · ${t("books.wo.inactive", "inactive")}`}
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-mono">
@@ -262,7 +280,7 @@ export default function WhoOwesPage() {
                     </TableBody>
                     <TableFooter>
                       <TableRow>
-                        <TableCell className="font-semibold">Total</TableCell>
+                        <TableCell className="font-semibold">{t("common.total", "Total")}</TableCell>
                         <TableCell className="text-right font-mono font-semibold">
                           {formatINR(staff.reduce((s, e) => s + paise(e.shortagePaise), 0))}
                         </TableCell>
@@ -276,9 +294,10 @@ export default function WhoOwesPage() {
                     </TableFooter>
                   </Table>
                   <p className="text-xs text-muted-foreground mt-3">
-                    To write off or settle a shortage, post a manual entry: credit 1300 Staff
-                    Receivable and debit 1000 Cash (if they paid it back) or 6900 Cash Short (if
-                    you are absorbing it).
+                    {t(
+                      "books.wo.staffNote",
+                      "To write off or settle a shortage, post a manual entry: credit 1300 Staff Receivable and debit 1000 Cash (if they paid it back) or 6900 Cash Short (if you are absorbing it).",
+                    )}
                   </p>
                 </div>
               )}
@@ -289,11 +308,14 @@ export default function WhoOwesPage() {
         <TabsContent value="channels">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Digital money not yet in the bank</CardTitle>
+              <CardTitle className="text-base">
+                {t("books.wo.digital", "Digital money not yet in the bank")}
+              </CardTitle>
               <CardDescription>
-                Account 1100 — card, UPI and wallet collections sit here until the money lands
-                in your bank. A balance that keeps growing means settlements are not being
-                recorded.
+                {t(
+                  "books.wo.digitalDesc",
+                  "Account 1100 — card, UPI and wallet collections sit here until the money lands in your bank. A balance that keeps growing means settlements are not being recorded.",
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -301,19 +323,22 @@ export default function WhoOwesPage() {
                 <Loading />
               ) : channels.length === 0 ? (
                 <EmptyBooks
-                  title="No digital collections"
-                  body="No card, UPI or wallet money has been booked to the clearing account in this range."
+                  title={t("books.wo.noDigitalTitle", "No digital collections")}
+                  body={t(
+                    "books.wo.noDigitalBody",
+                    "No card, UPI or wallet money has been booked to the clearing account in this range.",
+                  )}
                 />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Channel</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead className="text-right">Taken in (Dr)</TableHead>
-                        <TableHead className="text-right">Settled to bank (Cr)</TableHead>
-                        <TableHead className="text-right">Still held</TableHead>
+                        <TableHead>{t("books.wo.colChannel", "Channel")}</TableHead>
+                        <TableHead>{t("books.wo.colType", "Type")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colTakenIn", "Taken in (Dr)")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colSettled", "Settled to bank (Cr)")}</TableHead>
+                        <TableHead className="text-right">{t("books.wo.colHeld", "Still held")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -338,7 +363,7 @@ export default function WhoOwesPage() {
                     <TableFooter>
                       <TableRow>
                         <TableCell colSpan={2} className="font-semibold">
-                          Total
+                          {t("common.total", "Total")}
                         </TableCell>
                         <TableCell className="text-right font-mono font-semibold">
                           {formatINR(channels.reduce((s, c) => s + paise(c.inPaise), 0))}
@@ -353,8 +378,10 @@ export default function WhoOwesPage() {
                     </TableFooter>
                   </Table>
                   <p className="text-xs text-muted-foreground mt-3">
-                    When a settlement hits your bank, post a manual entry: debit 1050 Bank and
-                    credit 1100 Card / UPI / Wallet Clearing, tagged to that channel.
+                    {t(
+                      "books.wo.digitalNote",
+                      "When a settlement hits your bank, post a manual entry: debit 1050 Bank and credit 1100 Card / UPI / Wallet Clearing, tagged to that channel.",
+                    )}
                   </p>
                 </div>
               )}
@@ -367,5 +394,10 @@ export default function WhoOwesPage() {
 }
 
 function Loading() {
-  return <div className="text-sm text-muted-foreground py-6 text-center">Loading…</div>;
+  const { t } = useT();
+  return (
+    <div className="text-sm text-muted-foreground py-6 text-center">
+      {t("common.loading", "Loading…")}
+    </div>
+  );
 }

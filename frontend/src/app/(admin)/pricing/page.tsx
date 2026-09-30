@@ -55,9 +55,12 @@ import {
 import { TrendingUp } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 
-const onError = (e: any) =>
-  toast.error(e?.response?.data?.error || e?.message || "Failed");
+// Fuel names are shared with the shift screens (shift.fuel.*).
+const fuelName = (t: ReturnType<typeof useT>["t"], f: string) =>
+  t(`shift.fuel.${f}`, FUEL_LABELS[f] || f);
 
 const FUELS = ["HSD", "MS", "MS_POWER", "CNG"] as const;
 const ALL = "__all__";
@@ -165,6 +168,8 @@ type TrendResp = { days: TrendDay[]; costBasis: string };
 
 export default function PricingPage() {
   const qc = useQueryClient();
+  const { t } = useT();
+  const locale = useDateLocale();
   const [range, setRange] = useState({ from: daysAgoStr(29), to: todayStr() });
   const [historyFuel, setHistoryFuel] = useState<string>(ALL);
   const [formOpen, setFormOpen] = useState(false);
@@ -242,15 +247,19 @@ export default function PricingPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Price Revision &amp; Revaluation</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            {t("pricing.title", "Price Revision & Revaluation")}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Rates move daily. The litres already in your tanks get revalued with
-            them — a paper gain or loss, not cash.
+            {t(
+              "pricing.subtitle",
+              "Rates move daily. The litres already in your tanks get revalued with them — a paper gain or loss, not cash."
+            )}
           </p>
         </div>
         <Button onClick={() => openForm("HSD")}>
           <TrendingUp className="h-4 w-4 mr-2" />
-          Record price revision
+          {t("pricing.record", "Record price revision")}
         </Button>
       </div>
 
@@ -264,7 +273,7 @@ export default function PricingPage() {
             <Card key={f}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">
-                  {FUEL_LABELS[f]}
+                  {fuelName(t, f)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -273,15 +282,17 @@ export default function PricingPage() {
                     {hasRate ? formatINR(row!.currentRatePaise!) : "—"}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    selling rate / L
+                    {t("pricing.sellingRate", "selling rate / L")}
                     {row?.effectiveFrom
-                      ? ` · since ${format(new Date(row.effectiveFrom), "dd MMM HH:mm")}`
+                      ? t("pricing.since", " · since {when}", {
+                          when: format(new Date(row.effectiveFrom), "d MMM HH:mm", { locale }),
+                        })
                       : ""}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t">
                   <div>
-                    <div className="text-muted-foreground">Avg cost / L</div>
+                    <div className="text-muted-foreground">{t("pricing.avgCost", "Avg cost / L")}</div>
                     <div className="font-medium text-sm">
                       {row?.avgCostPaisePerLitre
                         ? formatINR(row.avgCostPaisePerLitre)
@@ -289,19 +300,19 @@ export default function PricingPage() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Margin / L</div>
+                    <div className="text-muted-foreground">{t("pricing.margin", "Margin / L")}</div>
                     <div className={`font-semibold text-sm ${signClass(margin)}`}>
                       {margin === null ? "—" : signedINR(margin)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">In stock</div>
+                    <div className="text-muted-foreground">{t("pricing.inStock", "In stock")}</div>
                     <div className="font-medium text-sm">
                       {row ? `${formatLitres(row.stockMl)} L` : "—"}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Stock at rate</div>
+                    <div className="text-muted-foreground">{t("pricing.stockAtRate", "Stock at rate")}</div>
                     <div className="font-medium text-sm">
                       {row?.stockAtRatePaise ? formatINR(row.stockAtRatePaise) : "—"}
                     </div>
@@ -309,8 +320,11 @@ export default function PricingPage() {
                 </div>
                 {row && !row.costBasisComplete && (
                   <div className="text-[11px] text-amber-700">
-                    {row.estimatedStockTankCount} tank(s) have no cost basis yet —
-                    litres counted from the last shift&apos;s closing stock.
+                    {t(
+                      "pricing.noCostBasis",
+                      "{count} tank(s) have no cost basis yet — litres counted from the last shift's closing stock.",
+                      { count: row.estimatedStockTankCount }
+                    )}
                   </div>
                 )}
                 <Button
@@ -319,7 +333,7 @@ export default function PricingPage() {
                   className="w-full"
                   onClick={() => openForm(f)}
                 >
-                  Revise rate
+                  {t("pricing.reviseRate", "Revise rate")}
                 </Button>
               </CardContent>
             </Card>
@@ -330,14 +344,17 @@ export default function PricingPage() {
       {/* ---- Range picker + period revaluation ---- */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Period</CardTitle>
+          <CardTitle className="text-base">{t("pricing.period", "Period")}</CardTitle>
           <CardDescription>
-            Revaluation gain or loss recorded in this window, across all fuels.
+            {t(
+              "pricing.periodDesc",
+              "Revaluation gain or loss recorded in this window, across all fuels."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
           <div>
-            <Label>From</Label>
+            <Label>{t("common.from", "From")}</Label>
             <Input
               type="date"
               value={range.from}
@@ -345,7 +362,7 @@ export default function PricingPage() {
             />
           </div>
           <div>
-            <Label>To</Label>
+            <Label>{t("common.to", "To")}</Label>
             <Input
               type="date"
               value={range.to}
@@ -353,13 +370,16 @@ export default function PricingPage() {
             />
           </div>
           <div className="ml-auto text-right">
-            <div className="text-xs text-muted-foreground">Net stock revaluation</div>
+            <div className="text-xs text-muted-foreground">
+              {t("pricing.netReval", "Net stock revaluation")}
+            </div>
             <div className={`text-2xl font-semibold ${signClass(netRevaluation)}`}>
               {signedINR(netRevaluation)}
             </div>
             <div className="text-xs text-muted-foreground">
-              {summaryQ.data?.totals?.revisionCount ?? 0} revision(s) — paper value,
-              not cash
+              {t("pricing.revisionsPaper", "{count} revision(s) — paper value, not cash", {
+                count: summaryQ.data?.totals?.revisionCount ?? 0,
+              })}
             </div>
           </div>
         </CardContent>
@@ -368,23 +388,25 @@ export default function PricingPage() {
       {/* ---- Per-fuel summary ---- */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Revaluation by fuel</CardTitle>
+          <CardTitle className="text-base">{t("pricing.byFuel", "Revaluation by fuel")}</CardTitle>
           <CardDescription>
-            How much of the period&apos;s result came from price movement rather
-            than from selling fuel.
+            {t(
+              "pricing.byFuelDesc",
+              "How much of the period's result came from price movement rather than from selling fuel."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Fuel</TableHead>
-                <TableHead className="text-right">Revisions</TableHead>
-                <TableHead className="text-right">Opening</TableHead>
-                <TableHead className="text-right">Closing</TableHead>
-                <TableHead className="text-right">Low</TableHead>
-                <TableHead className="text-right">High</TableHead>
-                <TableHead className="text-right">Net gain / loss</TableHead>
+                <TableHead>{t("pricing.col.fuel", "Fuel")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.revisions", "Revisions")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.opening", "Opening")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.closing", "Closing")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.low", "Low")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.high", "High")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.net", "Net gain / loss")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -393,8 +415,8 @@ export default function PricingPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
                     {summaryQ.isLoading
-                      ? "Loading…"
-                      : "No price revisions recorded in this period."}
+                      ? t("common.loading", "Loading…")
+                      : t("pricing.noRevisionsPeriod", "No price revisions recorded in this period.")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -405,7 +427,7 @@ export default function PricingPage() {
                     return (
                       <TableRow key={f.fuelType}>
                         <TableCell className="font-medium">
-                          {FUEL_LABELS[f.fuelType] || f.fuelType}
+                          {fuelName(t, f.fuelType)}
                         </TableCell>
                         <TableCell className="text-right">
                           {f.revisionCount}
@@ -441,19 +463,25 @@ export default function PricingPage() {
       {/* ---- Margin trend ---- */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Margin per litre</CardTitle>
+          <CardTitle className="text-base">{t("pricing.marginTitle", "Margin per litre")}</CardTitle>
           <CardDescription>
-            Selling rate minus weighted-average cost, per day.
+            {t("pricing.marginDesc", "Selling rate minus weighted-average cost, per day.")}
             {trendQ.data?.costBasis === "CURRENT_SNAPSHOT" &&
-              " Cost is today's average cost basis applied across the range."}
+              t(
+                "pricing.marginSnapshot",
+                " Cost is today's average cost basis applied across the range."
+              )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {chartFuels.length === 0 ? (
             <div className="text-sm text-muted-foreground py-8 text-center">
               {trendQ.isLoading
-                ? "Loading…"
-                : "No margin to chart yet — a rate and a tank cost basis are both needed."}
+                ? t("common.loading", "Loading…")
+                : t(
+                    "pricing.noMargin",
+                    "No margin to chart yet — a rate and a tank cost basis are both needed."
+                  )}
             </div>
           ) : (
             <div style={{ width: "100%", height: 320 }}>
@@ -475,18 +503,21 @@ export default function PricingPage() {
                             maximumFractionDigits: 2,
                           }) +
                           " / L",
-                      FUEL_LABELS[String(name)] || String(name),
+                      fuelName(t, String(name)),
                     ]}
                     labelFormatter={(label, payload) => {
                       const litres = (payload?.[0] as any)?.payload?.litres;
                       return litres
-                        ? `${label} — ${Number(litres).toLocaleString("en-IN", {
-                            maximumFractionDigits: 0,
-                          })} L sold`
+                        ? t("pricing.litresSold", "{label} — {litres} L sold", {
+                            label: String(label),
+                            litres: Number(litres).toLocaleString("en-IN", {
+                              maximumFractionDigits: 0,
+                            }),
+                          })
                         : String(label);
                     }}
                   />
-                  <Legend formatter={(name) => FUEL_LABELS[String(name)] || String(name)} />
+                  <Legend formatter={(name) => fuelName(t, String(name))} />
                   {chartFuels.map((f) => (
                     <Line
                       key={f}
@@ -509,24 +540,24 @@ export default function PricingPage() {
       {/* ---- Revision history ---- */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Revision history</CardTitle>
+          <CardTitle className="text-base">{t("pricing.history", "Revision history")}</CardTitle>
           <CardDescription>
-            Every recorded rate change, with the stock it revalued.
+            {t("pricing.historyDesc", "Every recorded rate change, with the stock it revalued.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <Label>Fuel</Label>
+              <Label>{t("pricing.fuel", "Fuel")}</Label>
               <Select value={historyFuel} onValueChange={setHistoryFuel}>
                 <SelectTrigger className="min-w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All fuels</SelectItem>
+                  <SelectItem value={ALL}>{t("pricing.allFuels", "All fuels")}</SelectItem>
                   {FUELS.map((f) => (
                     <SelectItem key={f} value={f}>
-                      {FUEL_LABELS[f]}
+                      {fuelName(t, f)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -535,12 +566,20 @@ export default function PricingPage() {
             {revisionsQ.data && (
               <div className="ml-auto flex gap-2">
                 <Badge variant="outline">
-                  Gains {signedINR(big(revisionsQ.data.totals.gainPaise))}
+                  {t("pricing.gains", "Gains {v}", {
+                    v: signedINR(big(revisionsQ.data.totals.gainPaise)),
+                  })}
                 </Badge>
                 <Badge variant="outline">
-                  Losses {signedINR(big(revisionsQ.data.totals.lossPaise))}
+                  {t("pricing.losses", "Losses {v}", {
+                    v: signedINR(big(revisionsQ.data.totals.lossPaise)),
+                  })}
                 </Badge>
-                <Badge>Net {signedINR(big(revisionsQ.data.totals.netGainLossPaise))}</Badge>
+                <Badge>
+                  {t("pricing.netBadge", "Net {v}", {
+                    v: signedINR(big(revisionsQ.data.totals.netGainLossPaise)),
+                  })}
+                </Badge>
               </div>
             )}
           </div>
@@ -548,12 +587,12 @@ export default function PricingPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Effective</TableHead>
-                <TableHead>Fuel</TableHead>
-                <TableHead className="text-right">Old → New / L</TableHead>
-                <TableHead className="text-right">Change / L</TableHead>
-                <TableHead className="text-right">Stock at revision</TableHead>
-                <TableHead className="text-right">Gain / loss</TableHead>
+                <TableHead>{t("pricing.col.effective", "Effective")}</TableHead>
+                <TableHead>{t("pricing.col.fuel", "Fuel")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.oldNew", "Old → New / L")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.change", "Change / L")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.stockAt", "Stock at revision")}</TableHead>
+                <TableHead className="text-right">{t("pricing.col.gainLoss", "Gain / loss")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -561,8 +600,11 @@ export default function PricingPage() {
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
                     {revisionsQ.isLoading
-                      ? "Loading…"
-                      : "No revisions yet. Record one when the company changes your rate."}
+                      ? t("common.loading", "Loading…")
+                      : t(
+                          "pricing.noRevisions",
+                          "No revisions yet. Record one when the company changes your rate."
+                        )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -572,9 +614,9 @@ export default function PricingPage() {
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="whitespace-nowrap">
-                        {format(new Date(r.effectiveAt), "dd MMM yyyy HH:mm")}
+                        {format(new Date(r.effectiveAt), "d MMM yyyy HH:mm", { locale })}
                       </TableCell>
-                      <TableCell>{FUEL_LABELS[r.fuelType] || r.fuelType}</TableCell>
+                      <TableCell>{fuelName(t, r.fuelType)}</TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         {formatINR(r.oldRatePaise)} → {formatINR(r.newRatePaise)}
                       </TableCell>
@@ -632,6 +674,7 @@ function RevisionDialog({
   fuels: FuelRow[];
   onSaved: () => void;
 }) {
+  const { t } = useT();
   const [rate, setRate] = useState("");
   const [effectiveAt, setEffectiveAt] = useState("");
 
@@ -669,31 +712,35 @@ function RevisionDialog({
     onSuccess: (d: any) => {
       const gl = big(d?.stockGainLossPaise);
       toast.success(
-        `Rate revised. Stock revalued by ${signedINR(gl)} (${formatLitres(
-          d?.stockMl ?? "0",
-        )} L on hand).`,
+        t("pricing.revised", "Rate revised. Stock revalued by {value} ({litres} L on hand).", {
+          value: signedINR(gl),
+          litres: formatLitres(d?.stockMl ?? "0"),
+        }),
       );
       setRate("");
       setEffectiveAt("");
       onSaved();
     },
-    onError,
+    onError: (e: any) =>
+      toast.error(e?.response?.data?.error || e?.message || t("common.failed", "Failed")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Record price revision</DialogTitle>
+          <DialogTitle>{t("pricing.dialog.title", "Record price revision")}</DialogTitle>
           <DialogDescription>
-            Sets the new selling rate and records what the change does to the fuel
-            already in your tanks.
+            {t(
+              "pricing.dialog.desc",
+              "Sets the new selling rate and records what the change does to the fuel already in your tanks."
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
-            <Label>Fuel</Label>
+            <Label>{t("pricing.fuel", "Fuel")}</Label>
             <Select value={fuelType} onValueChange={setFuelType}>
               <SelectTrigger>
                 <SelectValue />
@@ -701,7 +748,7 @@ function RevisionDialog({
               <SelectContent>
                 {FUELS.map((f) => (
                   <SelectItem key={f} value={f}>
-                    {FUEL_LABELS[f]}
+                    {fuelName(t, f)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -710,13 +757,15 @@ function RevisionDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Current rate (₹/L)</Label>
+              <Label>{t("pricing.currentRate", "Current rate (₹/L)")}</Label>
               <div className="h-10 flex items-center text-sm font-medium">
-                {oldPaise === null ? "Not set" : formatINR(oldPaise.toString())}
+                {oldPaise === null
+                  ? t("pricing.notSet", "Not set")
+                  : formatINR(oldPaise.toString())}
               </div>
             </div>
             <div>
-              <Label>New rate (₹/L)</Label>
+              <Label>{t("pricing.newRate", "New rate (₹/L)")}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -729,7 +778,7 @@ function RevisionDialog({
           </div>
 
           <div>
-            <Label>Effective from (optional — defaults to now)</Label>
+            <Label>{t("pricing.effectiveFrom", "Effective from (optional — defaults to now)")}</Label>
             <Input
               type="datetime-local"
               value={effectiveAt}
@@ -740,18 +789,23 @@ function RevisionDialog({
           {/* ---- live impact preview ---- */}
           {oldPaise === null ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              No rate is set for {FUEL_LABELS[fuelType]} yet, so there is nothing to
-              revise. Set the opening rate under Fuel Rates first.
+              {t(
+                "pricing.noRateSet",
+                "No rate is set for {fuel} yet, so there is nothing to revise. Set the opening rate under Fuel Rates first.",
+                { fuel: fuelName(t, fuelType) }
+              )}
             </div>
           ) : preview === null ? (
             <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-              You have <strong>{formatLitres(stockMl.toString())} L</strong> of{" "}
-              {FUEL_LABELS[fuelType]} in stock. Enter a new rate to see what the
-              change does to its value.
+              {t(
+                "pricing.stockImpact",
+                "You have {litres} L of {fuel} in stock. Enter a new rate to see what the change does to its value.",
+                { litres: formatLitres(stockMl.toString()), fuel: fuelName(t, fuelType) }
+              )}
             </div>
           ) : preview.same ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              That is the same as the current rate — nothing to revise.
+              {t("pricing.sameRate", "That is the same as the current rate — nothing to revise.")}
             </div>
           ) : (
             <div
@@ -762,24 +816,41 @@ function RevisionDialog({
               }`}
             >
               <p>
-                You have <strong>{formatLitres(stockMl.toString())} L</strong> of{" "}
-                {FUEL_LABELS[fuelType]} in stock. A{" "}
-                <strong>
-                  {formatINR(absBig(preview.delta).toString())}{" "}
-                  {preview.delta > 0n ? "increase" : "decrease"}
-                </strong>{" "}
-                {preview.gainLoss >= 0n ? "adds" : "takes"}{" "}
-                <strong>{formatINR(absBig(preview.gainLoss).toString())}</strong>{" "}
-                {preview.gainLoss >= 0n ? "to" : "from"} the value of that stock.
+                {preview.gainLoss >= 0n
+                  ? t(
+                      "pricing.impact.adds",
+                      "You have {litres} L of {fuel} in stock. A {change} increase adds {amount} to the value of that stock.",
+                      {
+                        litres: formatLitres(stockMl.toString()),
+                        fuel: fuelName(t, fuelType),
+                        change: formatINR(absBig(preview.delta).toString()),
+                        amount: formatINR(absBig(preview.gainLoss).toString()),
+                      }
+                    )
+                  : t(
+                      "pricing.impact.takes",
+                      "You have {litres} L of {fuel} in stock. A {change} decrease takes {amount} from the value of that stock.",
+                      {
+                        litres: formatLitres(stockMl.toString()),
+                        fuel: fuelName(t, fuelType),
+                        change: formatINR(absBig(preview.delta).toString()),
+                        amount: formatINR(absBig(preview.gainLoss).toString()),
+                      }
+                    )}
               </p>
               <p className="mt-2 text-xs opacity-80">
-                This revalues fuel you already own — it is not cash in hand, and no
-                money moves today.
+                {t(
+                  "pricing.paperNote",
+                  "This revalues fuel you already own — it is not cash in hand, and no money moves today."
+                )}
               </p>
               {row && !row.costBasisComplete && (
                 <p className="mt-1 text-xs opacity-80">
-                  {row.estimatedStockTankCount} tank(s) have no running inventory
-                  state; their litres come from the last shift&apos;s closing stock.
+                  {t(
+                    "pricing.noInventoryState",
+                    "{count} tank(s) have no running inventory state; their litres come from the last shift's closing stock.",
+                    { count: row.estimatedStockTankCount }
+                  )}
                 </p>
               )}
             </div>
@@ -787,7 +858,7 @@ function RevisionDialog({
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() => save.mutate()}
@@ -795,7 +866,7 @@ function RevisionDialog({
                 save.isPending || preview === null || preview.same || oldPaise === null
               }
             >
-              {save.isPending ? "Saving…" : "Record revision"}
+              {save.isPending ? t("common.saving", "Saving…") : t("pricing.recordBtn", "Record revision")}
             </Button>
           </div>
         </div>

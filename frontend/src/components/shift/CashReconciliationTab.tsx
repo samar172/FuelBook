@@ -33,6 +33,8 @@ import { formatINR, formatLitres } from "@/lib/utils";
 import { apiError, Employee } from "@/lib/types";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { AlertTriangle, BookLock, Wand2 } from "lucide-react";
 import {
   CASH_MODE_HELP,
@@ -71,6 +73,8 @@ export function CashReconciliationTab({
   shift: { id: string; status: string; reportDate?: string };
   disabled: boolean;
 }) {
+  const { t } = useT();
+  const locale = useDateLocale();
   const qc = useQueryClient();
   const shiftId = shift.id;
 
@@ -114,26 +118,26 @@ export function CashReconciliationTab({
       return (await api.put(`/api/shifts/${shiftId}/cash-handovers`, { handovers })).data;
     },
     onSuccess: () => {
-      toast.success("Cash handovers saved");
+      toast.success(t("shift.handover.saved", "Cash handovers saved"));
       qc.invalidateQueries({ queryKey: ["shift-cash-recon", shiftId] });
       qc.invalidateQueries({ queryKey: ["shift", shiftId] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not save the handovers")),
+    onError: (e) => toast.error(apiError(e, t("shift.handover.saveFailed", "Could not save the handovers"))),
   });
 
   const setCashier = useMutation({
     mutationFn: async (cashierEmployeeId: string | null) =>
       (await api.put(`/api/shifts/${shiftId}/cashier`, { cashierEmployeeId })).data,
     onSuccess: () => {
-      toast.success("Shift cashier updated");
+      toast.success(t("shift.handover.cashierUpdated", "Shift cashier updated"));
       qc.invalidateQueries({ queryKey: ["shift-cash-recon", shiftId] });
       qc.invalidateQueries({ queryKey: ["shift", shiftId] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not set the cashier")),
+    onError: (e) => toast.error(apiError(e, t("shift.handover.cashierFailed", "Could not set the cashier"))),
   });
 
   if (isLoading) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <div className="text-sm text-muted-foreground">{t("common.loading", "Loading…")}</div>;
   }
   if (!data) return null;
 
@@ -164,33 +168,35 @@ export function CashReconciliationTab({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="secondary">{CASH_MODE_LABELS[data.mode]}</Badge>
+                <Badge variant="secondary">{t(`cashmode.${data.mode}.label`, CASH_MODE_LABELS[data.mode])}</Badge>
                 {data.ledgerPostedAt ? (
                   <Badge variant="success" className="gap-1">
-                    <BookLock className="h-3 w-3" /> Posted to the books on{" "}
-                    {format(new Date(data.ledgerPostedAt), "dd MMM yyyy, HH:mm")}
+                    <BookLock className="h-3 w-3" />{" "}
+                    {t("shift.handover.postedOn", "Posted to the books on {when}", {
+                      when: format(new Date(data.ledgerPostedAt), "dd MMM yyyy, HH:mm", { locale }),
+                    })}
                   </Badge>
                 ) : (
-                  <Badge variant="outline">Not yet posted to the books</Badge>
+                  <Badge variant="outline">{t("shift.handover.notPosted", "Not yet posted to the books")}</Badge>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1.5 max-w-2xl">
-                {CASH_MODE_HELP[data.mode]} You can change this under Pump Setup.
+                {t(`cashmode.${data.mode}.help`, CASH_MODE_HELP[data.mode])} {t("shift.handover.changeUnderSetup", "You can change this under Pump Setup.")}
               </p>
             </div>
             {data.mode === "POOLED_CASHIER" && (
               <div>
-                <Label className="text-xs">Shift cashier</Label>
+                <Label className="text-xs">{t("shift.handover.cashier", "Shift cashier")}</Label>
                 <Select
                   value={data.cashierEmployeeId ?? NO_CASHIER}
                   onValueChange={(v) => setCashier.mutate(v === NO_CASHIER ? null : v)}
                   disabled={readOnly || setCashier.isPending}
                 >
                   <SelectTrigger className="w-56 mt-1">
-                    <SelectValue placeholder="Pick the cashier" />
+                    <SelectValue placeholder={t("shift.handover.pickCashier", "Pick the cashier")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_CASHIER}>Nobody assigned</SelectItem>
+                    <SelectItem value={NO_CASHIER}>{t("shift.handover.noCashier", "Nobody assigned")}</SelectItem>
                     {employees.map((e) => (
                       <SelectItem key={e.id} value={e.id}>
                         {e.name}
@@ -204,8 +210,11 @@ export function CashReconciliationTab({
 
           {readOnly && (
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">
-              This shift is {data.status.toLowerCase()} — the handover figures are frozen. Unlock
-              the shift to change them; the ledger entries will be reversed and re-posted.
+              {t(
+                "shift.handover.frozen",
+                "This shift is {status} — the handover figures are frozen. Unlock the shift to change them; the ledger entries will be reversed and re-posted.",
+                { status: t(`shift.status.${data.status}`, data.status.toLowerCase()) },
+              )}
             </p>
           )}
         </CardContent>
@@ -216,12 +225,20 @@ export function CashReconciliationTab({
           <AlertTriangle className="h-5 w-5 text-red-700 mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold text-red-900">
-              {formatINR(data.unattributedSalesPaise)} of fuel is nobody&apos;s responsibility
+              {t("shift.handover.nobodysResponsibility", "{amount} of fuel is nobody's responsibility", {
+                amount: formatINR(data.unattributedSalesPaise),
+              })}
             </div>
             <div className="text-red-800">
               {data.mode === "POOLED_CASHIER" && !data.cashierEmployeeId
-                ? "No shift cashier has been picked, so the whole shift's cash is unaccounted for. Pick the cashier above."
-                : "Fuel was dispensed on nozzles with no attendant assigned, so that cash cannot be pinned on anyone. Assign the nozzles under the Employees tab."}
+                ? t(
+                    "shift.handover.noCashierPicked",
+                    "No shift cashier has been picked, so the whole shift's cash is unaccounted for. Pick the cashier above.",
+                  )
+                : t(
+                    "shift.handover.noAttendant",
+                    "Fuel was dispensed on nozzles with no attendant assigned, so that cash cannot be pinned on anyone. Assign the nozzles under the Employees tab.",
+                  )}
             </div>
           </div>
         </div>
@@ -229,25 +246,33 @@ export function CashReconciliationTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Cash Reconciliation</CardTitle>
+          <CardTitle>{t("shift.handover.title", "Cash Reconciliation")}</CardTitle>
           <CardDescription>
-            What each person should have handed over, against what they actually did. Expected
-            cash = fuel they dispensed − credit they gave out − money that came in digitally.
-            Expenses they paid out of the drawer are shown for context only and are{" "}
-            <span className="font-medium">not</span> deducted — collections in FuelBook are
-            recorded gross of expenses. Cash they already handed in during the shift counts
-            towards the same figure, so what is still outstanding is expected cash minus what
-            was handed in mid-shift.
+            {t(
+              "shift.handover.descA",
+              "What each person should have handed over, against what they actually did. Expected cash = fuel they dispensed − credit they gave out − money that came in digitally. Expenses they paid out of the drawer are shown for context only and are ",
+            )}
+            <span className="font-medium">{t("shift.handover.descNot", "not")}</span>
+            {t(
+              "shift.handover.descB",
+              " deducted — collections in FuelBook are recorded gross of expenses. Cash they already handed in during the shift counts towards the same figure, so what is still outstanding is expected cash minus what was handed in mid-shift.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {rows.length === 0 ? (
             <div className="rounded-md border border-dashed p-8 text-center">
-              <div className="font-medium">Nobody to reconcile yet</div>
+              <div className="font-medium">{t("shift.handover.emptyTitle", "Nobody to reconcile yet")}</div>
               <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
                 {data.mode === "POOLED_CASHIER"
-                  ? "Pick the shift cashier above and the whole shift's cash will be reconciled against them."
-                  : "Assign attendants to nozzles under the Employees tab, and enter the meter readings — then each attendant's expected cash appears here."}
+                  ? t(
+                      "shift.handover.emptyPooled",
+                      "Pick the shift cashier above and the whole shift's cash will be reconciled against them.",
+                    )
+                  : t(
+                      "shift.handover.emptyPerAttendant",
+                      "Assign attendants to nozzles under the Employees tab, and enter the meter readings — then each attendant's expected cash appears here.",
+                    )}
               </p>
             </div>
           ) : (
@@ -255,16 +280,16 @@ export function CashReconciliationTab({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Person</TableHead>
-                    <TableHead className="text-right">Fuel dispensed</TableHead>
-                    <TableHead className="text-right">Credit given</TableHead>
-                    <TableHead className="text-right">Digital taken</TableHead>
-                    <TableHead className="text-right">Expected cash</TableHead>
-                    <TableHead className="text-right">Handed in mid-shift</TableHead>
-                    <TableHead className="text-right">Still outstanding</TableHead>
-                    <TableHead className="text-right w-36">Cash handed over</TableHead>
-                    <TableHead className="text-right">Short / Excess</TableHead>
-                    <TableHead className="min-w-[10rem]">Notes</TableHead>
+                    <TableHead>{t("shift.handover.person", "Person")}</TableHead>
+                    <TableHead className="text-right">{t("shift.handover.fuelDispensed", "Fuel dispensed")}</TableHead>
+                    <TableHead className="text-right">{t("shift.handover.creditGiven", "Credit given")}</TableHead>
+                    <TableHead className="text-right">{t("shift.handover.digitalTaken", "Digital taken")}</TableHead>
+                    <TableHead className="text-right">{t("shift.handover.expectedCash", "Expected cash")}</TableHead>
+                    <TableHead className="text-right">{t("shift.handover.handedMidShift", "Handed in mid-shift")}</TableHead>
+                    <TableHead className="text-right">{t("shift.handover.stillOutstanding", "Still outstanding")}</TableHead>
+                    <TableHead className="text-right w-36">{t("shift.handover.cashHandedOver", "Cash handed over")}</TableHead>
+                    <TableHead className="text-right">{t("shift.handover.shortExcess", "Short / Excess")}</TableHead>
+                    <TableHead className="min-w-[10rem]">{t("common.notes", "Notes")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -277,15 +302,16 @@ export function CashReconciliationTab({
                           <div className="font-medium">{r.employeeName}</div>
                           <div className="text-xs text-muted-foreground">
                             {r.nozzleCodes.length
-                              ? `Nozzles ${r.nozzleCodes.join(", ")}`
+                              ? t("shift.handover.nozzlesList", "Nozzles {codes}", { codes: r.nozzleCodes.join(", ") })
                               : data.mode === "POOLED_CASHIER"
-                                ? "Whole shift"
-                                : "No nozzle assigned"}
+                                ? t("shift.handover.wholeShift", "Whole shift")
+                                : t("shift.handover.noNozzle", "No nozzle assigned")}
                           </div>
                           {paise(r.expensesPaidPaise) > 0 && (
                             <div className="text-xs text-muted-foreground">
-                              Paid {formatINR(r.expensesPaidPaise)} of expenses from the drawer
-                              (not deducted)
+                              {t("shift.handover.paidFromDrawer", "Paid {amount} of expenses from the drawer (not deducted)", {
+                                amount: formatINR(r.expensesPaidPaise),
+                              })}
                             </div>
                           )}
                         </TableCell>
@@ -309,20 +335,26 @@ export function CashReconciliationTab({
                             <>
                               {formatINR(r.droppedMidShiftPaise)}
                               <div className="text-[11px] font-sans text-muted-foreground">
-                                {r.drops.length} drop{r.drops.length === 1 ? "" : "s"} —{" "}
-                                {r.drops
-                                  .map((d) => dropTimeLabel(d.occurredAt, shift.reportDate))
-                                  .join(", ")}
+                                {t(
+                                  r.drops.length === 1 ? "shift.handover.dropsOne" : "shift.handover.dropsMany",
+                                  r.drops.length === 1 ? "{n} drop — {times}" : "{n} drops — {times}",
+                                  {
+                                    n: r.drops.length,
+                                    times: r.drops
+                                      .map((d) => dropTimeLabel(d.occurredAt, shift.reportDate, locale))
+                                      .join(", "),
+                                  },
+                                )}
                               </div>
                             </>
                           ) : (
-                            <span className="text-xs font-sans text-muted-foreground">Nothing</span>
+                            <span className="text-xs font-sans text-muted-foreground">{t("shift.handover.nothing", "Nothing")}</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {formatINR(r.remainingToHandOverPaise)}
                           <div className="text-[11px] font-sans text-muted-foreground">
-                            still to hand over
+                            {t("shift.handover.stillToHandOver", "still to hand over")}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -332,7 +364,7 @@ export function CashReconciliationTab({
                             min="0"
                             inputMode="decimal"
                             className="text-right"
-                            placeholder="Not recorded"
+                            placeholder={t("shift.handover.notRecorded", "Not recorded")}
                             value={draft?.amount ?? ""}
                             disabled={readOnly}
                             onChange={(e) =>
@@ -359,22 +391,22 @@ export function CashReconciliationTab({
                                 }))
                               }
                             >
-                              <Wand2 className="h-3 w-3" /> Matched exactly
+                              <Wand2 className="h-3 w-3" /> {t("shift.handover.matchedExactly", "Matched exactly")}
                             </button>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
                           {variance === null ? (
-                            <span className="text-xs text-muted-foreground">Not recorded</span>
+                            <span className="text-xs text-muted-foreground">{t("shift.handover.notRecorded", "Not recorded")}</span>
                           ) : variance === 0 ? (
-                            <Badge variant="success">Tallies</Badge>
+                            <Badge variant="success">{t("shift.handover.tallies", "Tallies")}</Badge>
                           ) : variance < 0 ? (
                             <div>
                               <div className="font-mono font-medium text-red-700">
                                 {formatINR(Math.abs(variance))}
                               </div>
                               <div className="text-[11px] text-red-700">
-                                short — recoverable from them
+                                {t("shift.handover.shortRecoverable", "short — recoverable from them")}
                               </div>
                             </div>
                           ) : (
@@ -382,13 +414,13 @@ export function CashReconciliationTab({
                               <div className="font-mono font-medium text-green-700">
                                 {formatINR(variance)}
                               </div>
-                              <div className="text-[11px] text-green-700">excess in the drawer</div>
+                              <div className="text-[11px] text-green-700">{t("shift.handover.excessDrawer", "excess in the drawer")}</div>
                             </div>
                           )}
                         </TableCell>
                         <TableCell>
                           <Input
-                            placeholder="Optional"
+                            placeholder={t("common.optional", "Optional")}
                             maxLength={500}
                             value={draft?.notes ?? ""}
                             disabled={readOnly}
@@ -410,7 +442,7 @@ export function CashReconciliationTab({
                 <TableFooter>
                   <TableRow>
                     <TableCell colSpan={4} className="font-semibold">
-                      Total
+                      {t("common.total", "Total")}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">
                       {formatINR(totalExpected)}
@@ -428,10 +460,14 @@ export function CashReconciliationTab({
                       {totalVariance === null
                         ? "—"
                         : totalVariance === 0
-                          ? "Tallies"
-                          : `${totalVariance < 0 ? "Short " : "Excess "}${formatINR(
-                              Math.abs(totalVariance),
-                            )}`}
+                          ? t("shift.handover.tallies", "Tallies")
+                          : totalVariance < 0
+                            ? t("shift.handover.totalShort", "Short {amount}", {
+                                amount: formatINR(Math.abs(totalVariance)),
+                              })
+                            : t("shift.handover.totalExcess", "Excess {amount}", {
+                                amount: formatINR(Math.abs(totalVariance)),
+                              })}
                     </TableCell>
                     <TableCell />
                   </TableRow>
@@ -443,13 +479,13 @@ export function CashReconciliationTab({
           {!readOnly && rows.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground max-w-xl">
-                Saving records the whole set at once — the amount is seeded from what they have
-                already handed in. Clear someone&apos;s amount to remove their handover record
-                entirely. Shortages become money that person owes you (account 1300) once the
-                shift is locked.
+                {t(
+                  "shift.handover.saveNote",
+                  "Saving records the whole set at once — the amount is seeded from what they have already handed in. Clear someone's amount to remove their handover record entirely. Shortages become money that person owes you (account 1300) once the shift is locked.",
+                )}
               </p>
               <Button onClick={() => save.mutate()} disabled={save.isPending}>
-                {save.isPending ? "Saving…" : "Save handovers"}
+                {save.isPending ? t("common.saving", "Saving…") : t("shift.handover.save", "Save handovers")}
               </Button>
             </div>
           )}

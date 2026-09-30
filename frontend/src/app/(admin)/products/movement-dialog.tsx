@@ -28,6 +28,7 @@ import {
 import { formatINR } from "@/lib/utils";
 import { apiError } from "@/lib/types";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import {
   KIND_LABELS,
   KINDS,
@@ -56,6 +57,7 @@ export function MovementDialog({
   product: Product | null;
   defaultKind?: MovementKind;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [kind, setKind] = useState<MovementKind>(defaultKind);
   const [direction, setDirection] = useState<Direction>("IN");
@@ -150,7 +152,7 @@ export function MovementDialog({
       ).data;
     },
     onSuccess: () => {
-      toast.success(`${KIND_LABELS[kind]} recorded`);
+      toast.success(t("products.kindRecorded", "{kind} recorded", { kind: t(`products.kind.${kind}`, KIND_LABELS[kind]) }));
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["product", product?.id] });
       qc.invalidateQueries({ queryKey: ["product-movements"] });
@@ -167,7 +169,7 @@ export function MovementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Record movement</DialogTitle>
+          <DialogTitle>{t("products.recordMovement", "Record movement")}</DialogTitle>
           <DialogDescription>
             {product.sku} · {product.name}
           </DialogDescription>
@@ -183,19 +185,19 @@ export function MovementDialog({
                 variant={kind === k ? "default" : "outline"}
                 onClick={() => changeKind(k)}
               >
-                {KIND_LABELS[k]}
+                {t(`products.kind.${k}`, KIND_LABELS[k])}
               </Button>
             ))}
           </div>
 
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">In stock</span>
+            <span className="text-muted-foreground">{t("products.inStock", "In stock")}</span>
             <Badge variant={product.stockQuantity <= 0 ? "destructive" : "secondary"}>
-              {stockless ? "not stocked" : `${product.stockQuantity} ${UNIT_LABELS[product.unit]}`}
+              {stockless ? t("products.notStocked", "not stocked") : `${product.stockQuantity} ${t(`products.unit.${product.unit}`, UNIT_LABELS[product.unit])}`}
             </Badge>
             {!stockless && (
               <>
-                <span className="text-muted-foreground">Avg cost</span>
+                <span className="text-muted-foreground">{t("products.avgCost", "Avg cost")}</span>
                 <span>{formatINR(avgCost.toString())}</span>
               </>
             )}
@@ -203,7 +205,7 @@ export function MovementDialog({
 
           {(kind === "ADJUSTMENT" || kind === "RETURN") && (
             <div>
-              <Label>Direction</Label>
+              <Label>{t("products.direction", "Direction")}</Label>
               <div className="flex gap-1 mt-1">
                 <Button
                   type="button"
@@ -211,7 +213,7 @@ export function MovementDialog({
                   variant={direction === "IN" ? "default" : "outline"}
                   onClick={() => setDirection("IN")}
                 >
-                  IN — stock increases
+                  {t("products.dirIn", "IN — stock increases")}
                 </Button>
                 <Button
                   type="button"
@@ -219,24 +221,24 @@ export function MovementDialog({
                   variant={direction === "OUT" ? "default" : "outline"}
                   onClick={() => setDirection("OUT")}
                 >
-                  OUT — stock decreases
+                  {t("products.dirOut", "OUT — stock decreases")}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {kind === "RETURN"
                   ? direction === "IN"
-                    ? "Goods coming back from a customer; they re-enter stock at average cost."
-                    : "Goods going back to the supplier."
+                    ? t("products.returnInHint", "Goods coming back from a customer; they re-enter stock at average cost.")
+                    : t("products.returnOutHint", "Goods going back to the supplier.")
                   : direction === "IN"
-                    ? "Stock found / opening stock entry. Not a taxable supply, so no GST."
-                    : "Damage, leakage or internal use, valued at average cost. No GST."}
+                    ? t("products.adjustInHint", "Stock found / opening stock entry. Not a taxable supply, so no GST.")
+                    : t("products.adjustOutHint", "Damage, leakage or internal use, valued at average cost. No GST.")}
               </p>
             </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label>Quantity ({UNIT_LABELS[product.unit]})</Label>
+              <Label>{t("products.quantityUnit", "Quantity ({unit})", { unit: t(`products.unit.${product.unit}`, UNIT_LABELS[product.unit]) })}</Label>
               <Input
                 type="number"
                 inputMode="numeric"
@@ -246,12 +248,12 @@ export function MovementDialog({
               />
               {overSell && (
                 <p className="text-xs text-destructive mt-1">
-                  Only {product.stockQuantity} in stock — the server will reject this.
+                  {t("products.overSell", "Only {n} in stock — the server will reject this.", { n: product.stockQuantity })}
                 </p>
               )}
             </div>
             <div>
-              <Label>Price per unit (₹)</Label>
+              <Label>{t("products.pricePerUnit", "Price per unit (₹)")}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -261,27 +263,27 @@ export function MovementDialog({
               />
             </div>
             <div>
-              <Label>Date</Label>
+              <Label>{t("common.date", "Date")}</Label>
               <Input
                 type="date"
                 value={occurredAt}
                 onChange={(e) => setOccurredAt(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground mt-1">Leave blank for right now.</p>
+              <p className="text-xs text-muted-foreground mt-1">{t("products.blankForNow", "Leave blank for right now.")}</p>
             </div>
             <div>
-              <Label>Reference</Label>
+              <Label>{t("products.reference", "Reference")}</Label>
               <Input
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                placeholder="Invoice / bill no"
+                placeholder={t("products.referencePlaceholder", "Invoice / bill no")}
               />
             </div>
           </div>
 
           {taxed && (
             <div>
-              <Label>Price basis</Label>
+              <Label>{t("products.priceBasis", "Price basis")}</Label>
               <div className="flex gap-1 mt-1">
                 <Button
                   type="button"
@@ -289,7 +291,7 @@ export function MovementDialog({
                   variant={inclusive ? "default" : "outline"}
                   onClick={() => setInclusive(true)}
                 >
-                  GST-inclusive (MRP)
+                  {t("products.gstInclusive", "GST-inclusive (MRP)")}
                 </Button>
                 <Button
                   type="button"
@@ -297,7 +299,7 @@ export function MovementDialog({
                   variant={!inclusive ? "default" : "outline"}
                   onClick={() => setInclusive(false)}
                 >
-                  GST-exclusive (+ tax)
+                  {t("products.gstExclusive", "GST-exclusive (+ tax)")}
                 </Button>
               </div>
             </div>
@@ -305,13 +307,13 @@ export function MovementDialog({
 
           {kind === "SALE" && (
             <div>
-              <Label>Credit customer (optional)</Label>
+              <Label>{t("products.creditCustomerOptional", "Credit customer (optional)")}</Label>
               <Select value={customerId} onValueChange={setCustomerId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Cash sale" />
+                  <SelectValue placeholder={t("products.cashSale", "Cash sale")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>Cash sale</SelectItem>
+                  <SelectItem value={NONE}>{t("products.cashSale", "Cash sale")}</SelectItem>
                   {customers.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
@@ -321,42 +323,41 @@ export function MovementDialog({
                 </SelectContent>
               </Select>
               <p className="text-xs text-amber-700 mt-1">
-                Noted against the customer for reference only. A lube sale on credit is
-                <strong> not</strong> added to their fuel credit balance — collect it separately.
+                {t("products.creditNote", "Noted against the customer for reference only. A lube sale on credit is NOT added to their fuel credit balance — collect it separately.")}
               </p>
             </div>
           )}
 
           <div>
-            <Label>Notes</Label>
+            <Label>{t("common.notes", "Notes")}</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
             <div className="font-medium">
-              {taxed ? `GST breakdown @ ${product.gstRateBp / 100}%` : "Value"}
+              {taxed ? t("products.gstBreakdownAt", "GST breakdown @ {pct}%", { pct: product.gstRateBp / 100 }) : t("products.value", "Value")}
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Taxable value</span>
+              <span className="text-muted-foreground">{t("products.taxableValue", "Taxable value")}</span>
               <span>{formatINR(split.taxable.toString())}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">GST</span>
+              <span className="text-muted-foreground">{t("products.gst", "GST")}</span>
               <span>{formatINR(split.gst.toString())}</span>
             </div>
             <div className="flex justify-between font-semibold">
-              <span>{kind === "SALE" ? "Customer pays" : "Total"}</span>
+              <span>{kind === "SALE" ? t("products.customerPays", "Customer pays") : t("common.total", "Total")}</span>
               <span>{formatINR(split.gross.toString())}</span>
             </div>
             {kind === "SALE" && !stockless && (
               <>
                 <Separator className="my-1" />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Cost of goods (avg cost)</span>
+                  <span className="text-muted-foreground">{t("products.cogsAvg", "Cost of goods (avg cost)")}</span>
                   <span>{formatINR(cogs.toString())}</span>
                 </div>
                 <div className="flex justify-between font-semibold">
-                  <span>Gross margin</span>
+                  <span>{t("products.grossMargin", "Gross margin")}</span>
                   <span className={margin < 0n ? "text-destructive" : "text-green-700"}>
                     {formatINR(margin.toString())} ({marginPct.toFixed(1)}%)
                   </span>
@@ -367,10 +368,10 @@ export function MovementDialog({
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button disabled={quantity <= 0 || save.isPending} onClick={() => save.mutate()}>
-              {save.isPending ? "Saving…" : `Record ${KIND_LABELS[kind].toLowerCase()}`}
+              {save.isPending ? t("common.saving", "Saving…") : t("products.recordKind", "Record {kind}", { kind: t(`products.kindLower.${kind}`, KIND_LABELS[kind].toLowerCase()) })}
             </Button>
           </div>
         </div>

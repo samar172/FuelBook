@@ -15,6 +15,8 @@ import { apiError, toDateInput, type Employee } from "@/lib/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Pencil, UserCheck, UserX } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 
 type Assignment = {
   id: string;
@@ -30,6 +32,10 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
   const { id } = params;
   const qc = useQueryClient();
   const canManage = can("canManageEmployees");
+  const { t } = useT();
+  const locale = useDateLocale();
+  const fmtDate = (iso: string | null | undefined) =>
+    iso ? format(new Date(iso), "d MMM yyyy", { locale }) : null;
   const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading } = useQuery<EmployeeLedger>({
@@ -46,13 +52,17 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
     mutationFn: async (activate: boolean) =>
       (await api.post(`/api/employees/${id}/${activate ? "reactivate" : "deactivate"}`)).data,
     onSuccess: (_res, activate) => {
-      toast.success(activate ? "Employee reactivated" : "Employee deactivated");
+      toast.success(
+        activate
+          ? t("employees.reactivated", "Employee reactivated")
+          : t("employees.deactivated", "Employee deactivated")
+      );
       refresh();
     },
     onError: (e) => toast.error(apiError(e)),
   });
 
-  if (isLoading) return <div className="text-muted-foreground">Loading…</div>;
+  if (isLoading) return <div className="text-muted-foreground">{t("common.loading", "Loading…")}</div>;
   if (!data) return null;
   const { employee, assignments } = data;
 
@@ -68,14 +78,14 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm sm:text-base">
             {employee.code && <span className="font-mono">{employee.code}</span>}
             {employee.designation && <span>{employee.designation}</span>}
-            <span>Phone: {employee.phone || "-"}</span>
-            <span>{employee.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}</span>
+            <span>{t("employees.phoneLine", "Phone: {phone}", { phone: employee.phone || "-" })}</span>
+            <span>{employee.isActive ? <Badge variant="success">{t("common.active", "Active")}</Badge> : <Badge variant="secondary">{t("common.inactive", "Inactive")}</Badge>}</span>
           </div>
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil className="h-4 w-4 mr-1" /> Edit details
+              <Pencil className="h-4 w-4 mr-1" /> {t("employees.editDetails", "Edit details")}
             </Button>
             <Button
               variant="outline"
@@ -83,9 +93,9 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
               disabled={toggleActive.isPending}
             >
               {employee.isActive ? (
-                <><UserX className="h-4 w-4 mr-1" /> Deactivate</>
+                <><UserX className="h-4 w-4 mr-1" /> {t("employees.deactivate", "Deactivate")}</>
               ) : (
-                <><UserCheck className="h-4 w-4 mr-1" /> Reactivate</>
+                <><UserCheck className="h-4 w-4 mr-1" /> {t("employees.reactivate", "Reactivate")}</>
               )}
             </Button>
           </div>
@@ -93,59 +103,59 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Shifts Worked</div><div className="text-xl font-semibold">{shiftsWorked}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Litres Dispensed</div><div className="text-xl font-semibold">{formatLitres(totalLitresMl)} L</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Value</div><div className="text-xl font-semibold">{formatINR(totalValuePaise)}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">{t("employees.shiftsWorked", "Shifts Worked")}</div><div className="text-xl font-semibold">{shiftsWorked}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">{t("employees.totalLitres", "Total Litres Dispensed")}</div><div className="text-xl font-semibold">{formatLitres(totalLitresMl)} L</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">{t("employees.totalValue", "Total Value")}</div><div className="text-xl font-semibold">{formatINR(totalValuePaise)}</div></CardContent></Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Employment details</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("employees.employment", "Employment details")}</CardTitle></CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-            <Field label="Designation" value={employee.designation} />
-            <Field label="Joining date" value={fmtDate(employee.joiningDate)} />
-            <Field label="Exit date" value={fmtDate(employee.exitDate)} />
-            <Field label="Date of birth" value={fmtDate(employee.dateOfBirth)} />
-            <Field label="Phone" value={employee.phone} />
-            <Field label="Alternate phone" value={employee.altPhone} />
+            <Field label={t("employees.designation", "Designation")} value={employee.designation} />
+            <Field label={t("employees.joiningDate", "Joining date")} value={fmtDate(employee.joiningDate)} />
+            <Field label={t("employees.exitDate", "Exit date")} value={fmtDate(employee.exitDate)} />
+            <Field label={t("employees.dob", "Date of birth")} value={fmtDate(employee.dateOfBirth)} />
+            <Field label={t("common.phone", "Phone")} value={employee.phone} />
+            <Field label={t("employees.altPhone", "Alternate phone")} value={employee.altPhone} />
             <div className="sm:col-span-2">
-              <dt className="text-xs text-muted-foreground">Address</dt>
+              <dt className="text-xs text-muted-foreground">{t("employees.address", "Address")}</dt>
               <dd className="font-medium break-words">
                 {[employee.addressLine, employee.city, employee.state, employee.pincode].filter(Boolean).join(", ") || "-"}
               </dd>
             </div>
             <Field
-              label="Emergency contact"
+              label={t("employees.emergencyContact", "Emergency contact")}
               value={
                 [employee.emergencyContactName, employee.emergencyContactPhone].filter(Boolean).join(" · ") || null
               }
             />
-            <Field label="Notes" value={employee.notes} />
+            <Field label={t("common.notes", "Notes")} value={employee.notes} />
           </dl>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Shift assignments</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("employees.assignments", "Shift assignments")}</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Date</TableHead><TableHead>Shift</TableHead><TableHead>Nozzle</TableHead>
-              <TableHead>Fuel</TableHead><TableHead>Litres</TableHead><TableHead>Value</TableHead>
+              <TableHead>{t("common.date", "Date")}</TableHead><TableHead>{t("employees.col.shift", "Shift")}</TableHead><TableHead>{t("employees.col.nozzle", "Nozzle")}</TableHead>
+              <TableHead>{t("employees.col.fuel", "Fuel")}</TableHead><TableHead>{t("employees.col.litres", "Litres")}</TableHead><TableHead>{t("employees.col.value", "Value")}</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {assignments.map((a) => (
                 <TableRow key={a.id}>
-                  <TableCell>{format(new Date(a.shiftReport.reportDate), "dd MMM yyyy")}</TableCell>
-                  <TableCell>{a.shiftReport.shiftType}</TableCell>
+                  <TableCell>{format(new Date(a.shiftReport.reportDate), "d MMM yyyy", { locale })}</TableCell>
+                  <TableCell>{t(`employees.shiftType.${a.shiftReport.shiftType}`, a.shiftReport.shiftType)}</TableCell>
                   <TableCell className="font-mono">{a.nozzle.code}</TableCell>
-                  <TableCell>{FUEL_LABELS[a.nozzle.fuelType] || a.nozzle.fuelType}</TableCell>
+                  <TableCell>{t(`shift.fuel.${a.nozzle.fuelType}`, FUEL_LABELS[a.nozzle.fuelType] || a.nozzle.fuelType)}</TableCell>
                   <TableCell>{formatLitres(a.litresMl)}</TableCell>
                   <TableCell>{formatINR(a.valuePaise)}</TableCell>
                 </TableRow>
               ))}
               {assignments.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No shift assignments yet</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">{t("employees.noAssignments", "No shift assignments yet")}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -154,7 +164,7 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit employee</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("employees.editTitle", "Edit employee")}</DialogTitle></DialogHeader>
           <EmployeeForm
             employee={employee}
             onSuccess={() => {
@@ -168,7 +178,6 @@ export default function EmployeeLedgerPage({ params }: { params: { id: string } 
   );
 }
 
-const fmtDate = (iso: string | null | undefined) => (iso ? format(new Date(iso), "dd MMM yyyy") : null);
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -180,6 +189,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 }
 
 function EmployeeForm({ employee, onSuccess }: { employee: Employee; onSuccess: () => void }) {
+  const { t } = useT();
   const [name, setName] = useState(employee.name);
   const [code, setCode] = useState(employee.code || "");
   const [designation, setDesignation] = useState(employee.designation || "");
@@ -219,44 +229,44 @@ function EmployeeForm({ employee, onSuccess }: { employee: Employee; onSuccess: 
         notes: orNull(notes),
       })).data,
     onSuccess: () => {
-      toast.success("Employee updated");
+      toast.success(t("employees.updated", "Employee updated"));
       onSuccess();
     },
-    onError: (e) => toast.error(apiError(e, "Could not save the employee")),
+    onError: (e) => toast.error(apiError(e, t("employees.saveFailed", "Could not save the employee"))),
   });
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="sm:col-span-2"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div><Label>Staff code</Label><Input value={code} onChange={(e) => setCode(e.target.value)} /></div>
-        <div><Label>Designation</Label><Input value={designation} onChange={(e) => setDesignation(e.target.value)} /></div>
-        <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-        <div><Label>Alternate phone</Label><Input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} /></div>
+        <div className="sm:col-span-2"><Label>{t("common.name", "Name")}</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <div><Label>{t("employees.staffCode", "Staff code")}</Label><Input value={code} onChange={(e) => setCode(e.target.value)} /></div>
+        <div><Label>{t("employees.designation", "Designation")}</Label><Input value={designation} onChange={(e) => setDesignation(e.target.value)} /></div>
+        <div><Label>{t("common.phone", "Phone")}</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+        <div><Label>{t("employees.altPhone", "Alternate phone")}</Label><Input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} /></div>
       </div>
 
       <Separator />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div><Label>Joining date</Label><Input type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} /></div>
-        <div><Label>Exit date</Label><Input type="date" value={exitDate} onChange={(e) => setExitDate(e.target.value)} /></div>
-        <div><Label>Date of birth</Label><Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>
+        <div><Label>{t("employees.joiningDate", "Joining date")}</Label><Input type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} /></div>
+        <div><Label>{t("employees.exitDate", "Exit date")}</Label><Input type="date" value={exitDate} onChange={(e) => setExitDate(e.target.value)} /></div>
+        <div><Label>{t("employees.dob", "Date of birth")}</Label><Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>
       </div>
 
       <Separator />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="sm:col-span-2"><Label>Address</Label><Input value={addressLine} onChange={(e) => setAddressLine(e.target.value)} /></div>
-        <div><Label>City</Label><Input value={city} onChange={(e) => setCity(e.target.value)} /></div>
-        <div><Label>State</Label><Input value={state} onChange={(e) => setState(e.target.value)} /></div>
-        <div><Label>Pincode</Label><Input value={pincode} onChange={(e) => setPincode(e.target.value)} maxLength={6} /></div>
-        <div><Label>Emergency contact</Label><Input value={ecName} onChange={(e) => setEcName(e.target.value)} /></div>
-        <div><Label>Emergency phone</Label><Input value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></div>
-        <div className="sm:col-span-2"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div className="sm:col-span-2"><Label>{t("employees.address", "Address")}</Label><Input value={addressLine} onChange={(e) => setAddressLine(e.target.value)} /></div>
+        <div><Label>{t("employees.city", "City")}</Label><Input value={city} onChange={(e) => setCity(e.target.value)} /></div>
+        <div><Label>{t("employees.state", "State")}</Label><Input value={state} onChange={(e) => setState(e.target.value)} /></div>
+        <div><Label>{t("employees.pincode", "Pincode")}</Label><Input value={pincode} onChange={(e) => setPincode(e.target.value)} maxLength={6} /></div>
+        <div><Label>{t("employees.emergencyContact", "Emergency contact")}</Label><Input value={ecName} onChange={(e) => setEcName(e.target.value)} /></div>
+        <div><Label>{t("employees.emergencyPhone", "Emergency phone")}</Label><Input value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></div>
+        <div className="sm:col-span-2"><Label>{t("common.notes", "Notes")}</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
       </div>
 
       <Button onClick={() => save.mutate()} disabled={!name.trim() || save.isPending} className="w-full">
-        {save.isPending ? "Saving…" : "Save changes"}
+        {save.isPending ? t("common.saving", "Saving…") : t("employees.saveChanges", "Save changes")}
       </Button>
     </div>
   );

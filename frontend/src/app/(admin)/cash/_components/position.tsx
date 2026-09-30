@@ -10,11 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { formatINR } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { MovementDialog, type MovementDefaults } from "./movements";
 import {
   EmptyState,
-  LOCATION_LABELS,
-  LOCATION_SHORT,
+  locLabel,
+  locShort,
   Loading,
   Money,
   StatTile,
@@ -65,6 +66,7 @@ type Position = {
 };
 
 export function PositionSection() {
+  const { t } = useT();
   const qc = useQueryClient();
   const [asOf, setAsOf] = useState(todayStr());
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -92,14 +94,17 @@ export function PositionSection() {
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <CardTitle>Where is the cash right now?</CardTitle>
+              <CardTitle>{t("cash.position.title", "Where is the cash right now?")}</CardTitle>
               <CardDescription>
-                Every rupee the pump has taken in, traced to the person or place holding it.
+                {t(
+                  "cash.position.desc",
+                  "Every rupee the pump has taken in, traced to the person or place holding it.",
+                )}
               </CardDescription>
             </div>
             <div className="flex items-end gap-2">
               <div>
-                <Label className="text-xs">As of</Label>
+                <Label className="text-xs">{t("cash.position.asOf", "As of")}</Label>
                 <Input
                   type="date"
                   value={asOf}
@@ -111,14 +116,14 @@ export function PositionSection() {
               <Button
                 variant="outline"
                 size="icon"
-                aria-label="Refresh"
+                aria-label={t("common.refresh", "Refresh")}
                 onClick={() => qc.invalidateQueries({ queryKey: ["cash-position"] })}
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>
               {editable ? (
                 <Button onClick={() => openMovement()}>
-                  <Plus className="h-4 w-4 mr-1" /> Record movement
+                  <Plus className="h-4 w-4 mr-1" /> {t("cash.movement.record", "Record movement")}
                 </Button>
               ) : null}
             </div>
@@ -126,56 +131,57 @@ export function PositionSection() {
         </CardHeader>
         <CardContent>
           {positionQ.isLoading ? (
-            <Loading label="Working out the cash position…" />
+            <Loading label={t("cash.position.loading", "Working out the cash position…")} />
           ) : positionQ.error ? (
             <EmptyState
-              title="Could not work out the cash position"
+              title={t("cash.position.loadFailed", "Could not work out the cash position")}
               hint={apiError(positionQ.error)}
             />
           ) : !p ? (
-            <EmptyState title="Nothing to show yet" />
+            <EmptyState title={t("cash.position.nothing", "Nothing to show yet")} />
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatTile
-                  label="Cash in hands"
+                  label={t("cash.position.inHands", "Cash in hands")}
                   value={formatINR(p.cashOnHandPaise)}
-                  hint="Attendants, cashier, safe and owner"
+                  hint={t("cash.position.inHandsHint", "Attendants, cashier, safe and owner")}
                   tone={bigOf(p.cashOnHandPaise) < 0n ? "danger" : "default"}
                 />
                 <StatTile
-                  label="Still with attendants"
+                  label={t("cash.position.withAttendants", "Still with attendants")}
                   value={formatINR(p.withAttendantsPaise)}
-                  hint="Not yet handed to the cashier"
+                  hint={t("cash.position.withAttendantsHint", "Not yet handed to the cashier")}
                   tone={bigOf(p.withAttendantsPaise) > 0n ? "warn" : "default"}
                 />
                 <StatTile
-                  label="Banked"
+                  label={t("cash.position.banked", "Banked")}
                   value={formatINR(p.inBankPaise)}
-                  hint="Deposited, as recorded here"
+                  hint={t("cash.position.bankedHint", "Deposited, as recorded here")}
                 />
                 <StatTile
-                  label="Paid out to vendors"
+                  label={t("cash.position.toVendors", "Paid out to vendors")}
                   value={formatINR(p.paidToVendorsPaise)}
-                  hint="Cash that left for expenses"
+                  hint={t("cash.position.toVendorsHint", "Cash that left for expenses")}
                 />
               </div>
 
               {p.hasNegative ? (
                 <div className="rounded-md border border-destructive bg-destructive/5 p-3">
                   <p className="text-sm font-semibold text-destructive flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" /> The records do not add up
+                    <AlertTriangle className="h-4 w-4" /> {t("cash.position.negTitle", "The records do not add up")}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    A negative holding is impossible in real life: more cash was recorded leaving
-                    than ever arrived. Something was recorded twice, or something that happened was
-                    never recorded.
+                    {t(
+                      "cash.position.negBody",
+                      "A negative holding is impossible in real life: more cash was recorded leaving than ever arrived. Something was recorded twice, or something that happened was never recorded.",
+                    )}
                   </p>
                   <ul className="mt-2 space-y-1">
                     {p.negatives.map((n, i) => (
                       <li key={i} className="text-sm flex justify-between gap-3">
                         <span>
-                          {LOCATION_SHORT[n.location] ?? n.location}
+                          {locShort(t, n.location)}
                           {n.employeeName ? ` · ${n.employeeName}` : ""}
                         </span>
                         <Money paise={n.balancePaise} emphasise />
@@ -192,11 +198,14 @@ export function PositionSection() {
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="font-semibold">
-                          {LOCATION_LABELS[loc.location] ?? loc.location}
+                          {locLabel(t, loc.location)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          in {formatINR(loc.inPaise)} · out {formatINR(loc.outPaise)}
-                          {loc.isTerminal ? " · not cash in hand" : ""}
+                          {t("cash.position.inOut", "in {in} · out {out}", {
+                            in: formatINR(loc.inPaise),
+                            out: formatINR(loc.outPaise),
+                          })}
+                          {loc.isTerminal ? t("cash.position.notInHand", " · not cash in hand") : ""}
                         </p>
                       </div>
                       <span className="text-lg font-bold">
@@ -205,7 +214,7 @@ export function PositionSection() {
                     </div>
 
                     {loc.holders.length === 0 ? (
-                      <p className="text-xs text-muted-foreground mt-2">Nothing here.</p>
+                      <p className="text-xs text-muted-foreground mt-2">{t("cash.position.nothingHere", "Nothing here.")}</p>
                     ) : (
                       <ul className="mt-2 divide-y">
                         {loc.holders.map((h) => (
@@ -214,10 +223,10 @@ export function PositionSection() {
                             className="py-1.5 flex items-center justify-between gap-2 text-sm"
                           >
                             <span className="min-w-0 truncate">
-                              {h.employeeName ?? "Unattributed"}
+                              {h.employeeName ?? t("cash.unattributed", "Unattributed")}
                               {h.employeeActive === false ? (
                                 <Badge variant="secondary" className="ml-1">
-                                  left
+                                  {t("cash.position.leftBadge", "left")}
                                 </Badge>
                               ) : null}
                             </span>
@@ -234,7 +243,7 @@ export function PositionSection() {
                                     })
                                   }
                                 >
-                                  Move
+                                  {t("cash.position.move", "Move")}
                                 </Button>
                               ) : null}
                             </span>
@@ -248,10 +257,10 @@ export function PositionSection() {
 
               {/* Per person, across locations. */}
               <div className="rounded-md border p-3">
-                <p className="font-semibold">Who is holding cash</p>
+                <p className="font-semibold">{t("cash.position.whoHolding", "Who is holding cash")}</p>
                 {p.custodians.length === 0 ? (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Nobody is holding cash against their name yet.
+                    {t("cash.position.nobodyHolding", "Nobody is holding cash against their name yet.")}
                   </p>
                 ) : (
                   <ul className="mt-2 divide-y">
@@ -265,7 +274,7 @@ export function PositionSection() {
                             {c.byLocation
                               .map(
                                 (l) =>
-                                  `${LOCATION_SHORT[l.location] ?? l.location} ${formatINR(l.balancePaise)}`,
+                                  `${locShort(t, l.location)} ${formatINR(l.balancePaise)}`,
                               )
                               .join(" · ")}
                           </p>
@@ -286,7 +295,9 @@ export function PositionSection() {
                   onClick={() => setShowRules((v) => !v)}
                 >
                   <Info className="h-3.5 w-3.5" />
-                  {showRules ? "Hide" : "How is this worked out?"}
+                  {showRules
+                    ? t("cash.position.hideHow", "Hide")
+                    : t("cash.position.showHow", "How is this worked out?")}
                 </button>
                 {showRules ? (
                   <ul className="mt-2 list-disc pl-5 space-y-1 text-xs text-muted-foreground">

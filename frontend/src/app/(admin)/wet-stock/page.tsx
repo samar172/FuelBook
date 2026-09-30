@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useT } from "@/lib/i18n";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DipLogTab } from "./DipLogTab";
 import { MeasureTestsTab } from "./MeasureTestsTab";
@@ -13,23 +14,27 @@ export default function WetStockPage() {
   // The dip log and the nozzle tests belong to the same shift, so the selection
   // is held here and shared between those two tabs.
   const [shiftId, setShiftId] = useState("");
+  const { t } = useT();
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Wet stock</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("wetstock.title", "Wet stock")}</h1>
         <p className="text-sm text-muted-foreground">
-          Dips, density, Weights &amp; Measures tests, wet-stock variance and tanker decantation.
+          {t(
+            "wetstock.subtitle",
+            "Dips, density, Weights & Measures tests, wet-stock variance and tanker decantation."
+          )}
         </p>
       </div>
 
       <Tabs defaultValue="dips">
         <TabsList className="flex w-full flex-wrap justify-start gap-1 sm:w-auto">
-          <TabsTrigger value="dips">Dip log</TabsTrigger>
-          <TabsTrigger value="tests">W&amp;M tests</TabsTrigger>
-          <TabsTrigger value="variance">Variance</TabsTrigger>
-          <TabsTrigger value="decant">Decantation</TabsTrigger>
-          <TabsTrigger value="charts">Dip charts</TabsTrigger>
+          <TabsTrigger value="dips">{t("wetstock.tab.dips", "Dip log")}</TabsTrigger>
+          <TabsTrigger value="tests">{t("wetstock.tab.tests", "W&M tests")}</TabsTrigger>
+          <TabsTrigger value="variance">{t("wetstock.tab.variance", "Variance")}</TabsTrigger>
+          <TabsTrigger value="decant">{t("wetstock.tab.decant", "Decantation")}</TabsTrigger>
+          <TabsTrigger value="charts">{t("wetstock.tab.charts", "Dip charts")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dips">

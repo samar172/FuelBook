@@ -12,18 +12,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatINR, formatLitres, FUEL_LABELS, litresToMl, paiseToRupees, rupeesToPaise } from "@/lib/utils";
 import { apiError, primaryVehicle, vehicleSummary, type CreditCustomer } from "@/lib/types";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
 
 const OTHER_VEHICLE = "__other__";
 
 export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: boolean }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
 
   const del = useMutation({
     mutationFn: async (saleId: string) => api.delete(`/api/shifts/${shift.id}/credit-sales/${saleId}`),
     onSuccess: () => {
-      toast.success("Removed");
+      toast.success(t("shift.credit.removed", "Removed"));
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
   });
@@ -36,21 +38,25 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
     <Card>
       <CardHeader className="flex-row justify-between items-start">
         <div>
-          <CardTitle>Credit Sales</CardTitle>
+          <CardTitle>{t("shift.credit.title", "Credit Sales")}</CardTitle>
           <CardDescription>
-            Sales where the customer doesn't pay in full. Example: Vijay buys ₹10,000 of diesel,
-            pays ₹5,000 cash today, owes ₹5,000. Both halves are tracked here.
+            {t(
+              "shift.credit.desc",
+              "Sales where the customer doesn't pay in full. Example: Vijay buys ₹10,000 of diesel, pays ₹5,000 cash today, owes ₹5,000. Both halves are tracked here.",
+            )}
           </CardDescription>
         </div>
         {!disabled && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-1" /> Add credit sale</Button>
+              <Button><Plus className="h-4 w-4 mr-1" /> {t("shift.credit.add", "Add credit sale")}</Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Add Credit Sale</DialogTitle>
-                <DialogDescription>Split-payment supported (cash now + credit balance).</DialogDescription>
+                <DialogTitle>{t("shift.credit.dialogTitle", "Add Credit Sale")}</DialogTitle>
+                <DialogDescription>
+                  {t("shift.credit.dialogDesc", "Split-payment supported (cash now + credit balance).")}
+                </DialogDescription>
               </DialogHeader>
               <CreditSaleForm
                 shiftId={shift.id}
@@ -67,13 +73,13 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Vehicle</TableHead>
-              <TableHead>Fuel</TableHead>
-              <TableHead>Qty (L)</TableHead>
-              <TableHead>Total (₹)</TableHead>
-              <TableHead>Paid Now (₹)</TableHead>
-              <TableHead>Credit (₹)</TableHead>
+              <TableHead>{t("shift.credit.customer", "Customer")}</TableHead>
+              <TableHead>{t("shift.credit.vehicle", "Vehicle")}</TableHead>
+              <TableHead>{t("shift.credit.fuel", "Fuel")}</TableHead>
+              <TableHead>{t("shift.credit.qty", "Qty (L)")}</TableHead>
+              <TableHead>{t("shift.credit.total", "Total (₹)")}</TableHead>
+              <TableHead>{t("shift.credit.paidNow", "Paid Now (₹)")}</TableHead>
+              <TableHead>{t("shift.credit.creditCol", "Credit (₹)")}</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
@@ -82,7 +88,7 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{s.customer?.name}</TableCell>
                 <TableCell className="font-mono uppercase">{s.vehicle?.vehicleNo || s.vehicleNo || "-"}</TableCell>
-                <TableCell>{FUEL_LABELS[s.fuelType] || s.fuelType}</TableCell>
+                <TableCell>{t(`shift.fuel.${s.fuelType}`, FUEL_LABELS[s.fuelType] || s.fuelType)}</TableCell>
                 <TableCell>{formatLitres(s.quantityMl)}</TableCell>
                 <TableCell>{formatINR(s.totalAmountPaise)}</TableCell>
                 <TableCell className="text-green-700">{formatINR(s.amountPaidPaise)}</TableCell>
@@ -99,7 +105,7 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
             {(shift.creditSales || []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
-                  No credit sales recorded yet.
+                  {t("shift.credit.empty", "No credit sales recorded yet.")}
                 </TableCell>
               </TableRow>
             )}
@@ -107,15 +113,15 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
         </Table>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Total credit-sale value</div>
+            <div className="text-xs text-muted-foreground">{t("shift.credit.totalValue", "Total credit-sale value")}</div>
             <div className="font-semibold">{formatINR(totalAmount)}</div>
           </div>
           <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Cash collected at sale</div>
+            <div className="text-xs text-muted-foreground">{t("shift.credit.cashAtSale", "Cash collected at sale")}</div>
             <div className="font-semibold text-green-700">{formatINR(totalPaid)}</div>
           </div>
           <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Added to outstanding</div>
+            <div className="text-xs text-muted-foreground">{t("shift.credit.addedOutstanding", "Added to outstanding")}</div>
             <div className="font-semibold text-amber-700">{formatINR(totalCredit)}</div>
           </div>
         </div>
@@ -125,6 +131,7 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
 }
 
 function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: () => void }) {
+  const { t } = useT();
   const { data: customers = [] } = useQuery<CreditCustomer[]>({
     queryKey: ["credit-customers"],
     queryFn: async () => (await api.get("/api/credit/customers")).data,
@@ -186,7 +193,7 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
       })).data;
     },
     onSuccess: () => {
-      toast.success("Credit sale recorded");
+      toast.success(t("shift.credit.recorded", "Credit sale recorded"));
       onSuccess();
     },
     onError: (e) => toast.error(apiError(e)),
@@ -195,15 +202,15 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
   return (
     <div className="space-y-3">
       <div>
-        <Label>Customer</Label>
+        <Label>{t("shift.credit.customer", "Customer")}</Label>
         <Select value={customerId} onValueChange={pickCustomer}>
-          <SelectTrigger><SelectValue placeholder="Pick customer" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder={t("shift.credit.pickCustomer", "Pick customer")} /></SelectTrigger>
           <SelectContent>
             {customers.filter((c) => c.isActive).map((c) => {
               const summary = vehicleSummary(c.vehicles);
               return (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.name} {summary ? `(${summary})` : ""} — owes {formatINR(c.currentBalancePaise)}
+                  {c.name} {summary ? `(${summary})` : ""} {t("shift.credit.owesLine", "— owes {amount}", { amount: formatINR(c.currentBalancePaise) })}
                 </SelectItem>
               );
             })}
@@ -212,38 +219,40 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Fuel</Label>
+          <Label>{t("shift.credit.fuel", "Fuel")}</Label>
           <Select value={fuelType} onValueChange={setFuelAndRate}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="HSD">Diesel</SelectItem>
-              <SelectItem value="MS">Petrol</SelectItem>
-              <SelectItem value="MS_POWER">MS Power</SelectItem>
-              <SelectItem value="CNG">CNG</SelectItem>
+              <SelectItem value="HSD">{t("shift.fuel.HSD", "Diesel")}</SelectItem>
+              <SelectItem value="MS">{t("shift.fuel.MS", "Petrol")}</SelectItem>
+              <SelectItem value="MS_POWER">{t("shift.fuel.MS_POWER", "MS Power")}</SelectItem>
+              <SelectItem value="CNG">{t("shift.fuel.CNG", "CNG")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>Vehicle</Label>
+          <Label>{t("shift.credit.vehicle", "Vehicle")}</Label>
           <Select value={vehicleId} onValueChange={setVehicleId} disabled={!customerId}>
             <SelectTrigger>
-              <SelectValue placeholder={customerId ? "Pick vehicle" : "Pick a customer first"} />
+              <SelectValue placeholder={customerId
+                    ? t("shift.credit.pickVehicle", "Pick vehicle")
+                    : t("shift.credit.pickCustomerFirst", "Pick a customer first")} />
             </SelectTrigger>
             <SelectContent>
               {customerVehicles.map((v) => (
                 <SelectItem key={v.id} value={v.id}>
                   {v.vehicleNo}
-                  {v.isPrimary ? " (primary)" : ""}
+                  {v.isPrimary ? t("shift.credit.primary", " (primary)") : ""}
                 </SelectItem>
               ))}
-              <SelectItem value={OTHER_VEHICLE}>Other / not registered</SelectItem>
+              <SelectItem value={OTHER_VEHICLE}>{t("shift.credit.otherVehicle", "Other / not registered")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
       {vehicleId === OTHER_VEHICLE && (
         <div>
-          <Label>Vehicle no</Label>
+          <Label>{t("shift.credit.vehicleNo", "Vehicle no")}</Label>
           <Input
             value={vehicleNo}
             onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
@@ -251,33 +260,33 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
             placeholder="MH12AB1234"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Recorded on this sale only. Register it on the customer to reuse it.
+            {t("shift.credit.vehicleNote", "Recorded on this sale only. Register it on the customer to reuse it.")}
           </p>
         </div>
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
-          <Label>Quantity (L)</Label>
+          <Label>{t("shift.credit.quantity", "Quantity (L)")}</Label>
           <Input type="number" step="0.001" value={litres} onChange={(e) => setLitres(e.target.value)} />
         </div>
         <div>
-          <Label>Rate / L (₹)</Label>
+          <Label>{t("shift.credit.ratePerL", "Rate / L (₹)")}</Label>
           <Input type="number" step="0.01" value={rateRupees} onChange={(e) => setRateRupees(e.target.value)} />
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <Label>Total (₹)</Label>
+          <Label>{t("shift.credit.total", "Total (₹)")}</Label>
           <Input value={total} readOnly className="bg-slate-50" />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Paid now (₹)</Label>
+          <Label>{t("shift.credit.paidNowField", "Paid now (₹)")}</Label>
           <Input type="number" step="0.01" value={paidRupees} onChange={(e) => setPaidRupees(e.target.value)} />
         </div>
         <div>
-          <Label>Paid via</Label>
+          <Label>{t("shift.credit.paidVia", "Paid via")}</Label>
           <Select value={paidViaChannelId} onValueChange={setPaidViaChannelId}>
-            <SelectTrigger><SelectValue placeholder="Cash / UPI / Card" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t("shift.credit.paidViaPlaceholder", "Cash / UPI / Card")} /></SelectTrigger>
             <SelectContent>
               {channels.map((c: any) => (
                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -287,14 +296,14 @@ function CreditSaleForm({ shiftId, onSuccess }: { shiftId: string; onSuccess: ()
         </div>
       </div>
       <div className="rounded-md border p-3 bg-amber-50 text-sm">
-        Credit balance added: <span className="font-semibold">₹{credit}</span>
+        {t("shift.credit.balanceAdded", "Credit balance added:")} <span className="font-semibold">₹{credit}</span>
       </div>
       <Button
         onClick={() => submit.mutate()}
         disabled={submit.isPending || !customerId || !litres || !rateRupees}
         className="w-full"
       >
-        {submit.isPending ? "Saving…" : "Record Credit Sale"}
+        {submit.isPending ? t("common.saving", "Saving…") : t("shift.credit.record", "Record Credit Sale")}
       </Button>
     </div>
   );

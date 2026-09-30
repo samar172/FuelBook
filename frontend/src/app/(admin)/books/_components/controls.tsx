@@ -5,9 +5,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { formatINR } from "@/lib/utils";
+import { formatINR, FUEL_LABELS } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { Range, daysAgoStr, todayStr } from "@/lib/books";
+import {
+  ACCOUNT_PLAIN,
+  ACCOUNT_TYPE_LABELS,
+  AccountType,
+  Range,
+  SOURCE_LABELS,
+  daysAgoStr,
+  todayStr,
+} from "@/lib/books";
+
+type TFn = ReturnType<typeof useT>["t"];
+
+// Translated display strings for the fixed chart of accounts. The constants in
+// lib/books.ts stay as the English fallback; account names come from the API
+// but are fixed system names, so they are looked up by code.
+export const acctName = (t: TFn, code: string, fallback: string) =>
+  t(`books.acct.${code}`, fallback);
+export const acctPlain = (t: TFn, code: string) => {
+  const en = ACCOUNT_PLAIN[code];
+  return en ? t(`books.plain.${code}`, en) : "";
+};
+export const typeLabel = (t: TFn, type: AccountType) =>
+  t(`books.type.${type}`, ACCOUNT_TYPE_LABELS[type] ?? type);
+export const sourceLabel = (t: TFn, source: string) =>
+  t(`books.source.${source}`, SOURCE_LABELS[source as keyof typeof SOURCE_LABELS] ?? source);
+export const fuelLabel = (t: TFn, fuel: string) =>
+  t(`books.fuel.${fuel}`, FUEL_LABELS[fuel] ?? fuel);
 
 /**
  * From/To with 7d / 30d / 90d quick buttons — the same control the Reports page uses,
@@ -22,6 +49,7 @@ export function DateRangeBar({
   onChange: (r: Range) => void;
   children?: React.ReactNode;
 }) {
+  const { t } = useT();
   const [draft, setDraft] = useState<Range>(range);
 
   const quick = (days: number) => {
@@ -34,7 +62,7 @@ export function DateRangeBar({
     <Card>
       <CardContent className="p-4 flex flex-wrap items-end gap-3">
         <div>
-          <Label className="text-xs">From</Label>
+          <Label className="text-xs">{t("common.from", "From")}</Label>
           <Input
             type="date"
             value={draft.from}
@@ -44,7 +72,7 @@ export function DateRangeBar({
           />
         </div>
         <div>
-          <Label className="text-xs">To</Label>
+          <Label className="text-xs">{t("common.to", "To")}</Label>
           <Input
             type="date"
             value={draft.to}
@@ -54,17 +82,17 @@ export function DateRangeBar({
             className="w-40"
           />
         </div>
-        <Button onClick={() => onChange(draft)}>Apply</Button>
+        <Button onClick={() => onChange(draft)}>{t("common.apply", "Apply")}</Button>
         {children}
         <div className="flex gap-1 ml-auto">
           <Button size="sm" variant="outline" onClick={() => quick(7)}>
-            7d
+            {t("books.range.7d", "7d")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => quick(30)}>
-            30d
+            {t("books.range.30d", "30d")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => quick(90)}>
-            90d
+            {t("books.range.90d", "90d")}
           </Button>
         </div>
       </CardContent>
@@ -82,12 +110,13 @@ export function AsOfBar({
   onChange: (d: string) => void;
   children?: React.ReactNode;
 }) {
+  const { t } = useT();
   const [draft, setDraft] = useState(asOf);
   return (
     <Card>
       <CardContent className="p-4 flex flex-wrap items-end gap-3">
         <div>
-          <Label className="text-xs">Balances as on</Label>
+          <Label className="text-xs">{t("books.asOn", "Balances as on")}</Label>
           <Input
             type="date"
             value={draft}
@@ -96,7 +125,7 @@ export function AsOfBar({
             className="w-40"
           />
         </div>
-        <Button onClick={() => onChange(draft)}>Apply</Button>
+        <Button onClick={() => onChange(draft)}>{t("common.apply", "Apply")}</Button>
         {children}
         <Button
           size="sm"
@@ -107,7 +136,7 @@ export function AsOfBar({
             onChange(todayStr());
           }}
         >
-          Today
+          {t("common.today", "Today")}
         </Button>
       </CardContent>
     </Card>
@@ -131,7 +160,10 @@ export function BalanceCheck({
   okBody: string;
   badTitle: string;
 }) {
+  const { t } = useT();
   if (balanced === undefined) return null;
+  // The amount is bold, so split the sentence around a marker to keep word order per language.
+  const outBy = t("books.check.outBy", "Out by {amount}.", { amount: "\u0001" }).split("\u0001");
   if (balanced) {
     return (
       <div className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm">
@@ -149,10 +181,13 @@ export function BalanceCheck({
       <div>
         <div className="font-semibold text-red-900">{badTitle}</div>
         <div className="text-red-800">
-          Out by <span className="font-semibold">{formatINR(differencePaise ?? 0)}</span>. The
-          books are not trustworthy until this is explained — nothing here is deleted, so the
-          cause will be in the journal. Check the most recent entries and tell whoever
-          maintains FuelBook.
+          {outBy[0]}
+          <span className="font-semibold">{formatINR(differencePaise ?? 0)}</span>
+          {outBy[1]}{" "}
+          {t(
+            "books.check.badBody",
+            "The books are not trustworthy until this is explained — nothing here is deleted, so the cause will be in the journal. Check the most recent entries and tell whoever maintains FuelBook.",
+          )}
         </div>
       </div>
     </div>
@@ -161,25 +196,27 @@ export function BalanceCheck({
 
 /** Dr / Cr chip, so which side a number sits on is never ambiguous. */
 export function SideBadge({ side }: { side: "Dr" | "Cr" }) {
+  const { t } = useT();
   return (
     <Badge variant={side === "Dr" ? "secondary" : "outline"} className="font-mono text-[10px]">
-      {side}
+      {t(`books.side.${side}`, side)}
     </Badge>
   );
 }
 
 /** Empty-state block used whenever a statement has nothing to show yet. */
-export function EmptyBooks({
-  title = "Nothing in the books yet",
-  body = "Journal entries are written automatically when you lock a shift. Lock a shift report (or post a manual entry) and it will show up here.",
-}: {
-  title?: string;
-  body?: string;
-}) {
+export function EmptyBooks({ title, body }: { title?: string; body?: string }) {
+  const { t } = useT();
   return (
     <div className="rounded-md border border-dashed p-8 text-center">
-      <div className="font-medium">{title}</div>
-      <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">{body}</p>
+      <div className="font-medium">{title ?? t("books.empty.title", "Nothing in the books yet")}</div>
+      <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+        {body ??
+          t(
+            "books.empty.body",
+            "Journal entries are written automatically when you lock a shift. Lock a shift report (or post a manual entry) and it will show up here.",
+          )}
+      </p>
     </div>
   );
 }

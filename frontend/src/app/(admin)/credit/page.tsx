@@ -29,6 +29,7 @@ import { apiError, primaryVehicle, type CreditCustomer } from "@/lib/types";
 import { toast } from "sonner";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 const ALL = "__all__";
 
@@ -42,6 +43,7 @@ type Filters = {
 const EMPTY: Filters = { q: "", active: ALL, outstandingOnly: false, overLimitOnly: false };
 
 export default function CreditCustomersPage() {
+  const { t } = useT();
   const qc = useQueryClient();
   const { data = [] } = useQuery<CreditCustomer[]>({
     queryKey: ["credit-customers"],
@@ -101,13 +103,13 @@ export default function CreditCustomersPage() {
   );
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
-  if (f.q.trim()) chips.push({ key: "q", label: `Search: ${f.q.trim()}`, clear: () => set("q", "") });
+  if (f.q.trim()) chips.push({ key: "q", label: t("credit.searchChip", "Search: {q}", { q: f.q.trim() }), clear: () => set("q", "") });
   if (f.active !== ALL)
-    chips.push({ key: "active", label: f.active === "active" ? "Active only" : "Inactive only", clear: () => set("active", ALL) });
+    chips.push({ key: "active", label: f.active === "active" ? t("credit.activeOnly", "Active only") : t("credit.inactiveOnly", "Inactive only"), clear: () => set("active", ALL) });
   if (f.outstandingOnly)
-    chips.push({ key: "out", label: "Has outstanding", clear: () => set("outstandingOnly", false) });
+    chips.push({ key: "out", label: t("credit.hasOutstanding", "Has outstanding"), clear: () => set("outstandingOnly", false) });
   if (f.overLimitOnly)
-    chips.push({ key: "over", label: "Over credit limit", clear: () => set("overLimitOnly", false) });
+    chips.push({ key: "over", label: t("credit.overLimit", "Over credit limit"), clear: () => set("overLimitOnly", false) });
   const active = chips.length > 0;
   const clearAll = () => setF(EMPTY);
 
@@ -154,7 +156,7 @@ export default function CreditCustomersPage() {
         notes: notes || undefined,
       })).data,
     onSuccess: () => {
-      toast.success("Customer added");
+      toast.success(t("credit.customerAdded", "Customer added"));
       setOpen(false);
       reset();
       qc.invalidateQueries({ queryKey: ["credit-customers"] });
@@ -166,41 +168,41 @@ export default function CreditCustomersPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Credit Customers</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">Customers who buy on credit and pay later</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("credit.title", "Credit Customers")}</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">{t("credit.subtitle", "Customers who buy on credit and pay later")}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-1" /> Add customer</Button>
+            <Button><Plus className="h-4 w-4 mr-1" /> {t("credit.addCustomer", "Add customer")}</Button>
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Add Credit Customer</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t("credit.addDialogTitle", "Add Credit Customer")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-                <div><Label>Customer code</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Optional" /></div>
-                <div><Label>Contact person</Label><Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} /></div>
-                <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-                <div><Label>Alternate phone</Label><Input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} /></div>
+                <div className="sm:col-span-2"><Label>{t("common.name", "Name")}</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+                <div><Label>{t("credit.customerCode", "Customer code")}</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("common.optional", "Optional")} /></div>
+                <div><Label>{t("credit.contactPerson", "Contact person")}</Label><Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} /></div>
+                <div><Label>{t("common.phone", "Phone")}</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+                <div><Label>{t("credit.altPhone", "Alternate phone")}</Label><Input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} /></div>
               </div>
 
               <Separator />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Label>First vehicle no</Label>
+                  <Label>{t("credit.firstVehicleNo", "First vehicle no")}</Label>
                   <Input
                     value={vehicle}
                     onChange={(e) => setVehicle(e.target.value.toUpperCase())}
                     placeholder="MH12AB1234"
                     className="uppercase"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Registered as the primary vehicle. More can be added later.</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("credit.firstVehicleHint", "Registered as the primary vehicle. More can be added later.")}</p>
                 </div>
-                <div><Label>Credit limit (₹)</Label><Input type="number" step="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} /></div>
+                <div><Label>{t("credit.creditLimit", "Credit limit (₹)")}</Label><Input type="number" step="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} /></div>
                 <div>
-                  <Label>Payment terms (days)</Label>
-                  <Input type="number" min="0" max="365" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="0 = due immediately" />
+                  <Label>{t("credit.paymentTermsDays", "Payment terms (days)")}</Label>
+                  <Input type="number" min="0" max="365" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={t("credit.termsPlaceholder", "0 = due immediately")} />
                 </div>
               </div>
 
@@ -212,23 +214,23 @@ export default function CreditCustomersPage() {
                 className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
               >
                 {showBilling ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                Billing address &amp; GSTIN (optional)
+                {t("credit.billingSection", "Billing address & GSTIN (optional)")}
               </button>
 
               {showBilling && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="sm:col-span-2"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-                  <div className="sm:col-span-2"><Label>GSTIN</Label><Input value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} className="uppercase" placeholder="27AAAAA0000A1Z5" /></div>
-                  <div className="sm:col-span-2"><Label>Address</Label><Input value={addressLine} onChange={(e) => setAddressLine(e.target.value)} /></div>
-                  <div><Label>City</Label><Input value={city} onChange={(e) => setCity(e.target.value)} /></div>
-                  <div><Label>State</Label><Input value={state} onChange={(e) => setState(e.target.value)} /></div>
-                  <div><Label>Pincode</Label><Input value={pincode} onChange={(e) => setPincode(e.target.value)} maxLength={6} /></div>
-                  <div className="sm:col-span-2"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+                  <div className="sm:col-span-2"><Label>{t("credit.email", "Email")}</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                  <div className="sm:col-span-2"><Label>{t("credit.gstin", "GSTIN")}</Label><Input value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} className="uppercase" placeholder="27AAAAA0000A1Z5" /></div>
+                  <div className="sm:col-span-2"><Label>{t("credit.address", "Address")}</Label><Input value={addressLine} onChange={(e) => setAddressLine(e.target.value)} /></div>
+                  <div><Label>{t("credit.city", "City")}</Label><Input value={city} onChange={(e) => setCity(e.target.value)} /></div>
+                  <div><Label>{t("credit.state", "State")}</Label><Input value={state} onChange={(e) => setState(e.target.value)} /></div>
+                  <div><Label>{t("credit.pincode", "Pincode")}</Label><Input value={pincode} onChange={(e) => setPincode(e.target.value)} maxLength={6} /></div>
+                  <div className="sm:col-span-2"><Label>{t("common.notes", "Notes")}</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
                 </div>
               )}
 
               <Button onClick={() => create.mutate()} disabled={!name || create.isPending} className="w-full">
-                {create.isPending ? "Saving…" : "Add"}
+                {create.isPending ? t("common.saving", "Saving…") : t("common.add", "Add")}
               </Button>
             </div>
           </DialogContent>
@@ -239,23 +241,23 @@ export default function CreditCustomersPage() {
         <CardContent className="p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
-              <Label className="text-xs">Search</Label>
+              <Label className="text-xs">{t("common.search", "Search")}</Label>
               <Input
-                placeholder="Name, code, phone or vehicle no"
+                placeholder={t("credit.searchPlaceholder", "Name, code, phone or vehicle no")}
                 value={f.q}
                 onChange={(e) => set("q", e.target.value)}
               />
             </div>
             <div className="min-w-0">
-              <Label className="text-xs">Status</Label>
+              <Label className="text-xs">{t("common.status", "Status")}</Label>
               <Select value={f.active} onValueChange={(v) => set("active", v)}>
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All customers</SelectItem>
-                  <SelectItem value="active">Active only</SelectItem>
-                  <SelectItem value="inactive">Inactive only</SelectItem>
+                  <SelectItem value={ALL}>{t("credit.allCustomers", "All customers")}</SelectItem>
+                  <SelectItem value="active">{t("credit.activeOnly", "Active only")}</SelectItem>
+                  <SelectItem value="inactive">{t("credit.inactiveOnly", "Inactive only")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -269,7 +271,7 @@ export default function CreditCustomersPage() {
                 checked={f.outstandingOnly}
                 onChange={(e) => set("outstandingOnly", e.target.checked)}
               />
-              Has outstanding only
+              {t("credit.hasOutstandingOnly", "Has outstanding only")}
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -278,7 +280,7 @@ export default function CreditCustomersPage() {
                 checked={f.overLimitOnly}
                 onChange={(e) => set("overLimitOnly", e.target.checked)}
               />
-              Over credit limit only
+              {t("credit.overLimitOnly", "Over credit limit only")}
             </label>
           </div>
 
@@ -288,7 +290,7 @@ export default function CreditCustomersPage() {
                 <FilterChip key={c.key} label={c.label} onRemove={c.clear} />
               ))}
               <Button size="sm" variant="ghost" onClick={clearAll}>
-                Clear all
+                {t("common.clearAll", "Clear all")}
               </Button>
             </div>
           )}
@@ -298,20 +300,20 @@ export default function CreditCustomersPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {active ? `${sorted.rows.length} of ${data.length} customers` : "All customers"}
+            {active ? t("credit.countOf", "{shown} of {total} customers", { shown: sorted.rows.length, total: data.length }) : t("credit.allCustomers", "All customers")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead {...sorted.sortProps("name")}>Name</SortableHead>
-                <SortableHead {...sorted.sortProps("vehicle")}>Vehicle</SortableHead>
-                <SortableHead {...sorted.sortProps("phone")}>Phone</SortableHead>
-                <SortableHead {...sorted.sortProps("limit")} align="right">Limit</SortableHead>
-                <SortableHead {...sorted.sortProps("outstanding")} align="right">Outstanding</SortableHead>
-                <SortableHead {...sorted.sortProps("util")} align="right">Util %</SortableHead>
-                <SortableHead {...sorted.sortProps("status")}>Status</SortableHead>
+                <SortableHead {...sorted.sortProps("name")}>{t("common.name", "Name")}</SortableHead>
+                <SortableHead {...sorted.sortProps("vehicle")}>{t("credit.vehicle", "Vehicle")}</SortableHead>
+                <SortableHead {...sorted.sortProps("phone")}>{t("common.phone", "Phone")}</SortableHead>
+                <SortableHead {...sorted.sortProps("limit")} align="right">{t("credit.limit", "Limit")}</SortableHead>
+                <SortableHead {...sorted.sortProps("outstanding")} align="right">{t("credit.outstanding", "Outstanding")}</SortableHead>
+                <SortableHead {...sorted.sortProps("util")} align="right">{t("credit.util", "Util %")}</SortableHead>
+                <SortableHead {...sorted.sortProps("status")}>{t("common.status", "Status")}</SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -334,7 +336,7 @@ export default function CreditCustomersPage() {
                           <span className="font-mono uppercase">{primary.vehicleNo}</span>
                           {extra > 0 && (
                             <Link href={`/credit/${c.id}`} className="shrink-0">
-                              <Badge variant="outline" title={`${total} vehicles registered`}>+{extra} more</Badge>
+                              <Badge variant="outline" title={t("credit.vehiclesRegistered", "{n} vehicles registered", { n: total })}>{t("credit.moreVehicles", "+{n} more", { n: extra })}</Badge>
                             </Link>
                           )}
                         </div>
@@ -351,7 +353,7 @@ export default function CreditCustomersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {c.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                      {c.isActive ? <Badge variant="success">{t("common.active", "Active")}</Badge> : <Badge variant="secondary">{t("common.inactive", "Inactive")}</Badge>}
                     </TableCell>
                   </TableRow>
                 );
@@ -361,7 +363,7 @@ export default function CreditCustomersPage() {
                   colSpan={7}
                   filtered={active}
                   onClear={clearAll}
-                  emptyMessage="No credit customers yet."
+                  emptyMessage={t("credit.noCustomers", "No credit customers yet.")}
                 />
               )}
             </TableBody>

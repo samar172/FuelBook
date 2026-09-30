@@ -3,6 +3,9 @@ import { ReactNode } from "react";
 import { getAuthUser } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, formatINR } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
+
+export type TFn = ReturnType<typeof useT>["t"];
 
 export const CASH_LOCATIONS = [
   "ATTENDANT",
@@ -44,6 +47,12 @@ export const daysAgoStr = (days: number) => {
   d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
 };
+
+// Translated location names. The maps above stay as the English fallback.
+export const locLabel = (t: TFn, loc: string) =>
+  t(`cash.loc.${loc}.label`, LOCATION_LABELS[loc] ?? loc);
+export const locShort = (t: TFn, loc: string) =>
+  t(`cash.loc.${loc}.short`, LOCATION_SHORT[loc] ?? loc);
 
 export const isOwner = () => getAuthUser()?.role === "OWNER";
 
@@ -126,9 +135,14 @@ export const EmptyState = ({ title, hint }: { title: string; hint?: string }) =>
   </div>
 );
 
-export const Loading = ({ label = "Loading…" }: { label?: string }) => (
-  <p className="text-sm text-muted-foreground py-6 text-center">{label}</p>
-);
+export const Loading = ({ label }: { label?: string }) => {
+  const { t } = useT();
+  return (
+    <p className="text-sm text-muted-foreground py-6 text-center">
+      {label ?? t("common.loading", "Loading…")}
+    </p>
+  );
+};
 
 // ===================== CSV PARSING =====================
 // The statement is pasted in by hand and parsed here in the browser; nothing is

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/utils";
 import { apiError } from "@/lib/types";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
 
 type Row = {
@@ -34,6 +35,7 @@ const NO_SLOT = "none";
 const NO_STAFF = "none";
 
 export function CollectionsTab({ shift, disabled }: { shift: any; disabled: boolean }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const shiftType: string | undefined = shift.shiftType;
 
@@ -111,44 +113,54 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
       })).data;
     },
     onSuccess: () => {
-      toast.success("Collections saved");
+      toast.success(t("shift.collections.saved", "Collections saved"));
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
-    onError: (e) => toast.error(apiError(e, "Failed")),
+    onError: (e) => toast.error(apiError(e, t("common.failed", "Something went wrong"))),
   });
 
   const noSlotsForShift = !slotsLoading && slots.length === 0;
-  const shiftWord = shiftType === "NIGHT" ? "night" : shiftType === "DAY" ? "day" : "this";
+  const shiftKey = shiftType === "NIGHT" ? "night" : shiftType === "DAY" ? "day" : "this";
+  const shiftWord = t(`shift.word.${shiftKey}`, shiftKey);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Payment Collections</CardTitle>
+        <CardTitle>{t("shift.collections.title", "Payment Collections")}</CardTitle>
         <CardDescription>
-          Money received via Cash, Card POS, UPI (Paytm/PhonePe), wallets, bank deposits — split by
-          time slot if you want. Only the slots set up for {shiftWord} shifts are offered. Naming who took each
-          amount matters: card and UPI they collected is deducted from the cash that
-          attendant owes at hand-over.
+          {t(
+            "shift.collections.desc",
+            "Money received via Cash, Card POS, UPI (Paytm/PhonePe), wallets, bank deposits — split by time slot if you want. Only the slots set up for {shiftWord} shifts are offered. Naming who took each amount matters: card and UPI they collected is deducted from the cash that attendant owes at hand-over.",
+            { shiftWord },
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {noSlotsForShift && (
           <p className="rounded-md border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
-            No time slots are set up for {shiftWord} shifts, so collections here are recorded
-            without a slot. Add one under <span className="font-medium">Pump Setup → Time Slots</span>{" "}
-            and tag it {shiftWord === "this" ? "Day or Night" : `“${shiftWord}”`} if you want this
-            shift&apos;s money split by time of day.
+            {t(
+              "shift.collections.noSlotsA",
+              "No time slots are set up for {shiftWord} shifts, so collections here are recorded without a slot. Add one under ",
+              { shiftWord },
+            )}
+            <span className="font-medium">{t("shift.collections.setupPath", "Pump Setup → Time Slots")}</span>
+            {t("shift.collections.noSlotsB", " and tag it {tag} if you want this shift's money split by time of day.", {
+              tag:
+                shiftKey === "this"
+                  ? t("shift.collections.dayOrNight", "Day or Night")
+                  : `“${shiftWord}”`,
+            })}
           </p>
         )}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Channel</TableHead>
-                {!noSlotsForShift && <TableHead>Time Slot</TableHead>}
-                <TableHead>Taken by</TableHead>
-                <TableHead>Amount (₹)</TableHead>
-                <TableHead>Reference</TableHead>
+                <TableHead>{t("shift.collections.channel", "Channel")}</TableHead>
+                {!noSlotsForShift && <TableHead>{t("shift.collections.timeSlot", "Time Slot")}</TableHead>}
+                <TableHead>{t("shift.collections.takenBy", "Taken by")}</TableHead>
+                <TableHead>{t("shift.collections.amount", "Amount (₹)")}</TableHead>
+                <TableHead>{t("shift.collections.reference", "Reference")}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -161,7 +173,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
                       onValueChange={(v) => setRows(rs => rs.map((x, i) => i === idx ? { ...x, channelId: v } : x))}
                       disabled={disabled}
                     >
-                      <SelectTrigger className="min-w-[160px]"><SelectValue placeholder="Channel" /></SelectTrigger>
+                      <SelectTrigger className="min-w-[160px]"><SelectValue placeholder={t("shift.collections.channel", "Channel")} /></SelectTrigger>
                       <SelectContent>
                         {channels.map((c: any) => (
                           <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -178,7 +190,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
                       >
                         <SelectTrigger className="min-w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={NO_SLOT}>— None —</SelectItem>
+                          <SelectItem value={NO_SLOT}>{t("shift.collections.none", "— None —")}</SelectItem>
                           {optionsFor(r).map((s) => (
                             <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                           ))}
@@ -196,7 +208,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
                     >
                       <SelectTrigger className="min-w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NO_STAFF}>— Not recorded —</SelectItem>
+                        <SelectItem value={NO_STAFF}>{t("shift.collections.notRecorded", "— Not recorded —")}</SelectItem>
                         {staffOptions.map((e) => (
                           <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                         ))}
@@ -240,7 +252,7 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
                     colSpan={noSlotsForShift ? 4 : 5}
                     className="text-center text-muted-foreground"
                   >
-                    Nothing collected yet.
+                    {t("shift.collections.empty", "Nothing collected yet.")}
                   </TableCell>
                 </TableRow>
               )}
@@ -265,16 +277,16 @@ export function CollectionsTab({ shift, disabled }: { shift: any; disabled: bool
                 ])
               }
             >
-              <Plus className="h-4 w-4 mr-1" /> Add row
+              <Plus className="h-4 w-4 mr-1" /> {t("common.addRow", "Add row")}
             </Button>
           )}
           <div className="text-sm">
-            Total collected: <span className="font-semibold">{formatINR(total)}</span>
+            {t("shift.collections.total", "Total collected")}: <span className="font-semibold">{formatINR(total)}</span>
           </div>
         </div>
         {!disabled && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save collections"}
+            {save.isPending ? t("common.saving", "Saving…") : t("shift.collections.save", "Save collections")}
           </Button>
         )}
       </CardContent>

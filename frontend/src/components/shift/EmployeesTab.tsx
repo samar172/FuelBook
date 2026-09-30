@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiError, Employee, toDateInput } from "@/lib/types";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
 
 type Row = {
@@ -26,6 +27,7 @@ type AttendanceRow = {
 const ON_DUTY_STATUSES = ["PRESENT", "HALF_DAY"];
 
 export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolean }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const reportDate = toDateInput(shift.reportDate);
   const shiftType: string | undefined = shift.shiftType;
@@ -89,10 +91,10 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
       ).data;
     },
     onSuccess: () => {
-      toast.success("Employee assignments saved");
+      toast.success(t("shift.employees.saved", "Employee assignments saved"));
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
-    onError: (e) => toast.error(apiError(e, "Failed")),
+    onError: (e) => toast.error(apiError(e, t("common.failed", "Something went wrong"))),
   });
 
   const defaultEmployeeId = (restrict ? onDutyEmployees[0]?.id : employees[0]?.id) || "";
@@ -100,11 +102,16 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Employees</CardTitle>
+        <CardTitle>{t("shift.employees.title", "Employees")}</CardTitle>
         <CardDescription>
-          Assign which employee ran each nozzle during this shift — feeds their ledger. This is
-          carried forward from the last {shiftType === "NIGHT" ? "night" : "day"} shift when the
-          shift is created, so usually you only need to fix the exceptions.
+          {t(
+            "shift.employees.desc",
+            "Assign which employee ran each nozzle during this shift — feeds their ledger. This is carried forward from the last {shiftWord} shift when the shift is created, so usually you only need to fix the exceptions.",
+            {
+              shiftWord:
+                shiftType === "NIGHT" ? t("shift.word.night", "night") : t("shift.word.day", "day"),
+            },
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -112,11 +119,17 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
             <p className="text-xs text-muted-foreground">
               {showAll
-                ? `Showing all active staff. ${onDutyEmployees.length} marked present for this shift.`
-                : `Showing the ${onDutyEmployees.length} staff marked present for this shift.`}
+                ? t("shift.employees.showingAll", "Showing all active staff. {n} marked present for this shift.", {
+                    n: onDutyEmployees.length,
+                  })
+                : t("shift.employees.showingOnDuty", "Showing the {n} staff marked present for this shift.", {
+                    n: onDutyEmployees.length,
+                  })}
             </p>
             <Button size="sm" variant="ghost" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show only staff on duty" : "Show all staff"}
+              {showAll
+                ? t("shift.employees.showOnDuty", "Show only staff on duty")
+                : t("shift.employees.showAllStaff", "Show all staff")}
             </Button>
           </div>
         )}
@@ -124,8 +137,8 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nozzle</TableHead>
-                <TableHead>Employee</TableHead>
+                <TableHead>{t("shift.employees.nozzle", "Nozzle")}</TableHead>
+                <TableHead>{t("shift.employees.employee", "Employee")}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -140,7 +153,7 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
                       }
                       disabled={disabled}
                     >
-                      <SelectTrigger className="min-w-[140px]"><SelectValue placeholder="Nozzle" /></SelectTrigger>
+                      <SelectTrigger className="min-w-[140px]"><SelectValue placeholder={t("shift.employees.nozzle", "Nozzle")} /></SelectTrigger>
                       <SelectContent>
                         {nozzles.map((n: any) => (
                           <SelectItem key={n.id} value={n.id}>{n.code}</SelectItem>
@@ -156,12 +169,12 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
                       }
                       disabled={disabled}
                     >
-                      <SelectTrigger className="min-w-[160px]"><SelectValue placeholder="Employee" /></SelectTrigger>
+                      <SelectTrigger className="min-w-[160px]"><SelectValue placeholder={t("shift.employees.employee", "Employee")} /></SelectTrigger>
                       <SelectContent>
                         {optionsFor(r.employeeId).map((e) => (
                           <SelectItem key={e.id} value={e.id}>
                             {e.name}
-                            {restrict && !onDuty.has(e.id) ? " (not marked present)" : ""}
+                            {restrict && !onDuty.has(e.id) ? t("shift.employees.notPresent", " (not marked present)") : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -179,7 +192,7 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
               {rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center text-muted-foreground">
-                    No employees assigned yet.
+                    {t("shift.employees.empty", "No employees assigned yet.")}
                   </TableCell>
                 </TableRow>
               )}
@@ -196,16 +209,16 @@ export function EmployeesTab({ shift, disabled }: { shift: any; disabled: boolea
               }
               disabled={nozzles.length === 0 || employees.length === 0}
             >
-              <Plus className="h-4 w-4 mr-1" /> Add row
+              <Plus className="h-4 w-4 mr-1" /> {t("common.addRow", "Add row")}
             </Button>
             {employees.length === 0 && (
-              <span className="text-xs text-muted-foreground">Add employees under the Employees page first.</span>
+              <span className="text-xs text-muted-foreground">{t("shift.employees.addFirst", "Add employees under the Employees page first.")}</span>
             )}
           </div>
         )}
         {!disabled && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save assignments"}
+            {save.isPending ? t("common.saving", "Saving…") : t("shift.employees.save", "Save assignments")}
           </Button>
         )}
       </CardContent>

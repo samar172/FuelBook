@@ -24,12 +24,12 @@ import {
 } from "@/components/ui/dialog";
 import { Fuel, Plus } from "lucide-react";
 import { toast } from "sonner";
-
-const onError = (e: any) =>
-  toast.error(e?.response?.data?.error || e?.message || "Failed");
+import { useT } from "@/lib/i18n";
+import { LanguageSwitch } from "@/components/language-switch";
 
 export default function SetupPage() {
   const router = useRouter();
+  const { t } = useT();
   const qc = useQueryClient();
   const [user, setUser] = useState<ApiUser | null>(null);
   const [adding, setAdding] = useState(false);
@@ -52,30 +52,33 @@ export default function SetupPage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 flex items-center justify-center">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 flex items-center justify-center">
+      <LanguageSwitch className="absolute right-4 top-4" />
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <div className="mx-auto bg-primary text-primary-foreground rounded-full p-3 w-fit mb-2">
             <Fuel className="h-6 w-6" />
           </div>
-          <CardTitle>Set up your pumps</CardTitle>
+          <CardTitle>{t("auth.setupTitle", "Set up your pumps")}</CardTitle>
           <CardDescription>
-            Add at least one pump to get started. You can add more pumps any time from
-            Settings.
+            {t(
+              "auth.setupDescription",
+              "Add at least one pump to get started. You can add more pumps any time from Settings."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-end mb-3">
             <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Add pump
+              <Plus className="h-4 w-4 mr-1" /> {t("auth.addPump", "Add pump")}
             </Button>
           </div>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>City</TableHead>
+                <TableHead>{t("auth.pumpName", "Name")}</TableHead>
+                <TableHead>{t("auth.pumpCode", "Code")}</TableHead>
+                <TableHead>{t("auth.pumpCity", "City")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -89,7 +92,7 @@ export default function SetupPage() {
               {pumps.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center text-muted-foreground">
-                    No pumps yet — add your first one.
+                    {t("auth.noPumpsYet", "No pumps yet — add your first one.")}
                   </TableCell>
                 </TableRow>
               )}
@@ -100,7 +103,7 @@ export default function SetupPage() {
               disabled={pumps.length === 0}
               onClick={() => router.push("/dashboard")}
             >
-              Continue to Dashboard
+              {t("auth.continueToDashboard", "Continue to Dashboard")}
             </Button>
           </div>
         </CardContent>
@@ -124,6 +127,9 @@ function PumpFormDialog({
   onOpenChange: (v: boolean) => void;
   onDone: () => void;
 }) {
+  const { t } = useT();
+  const onError = (e: any) =>
+    toast.error(e?.response?.data?.error || e?.message || t("settings.failed", "Failed"));
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -140,7 +146,7 @@ function PumpFormDialog({
   const save = useMutation({
     mutationFn: async () => {
       if (!form.name || !form.code || !form.address || !form.city || !form.state) {
-        throw new Error("All fields are required");
+        throw new Error(t("settings.allFieldsRequired", "All fields are required"));
       }
       return (await api.post("/api/setup/pumps", form)).data;
     },
@@ -155,7 +161,7 @@ function PumpFormDialog({
           });
         }
       }
-      toast.success("Pump added");
+      toast.success(t("settings.pumpAdded", "Pump added"));
       onOpenChange(false);
       onDone();
     },
@@ -166,42 +172,44 @@ function PumpFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add pump</DialogTitle>
+          <DialogTitle>{t("settings.addPump", "Add pump")}</DialogTitle>
           <DialogDescription>
-            Basic details for this pump — tanks, nozzles and payment channels are
-            configured after setup.
+            {t(
+              "settings.pumpAddHelpFirst",
+              "Basic details for this pump — tanks, nozzles and payment channels are configured after setup."
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="Pump name">
+          <Field label={t("settings.pumpName", "Pump name")}>
             <Input
-              placeholder="e.g. Shree Hari Petrol Pump"
+              placeholder={t("settings.pumpNamePlaceholder", "e.g. Shree Hari Petrol Pump")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </Field>
-          <Field label="Code (short, unique to this business)">
+          <Field label={t("settings.pumpCodeLabel", "Code (short, unique to this business)")}>
             <Input
-              placeholder="e.g. SHP"
+              placeholder={t("settings.pumpCodePlaceholder", "e.g. SHP")}
               maxLength={10}
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
             />
           </Field>
-          <Field label="Address">
+          <Field label={t("settings.address", "Address")}>
             <Input
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="City">
+            <Field label={t("settings.city", "City")}>
               <Input
                 value={form.city}
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
               />
             </Field>
-            <Field label="State">
+            <Field label={t("settings.state", "State")}>
               <Input
                 value={form.state}
                 onChange={(e) => setForm({ ...form, state: e.target.value })}
@@ -211,10 +219,10 @@ function PumpFormDialog({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Adding…" : "Add pump"}
+            {save.isPending ? t("settings.adding", "Adding…") : t("settings.addPump", "Add pump")}
           </Button>
         </div>
       </DialogContent>

@@ -40,6 +40,8 @@ import { apiError, Employee } from "@/lib/types";
 import { toast } from "sonner";
 import { format, parseISO, subDays } from "date-fns";
 import { AlertTriangle, Droplets, ShieldAlert, Truck } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import {
   DecantResponse,
   DecantRow,
@@ -82,6 +84,8 @@ const toForm = (r: DecantRow): Form => ({
 
 export function DecantationTab() {
   const qc = useQueryClient();
+  const { t } = useT();
+  const locale = useDateLocale();
   const writable = can("canEditTankerReceipts");
 
   const [range, setRange] = useState({
@@ -112,7 +116,7 @@ export function DecantationTab() {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!editing || !form) throw new Error("Nothing to save");
+      if (!editing || !form) throw new Error(t("wetstock.decant.nothingToSave", "Nothing to save"));
       return (
         await api.patch(`/api/wet-stock/decantation/${editing.id}`, {
           invoiceQtyMl: litresToMlStr(form.invoiceLitres) ?? undefined,
@@ -132,18 +136,26 @@ export function DecantationTab() {
     onSuccess: (row: DecantRow) => {
       if (row.transitLossMl && Number(row.transitLossMl) > 0) {
         toast.success(
-          `Saved — transit loss ${signedLitres(row.transitLossMl)} L${
-            row.claimAmountPaise ? ` (${formatINR(row.claimAmountPaise)})` : ""
-          }`,
+          row.claimAmountPaise
+            ? t("wetstock.decant.savedWithClaim", "Saved — transit loss {litres} L ({amount})", {
+                litres: signedLitres(row.transitLossMl),
+                amount: formatINR(row.claimAmountPaise),
+              })
+            : t("wetstock.decant.savedWithLoss", "Saved — transit loss {litres} L", {
+                litres: signedLitres(row.transitLossMl),
+              }),
         );
       } else {
-        toast.success("Decantation record saved");
+        toast.success(t("wetstock.decant.saved", "Decantation record saved"));
       }
       setEditing(null);
       qc.invalidateQueries({ queryKey: ["wet-decantation"] });
       qc.invalidateQueries({ queryKey: ["wet-variance"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not save the decantation record")),
+    onError: (e) =>
+      toast.error(
+        apiError(e, t("wetstock.decant.saveFailed", "Could not save the decantation record")),
+      ),
   });
 
   const rows = data?.rows ?? [];
@@ -153,17 +165,20 @@ export function DecantationTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Truck className="h-4 w-4" /> Tanker decantation &amp; transit loss
+            <Truck className="h-4 w-4" />{" "}
+            {t("wetstock.decant.title", "Tanker decantation & transit loss")}
           </CardTitle>
           <CardDescription>
-            Dip the tank before and after decanting. The shortfall against the OMC invoice is the
-            transit loss you can claim.
+            {t(
+              "wetstock.decant.desc",
+              "Dip the tank before and after decanting. The shortfall against the OMC invoice is the transit loss you can claim."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <Label htmlFor="d-from">From</Label>
+              <Label htmlFor="d-from">{t("common.from", "From")}</Label>
               <Input
                 id="d-from"
                 type="date"
@@ -173,7 +188,7 @@ export function DecantationTab() {
               />
             </div>
             <div>
-              <Label htmlFor="d-to">To</Label>
+              <Label htmlFor="d-to">{t("common.to", "To")}</Label>
               <Input
                 id="d-to"
                 type="date"
@@ -184,7 +199,7 @@ export function DecantationTab() {
             </div>
             <div className="flex items-end">
               <Button onClick={() => setRange(draft)} className="w-full">
-                Apply
+                {t("common.apply", "Apply")}
               </Button>
             </div>
           </div>
@@ -194,12 +209,14 @@ export function DecantationTab() {
       {isError ? (
         <Card>
           <CardContent className="py-6 text-sm text-destructive">
-            {apiError(error, "Could not load the tanker loads")}
+            {apiError(error, t("wetstock.decant.loadError", "Could not load the tanker loads"))}
           </CardContent>
         </Card>
       ) : isLoading ? (
         <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">Loading…</CardContent>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            {t("common.loading", "Loading…")}
+          </CardContent>
         </Card>
       ) : (
         <>
@@ -207,44 +224,65 @@ export function DecantationTab() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardContent className="pt-6">
-                  <div className="text-xs text-muted-foreground">Loads</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("wetstock.decant.loads", "Loads")}
+                  </div>
                   <div className="text-2xl font-semibold">{data.totals.loads}</div>
                   <div className="text-xs text-muted-foreground">
-                    {data.totals.decantedLoads} with dips recorded
+                    {t("wetstock.decant.loadsWithDips", "{count} with dips recorded", {
+                      count: data.totals.decantedLoads,
+                    })}
                   </div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <div className="text-xs text-muted-foreground">Total transit loss</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("wetstock.decant.totalLoss", "Total transit loss")}
+                  </div>
                   <div className="text-2xl font-semibold">
                     {formatLitres(data.totals.totalLossMl)} L
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    on {formatLitres(data.totals.totalInvoiceMl, 0)} L invoiced
+                    {t("wetstock.decant.onInvoiced", "on {litres} L invoiced", {
+                      litres: formatLitres(data.totals.totalInvoiceMl, 0),
+                    })}
                   </div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <div className="text-xs text-muted-foreground">Claimable value</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("wetstock.decant.claimable", "Claimable value")}
+                  </div>
                   <div className="text-2xl font-semibold">
                     {formatINR(data.totals.totalClaimPaise)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {data.totals.claimsRaised} claim(s) raised
+                    {t("wetstock.decant.claimsRaised", "{count} claim(s) raised", {
+                      count: data.totals.claimsRaised,
+                    })}
                   </div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <div className="text-xs text-muted-foreground">Needs attention</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("wetstock.decant.needsAttention", "Needs attention")}
+                  </div>
                   <div className="text-2xl font-semibold">
                     {data.totals.brokenSeals + data.totals.flaggedLosses}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {data.totals.brokenSeals} broken seal(s), {data.totals.flaggedLosses} loss
-                    {data.totals.flaggedLosses === 1 ? "" : "es"} over {data.claimFlagPct}%
+                    {t(
+                      "wetstock.decant.attentionDetail",
+                      "{seals} broken seal(s), {losses} loss(es) over {pct}%",
+                      {
+                        seals: data.totals.brokenSeals,
+                        losses: data.totals.flaggedLosses,
+                        pct: data.claimFlagPct,
+                      }
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -253,28 +291,42 @@ export function DecantationTab() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Loads received</CardTitle>
+              <CardTitle className="text-base">
+                {t("wetstock.decant.loadsReceived", "Loads received")}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {rows.length === 0 ? (
                 <p className="py-4 text-sm text-muted-foreground">
-                  No tanker loads in this range. Record receipts on the shift they arrived in, then
-                  decant them here.
+                  {t(
+                    "wetstock.decant.empty",
+                    "No tanker loads in this range. Record receipts on the shift they arrived in, then decant them here."
+                  )}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Received</TableHead>
-                        <TableHead>Tank</TableHead>
-                        <TableHead>Vendor / bill</TableHead>
-                        <TableHead className="text-right">Invoice L</TableHead>
-                        <TableHead className="text-right">By dip L</TableHead>
-                        <TableHead className="text-right">Loss L</TableHead>
-                        <TableHead className="text-right">Loss %</TableHead>
-                        <TableHead className="text-right">Claim</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>{t("wetstock.decant.thReceived", "Received")}</TableHead>
+                        <TableHead>{t("wetstock.var.tank", "Tank")}</TableHead>
+                        <TableHead>{t("wetstock.decant.thVendorBill", "Vendor / bill")}</TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.decant.thInvoiceL", "Invoice L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.decant.thByDipL", "By dip L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.decant.thLossL", "Loss L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.decant.thLossPct", "Loss %")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.decant.thClaim", "Claim")}
+                        </TableHead>
+                        <TableHead>{t("common.status", "Status")}</TableHead>
                         <TableHead />
                       </TableRow>
                     </TableHeader>
@@ -285,7 +337,7 @@ export function DecantationTab() {
                           className={r.sealBroken || r.lossFlagged ? "bg-destructive/5" : undefined}
                         >
                           <TableCell className="whitespace-nowrap">
-                            {format(parseISO(r.receivedAt), "dd MMM yyyy")}
+                            {format(parseISO(r.receivedAt), "dd MMM yyyy", { locale })}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">{r.tank?.name ?? "—"}</TableCell>
                           <TableCell className="whitespace-nowrap">
@@ -313,23 +365,27 @@ export function DecantationTab() {
                             <div className="flex flex-wrap gap-1">
                               {r.sealBroken ? (
                                 <Badge variant="destructive" className="whitespace-nowrap">
-                                  <ShieldAlert className="mr-1 h-3 w-3" /> Seal broken
+                                  <ShieldAlert className="mr-1 h-3 w-3" />{" "}
+                                  {t("wetstock.decant.sealBroken", "Seal broken")}
                                 </Badge>
                               ) : null}
                               {r.lossFlagged ? (
                                 <Badge variant="destructive" className="whitespace-nowrap">
-                                  <AlertTriangle className="mr-1 h-3 w-3" /> High loss
+                                  <AlertTriangle className="mr-1 h-3 w-3" />{" "}
+                                  {t("wetstock.decant.highLoss", "High loss")}
                                 </Badge>
                               ) : null}
                               {r.claimRaised ? (
-                                <Badge variant="warning">Claim raised</Badge>
+                                <Badge variant="warning">
+                                  {t("wetstock.decant.claimRaisedBadge", "Claim raised")}
+                                </Badge>
                               ) : null}
                               {!r.decanted ? (
                                 <Badge variant="outline" className="whitespace-nowrap">
-                                  Not decanted
+                                  {t("wetstock.decant.notDecanted", "Not decanted")}
                                 </Badge>
                               ) : !r.sealBroken && !r.lossFlagged ? (
-                                <Badge variant="success">OK</Badge>
+                                <Badge variant="success">{t("wetstock.decant.ok", "OK")}</Badge>
                               ) : null}
                             </div>
                           </TableCell>
@@ -341,7 +397,9 @@ export function DecantationTab() {
                               disabled={!writable}
                             >
                               <Droplets className="mr-1 h-3.5 w-3.5" />
-                              {r.decanted ? "Edit" : "Decant"}
+                              {r.decanted
+                                ? t("common.edit", "Edit")
+                                : t("wetstock.decant.decantBtn", "Decant")}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -352,7 +410,10 @@ export function DecantationTab() {
               )}
               {!writable ? (
                 <p className="pt-3 text-xs text-muted-foreground">
-                  You do not have permission to edit tanker receipts.
+                  {t(
+                    "wetstock.decant.noPermission",
+                    "You do not have permission to edit tanker receipts."
+                  )}
                 </p>
               ) : null}
             </CardContent>
@@ -363,12 +424,15 @@ export function DecantationTab() {
       <Dialog open={Boolean(editing)} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Decantation record</DialogTitle>
+            <DialogTitle>{t("wetstock.decant.dialogTitle", "Decantation record")}</DialogTitle>
             <DialogDescription>
               {editing
-                ? `${editing.tank?.name ?? "Tank"} · ${editing.vendorName || "load"} · received ${format(
+                ? `${editing.tank?.name ?? t("wetstock.decant.dialogTank", "Tank")} · ${
+                    editing.vendorName || t("wetstock.decant.dialogLoad", "load")
+                  } · ${t("wetstock.decant.dialogReceived", "received")} ${format(
                     parseISO(editing.receivedAt),
                     "dd MMM yyyy",
+                    { locale },
                   )}`
                 : ""}
             </DialogDescription>
@@ -377,7 +441,7 @@ export function DecantationTab() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="f-inv">Invoice qty (L)</Label>
+                  <Label htmlFor="f-inv">{t("wetstock.decant.invoiceQty", "Invoice qty (L)")}</Label>
                   <Input
                     id="f-inv"
                     inputMode="decimal"
@@ -387,7 +451,9 @@ export function DecantationTab() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="f-temp">Temperature (°C)</Label>
+                  <Label htmlFor="f-temp">
+                    {t("wetstock.decant.temperature", "Temperature (°C)")}
+                  </Label>
                   <Input
                     id="f-temp"
                     inputMode="numeric"
@@ -397,7 +463,7 @@ export function DecantationTab() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="f-dipb">Dip before (mm)</Label>
+                  <Label htmlFor="f-dipb">{t("wetstock.decant.dipBefore", "Dip before (mm)")}</Label>
                   <Input
                     id="f-dipb"
                     inputMode="numeric"
@@ -407,7 +473,7 @@ export function DecantationTab() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="f-dipa">Dip after (mm)</Label>
+                  <Label htmlFor="f-dipa">{t("wetstock.decant.dipAfter", "Dip after (mm)")}</Label>
                   <Input
                     id="f-dipa"
                     inputMode="numeric"
@@ -417,7 +483,9 @@ export function DecantationTab() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="f-dl">Density at loading</Label>
+                  <Label htmlFor="f-dl">
+                    {t("wetstock.decant.densityLoading", "Density at loading")}
+                  </Label>
                   <Input
                     id="f-dl"
                     inputMode="numeric"
@@ -427,7 +495,9 @@ export function DecantationTab() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="f-dr">Density at receipt</Label>
+                  <Label htmlFor="f-dr">
+                    {t("wetstock.decant.densityReceipt", "Density at receipt")}
+                  </Label>
                   <Input
                     id="f-dr"
                     inputMode="numeric"
@@ -437,26 +507,34 @@ export function DecantationTab() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="f-seal">Seals on arrival</Label>
+                  <Label htmlFor="f-seal">{t("wetstock.decant.seals", "Seals on arrival")}</Label>
                   <Select value={form.sealIntact} onValueChange={(v) => set("sealIntact", v)}>
                     <SelectTrigger id="f-seal" className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={SEAL_UNKNOWN}>Not checked</SelectItem>
-                      <SelectItem value="YES">Intact</SelectItem>
-                      <SelectItem value="NO">Broken / tampered</SelectItem>
+                      <SelectItem value={SEAL_UNKNOWN}>
+                        {t("wetstock.decant.sealNotChecked", "Not checked")}
+                      </SelectItem>
+                      <SelectItem value="YES">
+                        {t("wetstock.decant.sealIntact", "Intact")}
+                      </SelectItem>
+                      <SelectItem value="NO">
+                        {t("wetstock.decant.sealTampered", "Broken / tampered")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="f-by">Decanted by</Label>
+                  <Label htmlFor="f-by">{t("wetstock.decant.decantedBy", "Decanted by")}</Label>
                   <Select value={form.decantedById} onValueChange={(v) => set("decantedById", v)}>
                     <SelectTrigger id="f-by" className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={NO_EMPLOYEE}>Not recorded</SelectItem>
+                      <SelectItem value={NO_EMPLOYEE}>
+                        {t("wetstock.notRecorded", "Not recorded")}
+                      </SelectItem>
                       {employees.map((e) => (
                         <SelectItem key={e.id} value={e.id}>
                           {e.name}
@@ -467,12 +545,15 @@ export function DecantationTab() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="f-notes">Notes</Label>
+                <Label htmlFor="f-notes">{t("common.notes", "Notes")}</Label>
                 <Input
                   id="f-notes"
                   value={form.notes}
                   onChange={(e) => set("notes", e.target.value)}
-                  placeholder="Seal numbers, driver, anything disputed"
+                  placeholder={t(
+                    "wetstock.decant.notesPlaceholder",
+                    "Seal numbers, driver, anything disputed"
+                  )}
                   className="mt-1"
                 />
               </div>
@@ -483,19 +564,25 @@ export function DecantationTab() {
                   onChange={(e) => set("claimRaised", e.target.checked)}
                   className="h-4 w-4"
                 />
-                A transit-loss claim has been raised with the OMC
+                {t(
+                  "wetstock.decant.claimCheckbox",
+                  "A transit-loss claim has been raised with the OMC"
+                )}
               </label>
               <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-                The dip-measured quantity, the transit loss and the claim value are computed from
-                the tank&apos;s dip chart and this load&apos;s rate when you save. Without a dip
-                chart for the tank, the dips are stored but the loss cannot be derived.
+                {t(
+                  "wetstock.decant.computedNote",
+                  "The dip-measured quantity, the transit loss and the claim value are computed from the tank's dip chart and this load's rate when you save. Without a dip chart for the tank, the dips are stored but the loss cannot be derived."
+                )}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button variant="outline" onClick={() => setEditing(null)}>
-                  Cancel
+                  {t("common.cancel", "Cancel")}
                 </Button>
                 <Button onClick={() => save.mutate()} disabled={save.isPending}>
-                  {save.isPending ? "Saving…" : "Save record"}
+                  {save.isPending
+                    ? t("common.saving", "Saving…")
+                    : t("wetstock.decant.saveRecord", "Save record")}
                 </Button>
               </div>
             </div>

@@ -29,6 +29,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Plus, UserCheck, UserX } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 
 const ALL = "__all__";
 
@@ -38,6 +40,8 @@ const EMPTY: Filters = { q: "", designation: ALL, active: ALL };
 export default function EmployeesPage() {
   const qc = useQueryClient();
   const canManage = can("canManageEmployees");
+  const { t } = useT();
+  const locale = useDateLocale();
   const [showInactive, setShowInactive] = useState(false);
 
   const { data = [] } = useQuery<Employee[]>({
@@ -89,13 +93,16 @@ export default function EmployeesPage() {
   );
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
-  if (f.q.trim()) chips.push({ key: "q", label: `Search: ${f.q.trim()}`, clear: () => set("q", "") });
+  if (f.q.trim()) chips.push({ key: "q", label: t("employees.chipSearch", "Search: {q}", { q: f.q.trim() }), clear: () => set("q", "") });
   if (f.designation !== ALL)
-    chips.push({ key: "desig", label: `Role: ${f.designation}`, clear: () => set("designation", ALL) });
+    chips.push({ key: "desig", label: t("employees.chipRole", "Role: {v}", { v: f.designation }), clear: () => set("designation", ALL) });
   if (f.active !== ALL)
     chips.push({
       key: "active",
-      label: f.active === "active" ? "Active only" : "Inactive only",
+      label:
+        f.active === "active"
+          ? t("employees.activeOnly", "Active only")
+          : t("employees.inactiveOnly", "Inactive only"),
       clear: () => set("active", ALL),
     });
   const activeFilters = chips.length > 0;
@@ -146,7 +153,7 @@ export default function EmployeesPage() {
         notes: notes || undefined,
       })).data,
     onSuccess: () => {
-      toast.success("Employee added");
+      toast.success(t("employees.added", "Employee added"));
       setOpen(false);
       reset();
       invalidate();
@@ -157,7 +164,7 @@ export default function EmployeesPage() {
   const deactivate = useMutation({
     mutationFn: async (id: string) => (await api.post(`/api/employees/${id}/deactivate`)).data,
     onSuccess: () => {
-      toast.success("Employee deactivated");
+      toast.success(t("employees.deactivated", "Employee deactivated"));
       invalidate();
     },
     onError: (e) => toast.error(apiError(e)),
@@ -166,7 +173,7 @@ export default function EmployeesPage() {
   const reactivate = useMutation({
     mutationFn: async (id: string) => (await api.post(`/api/employees/${id}/reactivate`)).data,
     onSuccess: () => {
-      toast.success("Employee reactivated");
+      toast.success(t("employees.reactivated", "Employee reactivated"));
       invalidate();
     },
     onError: (e) => toast.error(apiError(e)),
@@ -176,27 +183,27 @@ export default function EmployeesPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Employees</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("employees.title", "Employees")}</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
-            Attendants you can assign to nozzles per shift.
+            {t("employees.subtitle", "Attendants you can assign to nozzles per shift.")}
           </p>
         </div>
         {canManage && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-1" /> Add employee</Button>
+              <Button><Plus className="h-4 w-4 mr-1" /> {t("employees.add", "Add employee")}</Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Add employee</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t("employees.add", "Add employee")}</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="sm:col-span-2"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-                  <div><Label>Staff code</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Optional" /></div>
-                  <div><Label>Designation</Label><Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Attendant" /></div>
-                  <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-                  <div><Label>Alternate phone</Label><Input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} /></div>
-                  <div><Label>Joining date</Label><Input type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} /></div>
-                  <div><Label>Date of birth</Label><Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>
+                  <div className="sm:col-span-2"><Label>{t("common.name", "Name")}</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+                  <div><Label>{t("employees.staffCode", "Staff code")}</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("employees.codePh", "Optional")} /></div>
+                  <div><Label>{t("employees.designation", "Designation")}</Label><Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder={t("employees.designationPh", "Attendant")} /></div>
+                  <div><Label>{t("common.phone", "Phone")}</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+                  <div><Label>{t("employees.altPhone", "Alternate phone")}</Label><Input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} /></div>
+                  <div><Label>{t("employees.joiningDate", "Joining date")}</Label><Input type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} /></div>
+                  <div><Label>{t("employees.dob", "Date of birth")}</Label><Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></div>
                 </div>
 
                 <Separator />
@@ -207,23 +214,23 @@ export default function EmployeesPage() {
                   className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   {showMore ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  Address &amp; emergency contact (optional)
+                  {t("employees.moreToggle", "Address & emergency contact (optional)")}
                 </button>
 
                 {showMore && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="sm:col-span-2"><Label>Address</Label><Input value={addressLine} onChange={(e) => setAddressLine(e.target.value)} /></div>
-                    <div><Label>City</Label><Input value={city} onChange={(e) => setCity(e.target.value)} /></div>
-                    <div><Label>State</Label><Input value={state} onChange={(e) => setState(e.target.value)} /></div>
-                    <div><Label>Pincode</Label><Input value={pincode} onChange={(e) => setPincode(e.target.value)} maxLength={6} /></div>
-                    <div><Label>Emergency contact</Label><Input value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} /></div>
-                    <div><Label>Emergency phone</Label><Input value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} /></div>
-                    <div className="sm:col-span-2"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+                    <div className="sm:col-span-2"><Label>{t("employees.address", "Address")}</Label><Input value={addressLine} onChange={(e) => setAddressLine(e.target.value)} /></div>
+                    <div><Label>{t("employees.city", "City")}</Label><Input value={city} onChange={(e) => setCity(e.target.value)} /></div>
+                    <div><Label>{t("employees.state", "State")}</Label><Input value={state} onChange={(e) => setState(e.target.value)} /></div>
+                    <div><Label>{t("employees.pincode", "Pincode")}</Label><Input value={pincode} onChange={(e) => setPincode(e.target.value)} maxLength={6} /></div>
+                    <div><Label>{t("employees.emergencyContact", "Emergency contact")}</Label><Input value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} /></div>
+                    <div><Label>{t("employees.emergencyPhone", "Emergency phone")}</Label><Input value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} /></div>
+                    <div className="sm:col-span-2"><Label>{t("common.notes", "Notes")}</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
                   </div>
                 )}
 
                 <Button onClick={() => create.mutate()} disabled={!name || create.isPending} className="w-full">
-                  {create.isPending ? "Saving…" : "Add"}
+                  {create.isPending ? t("common.saving", "Saving…") : t("common.add", "Add")}
                 </Button>
               </div>
             </DialogContent>
@@ -235,19 +242,19 @@ export default function EmployeesPage() {
         <CardContent className="p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs">Search</Label>
+              <Label className="text-xs">{t("common.search", "Search")}</Label>
               <Input
-                placeholder="Name, code, phone or city"
+                placeholder={t("employees.searchPh", "Name, code, phone or city")}
                 value={f.q}
                 onChange={(e) => set("q", e.target.value)}
               />
             </div>
             <div className="min-w-0">
-              <Label className="text-xs">Designation</Label>
+              <Label className="text-xs">{t("employees.designation", "Designation")}</Label>
               <Select value={f.designation} onValueChange={(v) => set("designation", v)}>
                 <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All designations</SelectItem>
+                  <SelectItem value={ALL}>{t("employees.allDesignations", "All designations")}</SelectItem>
                   {designations.map((d) => (
                     <SelectItem key={d} value={d}>{d}</SelectItem>
                   ))}
@@ -255,26 +262,29 @@ export default function EmployeesPage() {
               </Select>
             </div>
             <div className="min-w-0">
-              <Label className="text-xs">Status</Label>
+              <Label className="text-xs">{t("common.status", "Status")}</Label>
               <Select value={f.active} onValueChange={(v) => set("active", v)}>
                 <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All statuses</SelectItem>
-                  <SelectItem value="active">Active only</SelectItem>
-                  <SelectItem value="inactive">Inactive only</SelectItem>
+                  <SelectItem value={ALL}>{t("employees.allStatuses", "All statuses")}</SelectItem>
+                  <SelectItem value="active">{t("employees.activeOnly", "Active only")}</SelectItem>
+                  <SelectItem value="inactive">{t("employees.inactiveOnly", "Inactive only")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Inactive employees are only in this list when &ldquo;Show inactive&rdquo; is on.
+            {t(
+              "employees.inactiveHint",
+              "Inactive employees are only in this list when “Show inactive” is on."
+            )}
           </p>
           {activeFilters && (
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
               {chips.map((c) => (
                 <FilterChip key={c.key} label={c.label} onRemove={c.clear} />
               ))}
-              <Button size="sm" variant="ghost" onClick={clearAll}>Clear all</Button>
+              <Button size="sm" variant="ghost" onClick={clearAll}>{t("common.clearAll", "Clear all")}</Button>
             </div>
           )}
         </CardContent>
@@ -284,10 +294,13 @@ export default function EmployeesPage() {
         <CardHeader className="flex-row items-start justify-between gap-3">
           <CardTitle className="text-base">
             {activeFilters
-              ? `${sorted.rows.length} of ${data.length} employees`
+              ? t("employees.countTitle", "{n} of {total} employees", {
+                  n: sorted.rows.length,
+                  total: data.length,
+                })
               : showInactive
-                ? "All employees (including inactive)"
-                : "Active employees"}
+                ? t("employees.allIncl", "All employees (including inactive)")
+                : t("employees.activeTitle", "Active employees")}
           </CardTitle>
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
@@ -296,19 +309,19 @@ export default function EmployeesPage() {
               onChange={(e) => setShowInactive(e.target.checked)}
               className="h-4 w-4"
             />
-            Show inactive
+            {t("employees.showInactive", "Show inactive")}
           </label>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead {...sorted.sortProps("name")}>Name</SortableHead>
-                <SortableHead {...sorted.sortProps("designation")}>Designation</SortableHead>
-                <SortableHead {...sorted.sortProps("phone")}>Phone</SortableHead>
-                <SortableHead {...sorted.sortProps("joined")}>Joined</SortableHead>
-                <SortableHead {...sorted.sortProps("status")}>Status</SortableHead>
-                {canManage && <TableHead className="text-right">Actions</TableHead>}
+                <SortableHead {...sorted.sortProps("name")}>{t("common.name", "Name")}</SortableHead>
+                <SortableHead {...sorted.sortProps("designation")}>{t("employees.designation", "Designation")}</SortableHead>
+                <SortableHead {...sorted.sortProps("phone")}>{t("common.phone", "Phone")}</SortableHead>
+                <SortableHead {...sorted.sortProps("joined")}>{t("employees.col.joined", "Joined")}</SortableHead>
+                <SortableHead {...sorted.sortProps("status")}>{t("common.status", "Status")}</SortableHead>
+                {canManage && <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -322,9 +335,9 @@ export default function EmployeesPage() {
                   </TableCell>
                   <TableCell>{e.designation || "-"}</TableCell>
                   <TableCell>{e.phone || "-"}</TableCell>
-                  <TableCell>{e.joiningDate ? format(new Date(e.joiningDate), "dd MMM yyyy") : "-"}</TableCell>
+                  <TableCell>{e.joiningDate ? format(new Date(e.joiningDate), "d MMM yyyy", { locale }) : "-"}</TableCell>
                   <TableCell>
-                    {e.isActive ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                    {e.isActive ? <Badge variant="success">{t("common.active", "Active")}</Badge> : <Badge variant="secondary">{t("common.inactive", "Inactive")}</Badge>}
                   </TableCell>
                   {canManage && (
                     <TableCell className="text-right">
@@ -332,7 +345,7 @@ export default function EmployeesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          title="Deactivate"
+                          title={t("employees.deactivate", "Deactivate")}
                           onClick={() => deactivate.mutate(e.id)}
                           disabled={deactivate.isPending}
                         >
@@ -342,7 +355,7 @@ export default function EmployeesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          title="Reactivate"
+                          title={t("employees.reactivate", "Reactivate")}
                           onClick={() => reactivate.mutate(e.id)}
                           disabled={reactivate.isPending}
                         >
@@ -358,7 +371,7 @@ export default function EmployeesPage() {
                   colSpan={canManage ? 6 : 5}
                   filtered={activeFilters}
                   onClear={clearAll}
-                  emptyMessage="No employees yet."
+                  emptyMessage={t("employees.empty", "No employees yet.")}
                 />
               )}
             </TableBody>

@@ -3,20 +3,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { can, getAuthUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Lock } from "lucide-react";
 
 const SECTIONS = [
-  { href: "/books", label: "Trial Balance" },
-  { href: "/books/profit-loss", label: "Profit & Loss" },
-  { href: "/books/balance-sheet", label: "Balance Sheet" },
-  { href: "/books/journal", label: "Journal" },
-  { href: "/books/ledgers", label: "Ledgers" },
-  { href: "/books/who-owes", label: "Who Owes What" },
-  { href: "/books/new-entry", label: "New Entry", ownerOnly: true },
+  { href: "/books", key: "books.nav.trialBalance", label: "Trial Balance" },
+  { href: "/books/profit-loss", key: "books.nav.profitLoss", label: "Profit & Loss" },
+  { href: "/books/balance-sheet", key: "books.nav.balanceSheet", label: "Balance Sheet" },
+  { href: "/books/journal", key: "books.nav.journal", label: "Journal" },
+  { href: "/books/ledgers", key: "books.nav.ledgers", label: "Ledgers" },
+  { href: "/books/who-owes", key: "books.nav.whoOwes", label: "Who Owes What" },
+  { href: "/books/new-entry", key: "books.nav.newEntry", label: "New Entry", ownerOnly: true },
 ];
 
 export default function BooksLayout({ children }: { children: React.ReactNode }) {
+  const { t } = useT();
   const pathname = usePathname();
   const isOwner = getAuthUser()?.role === "OWNER";
   const allowed = can("canViewReports");
@@ -28,10 +30,14 @@ export default function BooksLayout({ children }: { children: React.ReactNode })
       <Card>
         <CardContent className="p-8 text-center">
           <Lock className="h-6 w-6 mx-auto text-muted-foreground" />
-          <div className="font-medium mt-2">You do not have access to the books</div>
+          <div className="font-medium mt-2">
+            {t("books.noAccess.title", "You do not have access to the books")}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Viewing the ledger needs the &ldquo;View reports&rdquo; permission. Ask the owner to
-            grant it under Users.
+            {t(
+              "books.noAccess.body",
+              "Viewing the ledger needs the “View reports” permission. Ask the owner to grant it under Users.",
+            )}
           </p>
         </CardContent>
       </Card>
@@ -41,10 +47,12 @@ export default function BooksLayout({ children }: { children: React.ReactNode })
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Books</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t("books.title", "Books")}</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          The pump&apos;s double-entry accounts. Entries are written automatically every time a
-          shift is locked, and reversed if it is unlocked — nothing is ever edited or deleted.
+          {t(
+            "books.subtitle",
+            "The pump's double-entry accounts. Entries are written automatically every time a shift is locked, and reversed if it is unlocked — nothing is ever edited or deleted.",
+          )}
         </p>
       </div>
 
@@ -63,7 +71,7 @@ export default function BooksLayout({ children }: { children: React.ReactNode })
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {s.label}
+              {t(s.key, s.label)}
             </Link>
           );
         })}

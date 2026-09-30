@@ -33,10 +33,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatINR, rupeesToPaise } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import {
   CASH_LOCATIONS,
   EmptyState,
-  LOCATION_SHORT,
+  locShort,
   Loading,
   PERSONAL_LOCATIONS,
   StatTile,
@@ -98,6 +99,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = 
 };
 
 export function DepositsSection() {
+  const { t } = useT();
   const qc = useQueryClient();
   const accountsQ = useBankAccounts();
   const accounts = accountsQ.data ?? [];
@@ -131,11 +133,11 @@ export function DepositsSection() {
     mutationFn: async (v: { id: string; status: string }) =>
       (await api.patch(`/api/cash-bank/deposits/${v.id}`, { status: v.status })).data,
     onSuccess: () => {
-      toast.success("Deposit updated");
+      toast.success(t("cash.deposit.updated", "Deposit updated"));
       qc.invalidateQueries({ queryKey: ["cash-deposits"] });
       qc.invalidateQueries({ queryKey: ["cash-bank-accounts"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not update the deposit")),
+    onError: (e) => toast.error(apiError(e, t("cash.deposit.updateFailed", "Could not update the deposit"))),
   });
 
   const editable = can("canEditCollections");
@@ -150,15 +152,17 @@ export function DepositsSection() {
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <CardTitle>Bank deposits</CardTitle>
+              <CardTitle>{t("cash.deposit.title", "Bank deposits")}</CardTitle>
               <CardDescription>
-                Cash taken to the bank, with the slip number. Each deposit also records the cash
-                leaving the pump.
+                {t(
+                  "cash.deposit.desc",
+                  "Cash taken to the bank, with the slip number. Each deposit also records the cash leaving the pump.",
+                )}
               </CardDescription>
             </div>
             {editable ? (
               <Button onClick={() => setOpen(true)} disabled={accounts.length === 0}>
-                <Plus className="h-4 w-4 mr-1" /> Record deposit
+                <Plus className="h-4 w-4 mr-1" /> {t("cash.deposit.record", "Record deposit")}
               </Button>
             ) : null}
           </div>
@@ -166,18 +170,21 @@ export function DepositsSection() {
         <CardContent className="space-y-4">
           {accounts.length === 0 && !accountsQ.isLoading ? (
             <EmptyState
-              title="No bank account set up"
-              hint="Add a bank account on the Bank tab before recording a deposit."
+              title={t("cash.deposit.noAccount", "No bank account set up")}
+              hint={t(
+                "cash.deposit.noAccountHint",
+                "Add a bank account on the Bank tab before recording a deposit.",
+              )}
             />
           ) : null}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <div>
-              <Label className="text-xs">From</Label>
+              <Label className="text-xs">{t("common.from", "From")}</Label>
               <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">To</Label>
+              <Label className="text-xs">{t("common.to", "To")}</Label>
               <Input
                 type="date"
                 value={to}
@@ -187,16 +194,16 @@ export function DepositsSection() {
               />
             </div>
             <div>
-              <Label className="text-xs">Status</Label>
+              <Label className="text-xs">{t("common.status", "Status")}</Label>
               <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All</SelectItem>
-                  <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="CLEARED">Cleared</SelectItem>
-                  <SelectItem value="DISPUTED">Disputed</SelectItem>
+                  <SelectItem value={ALL}>{t("cash.deposit.all", "All")}</SelectItem>
+                  <SelectItem value="PENDING">{t("cash.deposit.status.PENDING", "Pending")}</SelectItem>
+                  <SelectItem value="CLEARED">{t("cash.deposit.status.CLEARED", "Cleared")}</SelectItem>
+                  <SelectItem value="DISPUTED">{t("cash.deposit.status.DISPUTED", "Disputed")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -204,11 +211,23 @@ export function DepositsSection() {
 
           {summary ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <StatTile label="Deposited" value={formatINR(summary.totalPaise)} hint={`${summary.count} slips`} />
-              <StatTile label="Pending" value={formatINR(summary.pendingPaise)} tone="warn" />
-              <StatTile label="Cleared" value={formatINR(summary.clearedPaise)} tone="good" />
               <StatTile
-                label="Disputed"
+                label={t("cash.deposit.deposited", "Deposited")}
+                value={formatINR(summary.totalPaise)}
+                hint={t("cash.deposit.slips", "{n} slips", { n: summary.count })}
+              />
+              <StatTile
+                label={t("cash.deposit.status.PENDING", "Pending")}
+                value={formatINR(summary.pendingPaise)}
+                tone="warn"
+              />
+              <StatTile
+                label={t("cash.deposit.status.CLEARED", "Cleared")}
+                value={formatINR(summary.clearedPaise)}
+                tone="good"
+              />
+              <StatTile
+                label={t("cash.deposit.status.DISPUTED", "Disputed")}
                 value={formatINR(summary.disputedPaise)}
                 tone={Number(summary.disputedPaise) > 0 ? "danger" : "default"}
               />
@@ -218,23 +237,26 @@ export function DepositsSection() {
           {depositsQ.isLoading ? (
             <Loading />
           ) : depositsQ.error ? (
-            <EmptyState title="Could not load deposits" hint={apiError(depositsQ.error)} />
+            <EmptyState title={t("cash.deposit.loadFailed", "Could not load deposits")} hint={apiError(depositsQ.error)} />
           ) : rows.length === 0 ? (
             <EmptyState
-              title="No deposits in this range"
-              hint="Every trip to the bank recorded here is cash you can prove left the premises."
+              title={t("cash.deposit.empty", "No deposits in this range")}
+              hint={t(
+                "cash.deposit.emptyHint",
+                "Every trip to the bank recorded here is cash you can prove left the premises.",
+              )}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Bank</TableHead>
-                    <TableHead>Slip</TableHead>
-                    <TableHead>By</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("common.date", "Date")}</TableHead>
+                    <TableHead>{t("cash.deposit.colBank", "Bank")}</TableHead>
+                    <TableHead>{t("cash.deposit.colSlip", "Slip")}</TableHead>
+                    <TableHead>{t("cash.deposit.colBy", "By")}</TableHead>
+                    <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
+                    <TableHead>{t("common.status", "Status")}</TableHead>
                     {editable ? <TableHead /> : null}
                   </TableRow>
                 </TableHeader>
@@ -251,7 +273,9 @@ export function DepositsSection() {
                         {formatINR(d.amountPaise)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_VARIANT[d.status]}>{d.status}</Badge>
+                        <Badge variant={STATUS_VARIANT[d.status]}>
+                          {t(`cash.deposit.status.${d.status}`, d.status)}
+                        </Badge>
                       </TableCell>
                       {editable ? (
                         <TableCell className="whitespace-nowrap">
@@ -261,7 +285,7 @@ export function DepositsSection() {
                               size="sm"
                               onClick={() => setStatusOf.mutate({ id: d.id, status: "CLEARED" })}
                             >
-                              Cleared
+                              {t("cash.deposit.markCleared", "Cleared")}
                             </Button>
                           ) : null}
                           {d.status !== "DISPUTED" ? (
@@ -270,7 +294,7 @@ export function DepositsSection() {
                               size="sm"
                               onClick={() => setStatusOf.mutate({ id: d.id, status: "DISPUTED" })}
                             >
-                              Dispute
+                              {t("cash.deposit.markDisputed", "Dispute")}
                             </Button>
                           ) : null}
                         </TableCell>
@@ -296,6 +320,7 @@ function NewDepositDialog({
   onOpenChange: (v: boolean) => void;
   accounts: BankAccountRow[];
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const employeesQ = useEmployees();
   const employees = employeesQ.data ?? [];
@@ -324,7 +349,7 @@ function NewDepositDialog({
         })
       ).data,
     onSuccess: () => {
-      toast.success("Deposit recorded");
+      toast.success(t("cash.deposit.created", "Deposit recorded"));
       onOpenChange(false);
       setAmount("");
       setSlipNo("");
@@ -333,7 +358,7 @@ function NewDepositDialog({
       qc.invalidateQueries({ queryKey: ["cash-movements"] });
       qc.invalidateQueries({ queryKey: ["cash-bank-accounts"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not record the deposit")),
+    onError: (e) => toast.error(apiError(e, t("cash.deposit.createFailed", "Could not record the deposit"))),
   });
 
   const blocked =
@@ -346,17 +371,20 @@ function NewDepositDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Record a bank deposit</DialogTitle>
+          <DialogTitle>{t("cash.deposit.newTitle", "Record a bank deposit")}</DialogTitle>
           <DialogDescription>
-            This also records the cash leaving custody, so the cash position stays true.
+            {t(
+              "cash.deposit.newDesc",
+              "This also records the cash leaving custody, so the cash position stays true.",
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">Bank account</Label>
+            <Label className="text-xs">{t("cash.deposit.account", "Bank account")}</Label>
             <Select value={bankAccountId} onValueChange={setBankAccountId}>
               <SelectTrigger>
-                <SelectValue placeholder="Pick an account" />
+                <SelectValue placeholder={t("cash.deposit.pickAccount", "Pick an account")} />
               </SelectTrigger>
               <SelectContent>
                 {accounts.map((a) => (
@@ -369,7 +397,7 @@ function NewDepositDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Amount (₹)</Label>
+              <Label className="text-xs">{t("cash.deposit.amount", "Amount (₹)")}</Label>
               <Input
                 type="number"
                 inputMode="decimal"
@@ -381,7 +409,7 @@ function NewDepositDialog({
               />
             </div>
             <div>
-              <Label className="text-xs">Deposited on</Label>
+              <Label className="text-xs">{t("cash.deposit.on", "Deposited on")}</Label>
               <Input
                 type="date"
                 value={depositedOn}
@@ -392,17 +420,17 @@ function NewDepositDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Slip no.</Label>
+              <Label className="text-xs">{t("cash.deposit.slipNo", "Slip no.")}</Label>
               <Input value={slipNo} onChange={(e) => setSlipNo(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">Deposited by</Label>
+              <Label className="text-xs">{t("cash.deposit.by", "Deposited by")}</Label>
               <Select value={byEmployeeId} onValueChange={setByEmployeeId}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>Not recorded</SelectItem>
+                  <SelectItem value={NONE}>{t("cash.count.notRecorded", "Not recorded")}</SelectItem>
                   {employees.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       {e.name}
@@ -414,7 +442,7 @@ function NewDepositDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Cash came from</Label>
+              <Label className="text-xs">{t("cash.deposit.cameFrom", "Cash came from")}</Label>
               <Select value={fromLocation} onValueChange={setFromLocation}>
                 <SelectTrigger>
                   <SelectValue />
@@ -422,7 +450,7 @@ function NewDepositDialog({
                 <SelectContent>
                   {CASH_LOCATIONS.filter((l) => l !== "BANK" && l !== "VENDOR").map((l) => (
                     <SelectItem key={l} value={l}>
-                      {LOCATION_SHORT[l]}
+                      {locShort(t, l)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -430,13 +458,13 @@ function NewDepositDialog({
             </div>
             {fromNeedsPerson ? (
               <div>
-                <Label className="text-xs">Held by</Label>
+                <Label className="text-xs">{t("cash.deposit.heldBy", "Held by")}</Label>
                 <Select value={fromEmployeeId} onValueChange={setFromEmployeeId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Who?" />
+                    <SelectValue placeholder={t("cash.movement.who", "Who?")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>Pick a person…</SelectItem>
+                    <SelectItem value={NONE}>{t("cash.movement.pickPerson", "Pick a person…")}</SelectItem>
                     {employees.map((e) => (
                       <SelectItem key={e.id} value={e.id}>
                         {e.name}
@@ -449,10 +477,12 @@ function NewDepositDialog({
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button onClick={() => create.mutate()} disabled={blocked || create.isPending}>
-              {create.isPending ? "Saving…" : "Record deposit"}
+              {create.isPending
+                ? t("common.saving", "Saving…")
+                : t("cash.deposit.record", "Record deposit")}
             </Button>
           </div>
         </div>

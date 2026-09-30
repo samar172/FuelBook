@@ -28,8 +28,12 @@ import {
   CartesianGrid,
 } from "recharts";
 import { format, parseISO } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 
 export default function DashboardPage() {
+  const { t } = useT();
+  const dateLocale = useDateLocale();
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-today"],
     queryFn: async () => (await api.get("/api/dashboard/today")).data,
@@ -49,12 +53,12 @@ export default function DashboardPage() {
     return Object.entries(raw)
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([date, v]: any) => ({
-        date: format(parseISO(date), "EEE"),
+        date: format(parseISO(date), "EEE", { locale: dateLocale }),
         sales: Number(v.sales) / 100,
       }));
-  }, [trendQ.data]);
+  }, [trendQ.data, dateLocale]);
 
-  if (isLoading) return <div className="text-muted-foreground">Loading…</div>;
+  if (isLoading) return <div className="text-muted-foreground">{t("common.loading", "Loading…")}</div>;
   if (!data) return null;
 
   const cf = data.cashFlow;
@@ -65,12 +69,12 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Today — {data.date}</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">{data.shiftsCount} shift(s) running for today</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t("dashboard.todayHeading", "Today — {date}", { date: data.date })}</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">{t("dashboard.shiftsRunning", "{count} shift(s) running for today", { count: data.shiftsCount })}</p>
         </div>
         <Link href="/shifts/new">
           <button className="bg-primary text-primary-foreground rounded-md px-3 sm:px-4 py-2 text-sm font-medium hover:bg-primary/90">
-            + New Shift
+            {t("dashboard.newShift", "+ New Shift")}
           </button>
         </Link>
       </div>
@@ -80,31 +84,31 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <CircleDollarSign className="h-5 w-5" />
-            Money Flow Reconciliation
+            {t("dashboard.moneyFlow", "Money Flow Reconciliation")}
             {isMatched ? (
-              <Badge variant="success">Matched</Badge>
+              <Badge variant="success">{t("dashboard.matched", "Matched")}</Badge>
             ) : (
-              <Badge variant="warning">{diff > 0 ? "Excess" : "Short"} {formatINR(Math.abs(diff))}</Badge>
+              <Badge variant="warning">{diff > 0 ? t("dashboard.excess", "Excess") : t("dashboard.short", "Short")} {formatINR(Math.abs(diff))}</Badge>
             )}
           </CardTitle>
           <CardDescription>
-            Where every rupee of today's sales went — cash, digital, credit, expenses.
+            {t("dashboard.moneyFlowDesc", "Where every rupee of today's sales went — cash, digital, credit, expenses.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Money IN */}
           <div className="space-y-2">
             <div className="text-xs uppercase font-semibold text-muted-foreground tracking-wider">
-              Money In
+              {t("dashboard.moneyIn", "Money In")}
             </div>
-            <Row icon={<TrendingUp className="h-4 w-4 text-green-600" />} label="Total Sales" value={formatINR(cf.totalSalesPaise)} />
-            <Row icon={<ArrowDownCircle className="h-4 w-4 text-red-500" />} label="Less: Credit Issued (not collected)" value={`- ${formatINR(cf.totalCreditIssuedPaise)}`} />
-            <Row icon={<ArrowUpCircle className="h-4 w-4 text-green-600" />} label="Outstanding Received (past credit)" value={`+ ${formatINR(cf.totalOutstandingReceivedPaise)}`} />
+            <Row icon={<TrendingUp className="h-4 w-4 text-green-600" />} label={t("dashboard.totalSales", "Total Sales")} value={formatINR(cf.totalSalesPaise)} />
+            <Row icon={<ArrowDownCircle className="h-4 w-4 text-red-500" />} label={t("dashboard.lessCreditIssued", "Less: Credit Issued (not collected)")} value={`- ${formatINR(cf.totalCreditIssuedPaise)}`} />
+            <Row icon={<ArrowUpCircle className="h-4 w-4 text-green-600" />} label={t("dashboard.outstandingReceived", "Outstanding Received (past credit)")} value={`+ ${formatINR(cf.totalOutstandingReceivedPaise)}`} />
             <div className="border-t pt-2 mt-2">
-              <Row label="Expected Collections" value={formatINR(cf.moneyInExpected)} bold />
-              <Row label="Actual Collections (cash + digital + bank)" value={formatINR(cf.moneyInCollected)} bold />
+              <Row label={t("dashboard.expectedCollections", "Expected Collections")} value={formatINR(cf.moneyInExpected)} bold />
+              <Row label={t("dashboard.actualCollections", "Actual Collections (cash + digital + bank)")} value={formatINR(cf.moneyInCollected)} bold />
               <Row
-                label="Difference"
+                label={t("dashboard.difference", "Difference")}
                 value={(diff >= 0 ? "+" : "") + formatINR(Math.abs(diff))}
                 bold
                 accent={isMatched ? "success" : "warning"}
@@ -115,14 +119,14 @@ export default function DashboardPage() {
           {/* Cash position */}
           <div className="space-y-2">
             <div className="text-xs uppercase font-semibold text-muted-foreground tracking-wider">
-              Cash Position
+              {t("dashboard.cashPosition", "Cash Position")}
             </div>
-            <Row icon={<Wallet className="h-4 w-4" />} label="Opening Cash" value={formatINR(cf.openingCashPaise)} />
-            <Row icon={<TrendingUp className="h-4 w-4 text-green-600" />} label="+ Cash Sales (sales − credit)" value={formatINR(BigInt(cf.totalSalesPaise) - BigInt(cf.totalCreditIssuedPaise))} />
-            <Row icon={<ArrowUpCircle className="h-4 w-4 text-green-600" />} label="+ Outstanding Received" value={formatINR(cf.totalOutstandingReceivedPaise)} />
-            <Row icon={<Receipt className="h-4 w-4 text-red-500" />} label="− Total Expenses" value={`- ${formatINR(cf.totalExpensesPaise)}`} />
+            <Row icon={<Wallet className="h-4 w-4" />} label={t("dashboard.openingCash", "Opening Cash")} value={formatINR(cf.openingCashPaise)} />
+            <Row icon={<TrendingUp className="h-4 w-4 text-green-600" />} label={t("dashboard.plusCashSales", "+ Cash Sales (sales − credit)")} value={formatINR(BigInt(cf.totalSalesPaise) - BigInt(cf.totalCreditIssuedPaise))} />
+            <Row icon={<ArrowUpCircle className="h-4 w-4 text-green-600" />} label={t("dashboard.plusOutstandingReceived", "+ Outstanding Received")} value={formatINR(cf.totalOutstandingReceivedPaise)} />
+            <Row icon={<Receipt className="h-4 w-4 text-red-500" />} label={t("dashboard.minusTotalExpenses", "− Total Expenses")} value={`- ${formatINR(cf.totalExpensesPaise)}`} />
             <div className="border-t pt-2 mt-2">
-              <Row label="Closing Cash" value={formatINR(cf.closingCashPaise)} bold accent="primary" />
+              <Row label={t("dashboard.closingCash", "Closing Cash")} value={formatINR(cf.closingCashPaise)} bold accent="primary" />
             </div>
           </div>
         </CardContent>
@@ -130,7 +134,7 @@ export default function DashboardPage() {
 
       {/* Fuel sales by type */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">Fuel Sales — Today</h2>
+        <h2 className="text-lg font-semibold mb-3">{t("dashboard.fuelSalesToday", "Fuel Sales — Today")}</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Object.entries(data.fuelSales as Record<string, { qtyMl: string; amtPaise: string }>).map(([k, v]) => (
             <Card key={k}>
@@ -151,12 +155,12 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Banknote className="h-4 w-4" /> Collections by Channel
+              <Banknote className="h-4 w-4" /> {t("dashboard.collectionsByChannel", "Collections by Channel")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {(data.collectionsByChannel || []).length === 0 && (
-              <div className="text-sm text-muted-foreground">No collections yet.</div>
+              <div className="text-sm text-muted-foreground">{t("dashboard.noCollections", "No collections yet.")}</div>
             )}
             {(data.collectionsByChannel || []).map((c: any) => (
               <Row key={c.name} label={c.name} value={formatINR(c.amount)} />
@@ -166,17 +170,17 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Stock Levels</CardTitle>
+            <CardTitle className="text-base">{t("dashboard.stockLevels", "Stock Levels")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {data.stock.map((t: any) => {
-              const pct = (Number(t.currentMl) / Number(t.capacityMl)) * 100;
+            {data.stock.map((tk: any) => {
+              const pct = (Number(tk.currentMl) / Number(tk.capacityMl)) * 100;
               return (
-                <div key={t.tankId}>
+                <div key={tk.tankId}>
                   <div className="flex justify-between text-sm">
-                    <div className="font-medium">{t.name}</div>
+                    <div className="font-medium">{tk.name}</div>
                     <div className="text-muted-foreground">
-                      {formatLitres(t.currentMl)} / {formatLitres(t.capacityMl)} L
+                      {formatLitres(tk.currentMl)} / {formatLitres(tk.capacityMl)} L
                     </div>
                   </div>
                   <div className="h-2 bg-slate-100 rounded mt-1 overflow-hidden">
@@ -200,21 +204,21 @@ export default function DashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" /> Sales — Last 7 Days
+                <TrendingUp className="h-4 w-4" /> {t("dashboard.salesLast7", "Sales — Last 7 Days")}
               </CardTitle>
-              <CardDescription>Daily totals across all shifts.</CardDescription>
+              <CardDescription>{t("dashboard.salesLast7Desc", "Daily totals across all shifts.")}</CardDescription>
             </div>
             <Link
               href="/reports"
               className="text-sm text-primary inline-flex items-center gap-1 hover:underline"
             >
-              Full reports <ArrowRight className="h-3.5 w-3.5" />
+              {t("dashboard.fullReports", "Full reports")} <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </CardHeader>
           <CardContent>
             {trendData.length === 0 ? (
               <div className="text-sm text-muted-foreground py-8 text-center">
-                Trend will appear after a few shifts are submitted.
+                {t("dashboard.trendAfterShifts", "Trend will appear after a few shifts are submitted.")}
               </div>
             ) : (
               <div style={{ width: "100%", height: 220 }}>
@@ -265,14 +269,14 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" /> Top Credit Customers
+              <Users className="h-4 w-4" /> {t("dashboard.topCreditCustomers", "Top Credit Customers")}
             </CardTitle>
-            <CardDescription>By current outstanding.</CardDescription>
+            <CardDescription>{t("dashboard.byCurrentOutstanding", "By current outstanding.")}</CardDescription>
           </CardHeader>
           <CardContent>
             {(topCustomersQ.data || []).length === 0 ? (
               <div className="text-sm text-muted-foreground py-4">
-                No outstanding balances.
+                {t("dashboard.noOutstanding", "No outstanding balances.")}
               </div>
             ) : (
               <div className="space-y-2">
@@ -330,12 +334,12 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Outstanding Across All Customers</CardTitle>
+          <CardTitle className="text-base">{t("dashboard.outstandingAll", "Outstanding Across All Customers")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-bold">{formatINR(data.totalCustomerOutstandingPaise)}</div>
           <div className="text-sm text-muted-foreground">
-            Total amount owed to the pump by credit customers (running balance).
+            {t("dashboard.outstandingAllDesc", "Total amount owed to the pump by credit customers (running balance).")}
           </div>
         </CardContent>
       </Card>
@@ -343,11 +347,11 @@ export default function DashboardPage() {
       {/* Today's shifts */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Today's Shifts</CardTitle>
+          <CardTitle className="text-base">{t("dashboard.todaysShifts", "Today's Shifts")}</CardTitle>
         </CardHeader>
         <CardContent>
           {data.shifts.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No shifts created yet for today.</div>
+            <div className="text-sm text-muted-foreground">{t("dashboard.noShiftsToday", "No shifts created yet for today.")}</div>
           ) : (
             <div className="space-y-2">
               {data.shifts.map((s: any) => (
@@ -358,20 +362,20 @@ export default function DashboardPage() {
                 >
                   <div className="flex items-center gap-3">
                     <Badge variant={s.shiftType === "DAY" ? "default" : "secondary"}>
-                      {s.shiftType}
+                      {s.shiftType === "DAY" ? t("dashboard.shiftDay", "DAY") : s.shiftType === "NIGHT" ? t("dashboard.shiftNight", "NIGHT") : s.shiftType}
                     </Badge>
-                    <div className="text-sm font-medium">Sales {formatINR(s.totalSalesPaise)}</div>
+                    <div className="text-sm font-medium">{t("dashboard.salesLabel", "Sales")} {formatINR(s.totalSalesPaise)}</div>
                     <div className="text-sm text-muted-foreground">
-                      Closing cash {formatINR(s.closingCashPaise)}
+                      {t("dashboard.closingCashLabel", "Closing cash")} {formatINR(s.closingCashPaise)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {s.discrepancyFlag && (
                       <Badge variant="warning" className="gap-1">
-                        <AlertTriangle className="h-3 w-3" /> Discrepancy
+                        <AlertTriangle className="h-3 w-3" /> {t("dashboard.discrepancy", "Discrepancy")}
                       </Badge>
                     )}
-                    <Badge variant="outline">{s.status}</Badge>
+                    <Badge variant="outline">{t(`dashboard.status${s.status}`, s.status)}</Badge>
                   </div>
                 </Link>
               ))}

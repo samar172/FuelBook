@@ -12,6 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { format, parseISO, subDays } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { ShiftLite, SHIFT_LABELS } from "./types";
 
 // Dips and nozzle tests always belong to a shift, so both logs share one picker.
@@ -23,6 +25,9 @@ export function ShiftPicker({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const { t } = useT();
+  const locale = useDateLocale();
+
   const { data: shifts = [], isLoading } = useQuery<ShiftLite[]>({
     queryKey: ["wet-stock-shifts"],
     queryFn: async () =>
@@ -45,17 +50,22 @@ export function ShiftPicker({
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <div className="flex-1 min-w-0">
-        <Label htmlFor="wet-shift">Shift</Label>
+        <Label htmlFor="wet-shift">{t("wetstock.shift", "Shift")}</Label>
         <Select value={value || undefined} onValueChange={onChange} disabled={!shifts.length}>
           <SelectTrigger id="wet-shift" className="mt-1">
             <SelectValue
-              placeholder={isLoading ? "Loading shifts…" : "No shifts in the last 45 days"}
+              placeholder={
+                isLoading
+                  ? t("wetstock.loadingShifts", "Loading shifts…")
+                  : t("wetstock.noShifts", "No shifts in the last 45 days")
+              }
             />
           </SelectTrigger>
           <SelectContent>
             {shifts.map((s) => (
               <SelectItem key={s.id} value={s.id}>
-                {format(parseISO(s.reportDate), "dd MMM yyyy")} · {SHIFT_LABELS[s.shiftType]}
+                {format(parseISO(s.reportDate), "dd MMM yyyy", { locale })} ·{" "}
+                {t(`wetstock.shiftType.${s.shiftType}`, SHIFT_LABELS[s.shiftType])}
               </SelectItem>
             ))}
           </SelectContent>
@@ -73,10 +83,10 @@ export function ShiftPicker({
           className="w-fit"
         >
           {current.status === "LOCKED"
-            ? "Locked — read only"
+            ? t("wetstock.status.locked", "Locked — read only")
             : current.status === "SUBMITTED"
-              ? "Submitted"
-              : "Draft"}
+              ? t("wetstock.status.submitted", "Submitted")
+              : t("wetstock.status.draft", "Draft")}
         </Badge>
       ) : null}
     </div>

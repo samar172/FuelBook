@@ -26,7 +26,9 @@ import {
 import { formatINR } from "@/lib/utils";
 import { apiError, Employee } from "@/lib/types";
 import { toast } from "sonner";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, type Locale } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { HandCoins, Plus, Trash2, X } from "lucide-react";
 import { inputToPaise, paise } from "@/lib/books";
 
@@ -45,25 +47,28 @@ export type CashDrop = {
 
 type DropsResponse = { drops: CashDrop[]; totalPaise: string };
 
-const OFFICE_SAFE_LABEL = "the office safe";
-
 // An <input type="datetime-local"> value for a Date, in local time.
 const toLocalInput = (d: Date): string => format(d, "yyyy-MM-dd'T'HH:mm");
 
 // Where the cash went, in the owner's words.
-export const dropDestination = (d: CashDrop): string =>
+export const dropDestination = (
+  d: CashDrop,
+  t: (key: string, fallback?: string, vars?: Record<string, string | number>) => string,
+): string =>
   d.toLocation === "OFFICE_SAFE"
-    ? OFFICE_SAFE_LABEL
+    ? t("shift.drops.destSafe", "the office safe")
     : d.toEmployee
-      ? `${d.toEmployee.name} (cashier)`
-      : "the cashier";
+      ? t("shift.drops.destCashierNamed", "{name} (cashier)", { name: d.toEmployee.name })
+      : t("shift.drops.destCashier", "the cashier");
 
 // "2:45 PM", or "24 Sep, 11:50 PM" when the drop is not on the report date —
 // night shifts run past midnight.
-export const dropTimeLabel = (occurredAt: string, reportDate?: string): string => {
+export const dropTimeLabel = (occurredAt: string, reportDate?: string, locale?: Locale): string => {
   const when = new Date(occurredAt);
   const sameDay = reportDate ? isSameDay(when, new Date(reportDate)) : true;
-  return sameDay ? format(when, "h:mm a") : format(when, "d MMM, h:mm a");
+  return sameDay
+    ? format(when, "h:mm a", { locale })
+    : format(when, "d MMM, h:mm a", { locale });
 };
 
 type Form = {
@@ -102,6 +107,8 @@ export function CashDropsPanel({
   attendants: { employeeId: string; employeeName: string }[];
   cashierEmployeeId: string | null;
 }) {
+  const { t } = useT();
+  const locale = useDateLocale();
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery<DropsResponse>({
@@ -119,10 +126,10 @@ export function CashDropsPanel({
 
   const create = useMutation({
     mutationFn: async (f: Form) => {
-      if (!f.employeeId) throw new Error("Say who handed the cash in");
+      if (!f.employeeId) throw new Error(t("shift.drops.errWho", "Say who handed the cash in"));
       const amountPaise = inputToPaise(f.amount);
-      if (paise(amountPaise) <= 0) throw new Error("Enter how much cash was handed in");
-      if (!f.occurredAt) throw new Error("Say when the cash was handed in");
+      if (paise(amountPaise) <= 0) throw new Error(t("shift.drops.errAmount", "Enter how much cash was handed in"));
+      if (!f.occurredAt) throw new Error(t("shift.drops.errWhen", "Say when the cash was handed in"));
       return (
         await api.post(`/api/shifts/${shiftId}/cash-drops`, {
           employeeId: f.employeeId,
@@ -137,22 +144,22 @@ export function CashDropsPanel({
       ).data;
     },
     onSuccess: () => {
-      toast.success("Cash drop recorded");
+      toast.success(t("shift.drops.recorded", "Cash drop recorded"));
       setForm(null);
       refresh();
     },
-    onError: (e) => toast.error(apiError(e, "Could not record the cash drop")),
+    onError: (e) => toast.error(apiError(e, t("shift.drops.createFailed", "Could not record the cash drop"))),
   });
 
   const remove = useMutation({
     mutationFn: async (movementId: string) =>
       (await api.delete(`/api/shifts/${shiftId}/cash-drops/${movementId}`)).data,
     onSuccess: () => {
-      toast.success("Cash drop deleted");
+      toast.success(t("shift.drops.deleted", "Cash drop deleted"));
       refresh();
     },
     // A 409 means it is already posted to the books — show what the server said.
-    onError: (e) => toast.error(apiError(e, "Could not delete the cash drop")),
+    onError: (e) => toast.error(apiError(e, t("shift.drops.deleteFailed", "Could not delete the cash drop"))),
   });
 
   const drops = data?.drops ?? [];
@@ -167,21 +174,23 @@ export function CashDropsPanel({
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <CardTitle className="flex items-center gap-2">
-            <HandCoins className="h-4 w-4" /> Cash handed in during the shift
+            <HandCoins className="h-4 w-4" /> {t("shift.drops.title", "Cash handed in during the shift")}
           </CardTitle>
           <CardDescription>
-            Every time an attendant passes cash to the cashier or drops it in the office safe,
-            record it here with the time. It counts towards what they owe at the end of the shift.
+            {t(
+              "shift.drops.desc",
+              "Every time an attendant passes cash to the cashier or drops it in the office safe, record it here with the time. It counts towards what they owe at the end of the shift.",
+            )}
           </CardDescription>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">Handed in so far</div>
+            <div className="text-xs text-muted-foreground">{t("shift.drops.soFar", "Handed in so far")}</div>
             <div className="font-mono font-semibold">{formatINR(data?.totalPaise ?? 0)}</div>
           </div>
           {!readOnly && !form && (
             <Button size="sm" onClick={() => setForm(emptyForm(attendants[0]?.employeeId ?? "", cashierEmployeeId))}>
-              <Plus className="h-4 w-4 mr-1" /> Record cash drop
+              <Plus className="h-4 w-4 mr-1" /> {t("shift.drops.record", "Record cash drop")}
             </Button>
           )}
         </div>
@@ -190,20 +199,20 @@ export function CashDropsPanel({
         {!readOnly && form && (
           <div className="rounded-md border bg-muted/30 p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">Record a cash drop</div>
+              <div className="text-sm font-medium">{t("shift.drops.formTitle", "Record a cash drop")}</div>
               <Button size="icon" variant="ghost" onClick={() => setForm(null)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <Label className="text-xs">Who handed it in</Label>
+                <Label className="text-xs">{t("shift.drops.who", "Who handed it in")}</Label>
                 <Select
                   value={form.employeeId}
                   onValueChange={(v) => setForm({ ...form, employeeId: v })}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Pick the attendant" />
+                    <SelectValue placeholder={t("shift.drops.pickAttendant", "Pick the attendant")} />
                   </SelectTrigger>
                   <SelectContent>
                     {pickList.map((e) => (
@@ -215,7 +224,7 @@ export function CashDropsPanel({
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Amount (₹)</Label>
+                <Label className="text-xs">{t("shift.drops.amount", "Amount (₹)")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -228,7 +237,7 @@ export function CashDropsPanel({
                 />
               </div>
               <div>
-                <Label className="text-xs">Handed to</Label>
+                <Label className="text-xs">{t("shift.drops.handedTo", "Handed to")}</Label>
                 <Select
                   value={form.toLocation}
                   onValueChange={(v) => setForm({ ...form, toLocation: v as DropLocation })}
@@ -237,13 +246,13 @@ export function CashDropsPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CASHIER">The shift cashier</SelectItem>
-                    <SelectItem value="OFFICE_SAFE">The office safe</SelectItem>
+                    <SelectItem value="CASHIER">{t("shift.drops.toCashier", "The shift cashier")}</SelectItem>
+                    <SelectItem value="OFFICE_SAFE">{t("shift.drops.toSafe", "The office safe")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Time it happened</Label>
+                <Label className="text-xs">{t("shift.drops.when", "Time it happened")}</Label>
                 <Input
                   type="datetime-local"
                   className="mt-1"
@@ -251,12 +260,12 @@ export function CashDropsPanel({
                   onChange={(e) => setForm({ ...form, occurredAt: e.target.value })}
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Defaults to now — change it if you are writing it up a bit late.
+                  {t("shift.drops.whenHint", "Defaults to now — change it if you are writing it up a bit late.")}
                 </p>
               </div>
               {form.toLocation === "CASHIER" && (
                 <div>
-                  <Label className="text-xs">Which cashier took it</Label>
+                  <Label className="text-xs">{t("shift.drops.whichCashier", "Which cashier took it")}</Label>
                   <Select
                     value={form.toEmployeeId || "DEFAULT"}
                     onValueChange={(v) => setForm({ ...form, toEmployeeId: v === "DEFAULT" ? "" : v })}
@@ -267,8 +276,8 @@ export function CashDropsPanel({
                     <SelectContent>
                       <SelectItem value="DEFAULT">
                         {cashierEmployeeId
-                          ? "The shift cashier"
-                          : "The shift cashier (none set yet)"}
+                          ? t("shift.drops.defaultCashier", "The shift cashier")
+                          : t("shift.drops.defaultCashierNone", "The shift cashier (none set yet)")}
                       </SelectItem>
                       {employees
                         .filter((e) => e.id !== form.employeeId)
@@ -282,11 +291,11 @@ export function CashDropsPanel({
                 </div>
               )}
               <div className="sm:col-span-2">
-                <Label className="text-xs">Note (optional)</Label>
+                <Label className="text-xs">{t("shift.drops.note", "Note (optional)")}</Label>
                 <Input
                   className="mt-1"
                   maxLength={500}
-                  placeholder="e.g. counted together at the counter"
+                  placeholder={t("shift.drops.notePlaceholder", "e.g. counted together at the counter")}
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 />
@@ -294,24 +303,27 @@ export function CashDropsPanel({
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setForm(null)}>
-                Cancel
+                {t("common.cancel", "Cancel")}
               </Button>
               <Button onClick={() => create.mutate(form)} disabled={create.isPending}>
-                {create.isPending ? "Saving…" : "Record drop"}
+                {create.isPending ? t("common.saving", "Saving…") : t("shift.drops.submit", "Record drop")}
               </Button>
             </div>
           </div>
         )}
 
         {isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading…</div>
+          <div className="text-sm text-muted-foreground">{t("common.loading", "Loading…")}</div>
         ) : drops.length === 0 ? (
           <div className="rounded-md border border-dashed p-6 text-center">
-            <div className="font-medium">No cash handed in yet</div>
+            <div className="font-medium">{t("shift.drops.emptyTitle", "No cash handed in yet")}</div>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
               {readOnly
-                ? "Nobody handed cash in partway through this shift."
-                : "When someone hands cash over partway through the shift, record it here so the time is on the books."}
+                ? t("shift.drops.emptyReadOnly", "Nobody handed cash in partway through this shift.")
+                : t(
+                    "shift.drops.emptyEditable",
+                    "When someone hands cash over partway through the shift, record it here so the time is on the books.",
+                  )}
             </p>
           </div>
         ) : (
@@ -322,13 +334,22 @@ export function CashDropsPanel({
                 className="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-md border p-3"
               >
                 <Badge variant="outline" className="font-mono shrink-0">
-                  {dropTimeLabel(d.occurredAt, reportDate)}
+                  {dropTimeLabel(d.occurredAt, reportDate, locale)}
                 </Badge>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm">
-                    <span className="font-mono font-semibold">{formatINR(d.amountPaise)}</span>{" "}
-                    from <span className="font-medium">{d.fromEmployee.name}</span> to{" "}
-                    <span className="font-medium">{dropDestination(d)}</span>
+                    <span className="font-mono font-semibold">{formatINR(d.amountPaise)}</span>
+                    {t("shift.drops.fromTo", " from {from} to {to}", { from: "@@F@@", to: "@@T@@" })
+                      .split(/(@@F@@|@@T@@)/)
+                      .map((part, i) =>
+                        part === "@@F@@" ? (
+                          <span key={i} className="font-medium">{d.fromEmployee.name}</span>
+                        ) : part === "@@T@@" ? (
+                          <span key={i} className="font-medium">{dropDestination(d, t)}</span>
+                        ) : (
+                          part
+                        ),
+                      )}
                   </div>
                   {(d.purpose || d.notes) && (
                     <div className="text-xs text-muted-foreground">

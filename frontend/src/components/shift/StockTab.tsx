@@ -11,9 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatLitres, FUEL_LABELS, litresToMl, mlToLitres, rupeesToPaise } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
 import { Plus } from "lucide-react";
 
 export function StockTab({ shift, disabled }: { shift: any; disabled: boolean }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [entries, setEntries] = useState(() =>
     shift.stockEntries.map((e: any) => ({
@@ -29,8 +31,8 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
 
   // purchase per tank (sum of tanker receipts for this shift)
   const purchaseByTank: Record<string, number> = {};
-  for (const t of shift.tankerReceipts || []) {
-    purchaseByTank[t.tankId] = (purchaseByTank[t.tankId] || 0) + Number(t.receivedMl);
+  for (const rc of shift.tankerReceipts || []) {
+    purchaseByTank[rc.tankId] = (purchaseByTank[rc.tankId] || 0) + Number(rc.receivedMl);
   }
 
   const save = useMutation({
@@ -44,7 +46,7 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
       })).data;
     },
     onSuccess: () => {
-      toast.success("Stock saved");
+      toast.success(t("shift.stock.saved", "Stock saved"));
       qc.invalidateQueries({ queryKey: ["shift", shift.id] });
     },
   });
@@ -60,22 +62,24 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
     <Card>
       <CardHeader className="flex-row justify-between items-start">
         <div>
-          <CardTitle>Stock</CardTitle>
+          <CardTitle>{t("shift.stock.title", "Stock")}</CardTitle>
           <CardDescription>
-            Opening stock auto-filled. Enter closing stock per tank. Sale is computed from
-            opening + purchase - closing.
+            {t(
+              "shift.stock.desc",
+              "Opening stock auto-filled. Enter closing stock per tank. Sale is computed from opening + purchase - closing.",
+            )}
           </CardDescription>
         </div>
         {!disabled && (
           <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
-                <Plus className="h-4 w-4 mr-1" /> Tanker Receipt
+                <Plus className="h-4 w-4 mr-1" /> {t("shift.stock.tankerReceipt", "Tanker Receipt")}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Tanker Receipt</DialogTitle>
+                <DialogTitle>{t("shift.stock.addTankerReceipt", "Add Tanker Receipt")}</DialogTitle>
               </DialogHeader>
               <TankerReceiptForm
                 shiftId={shift.id}
@@ -93,12 +97,12 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tank</TableHead>
-              <TableHead>Fuel</TableHead>
-              <TableHead>Opening (L)</TableHead>
-              <TableHead>Purchase (L)</TableHead>
-              <TableHead>Closing (L)</TableHead>
-              <TableHead className="text-right">Sale by stock (L)</TableHead>
+              <TableHead>{t("shift.stock.tank", "Tank")}</TableHead>
+              <TableHead>{t("shift.stock.fuel", "Fuel")}</TableHead>
+              <TableHead>{t("shift.stock.opening", "Opening (L)")}</TableHead>
+              <TableHead>{t("shift.stock.purchase", "Purchase (L)")}</TableHead>
+              <TableHead>{t("shift.stock.closing", "Closing (L)")}</TableHead>
+              <TableHead className="text-right">{t("shift.stock.saleByStock", "Sale by stock (L)")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -108,7 +112,7 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
               return (
                 <TableRow key={e.tankId}>
                   <TableCell className="font-medium">{e.name}</TableCell>
-                  <TableCell>{FUEL_LABELS[e.fuelType] || e.fuelType}</TableCell>
+                  <TableCell>{t(`shift.fuel.${e.fuelType}`, FUEL_LABELS[e.fuelType] || e.fuelType)}</TableCell>
                   <TableCell>
                     <Input
                       type="number"
@@ -140,28 +144,28 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
         </Table>
         {!disabled && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save stock"}
+            {save.isPending ? t("common.saving", "Saving…") : t("shift.stock.save", "Save stock")}
           </Button>
         )}
         {(shift.tankerReceipts || []).length > 0 && (
           <div>
-            <div className="text-sm font-semibold mb-2">Tanker Receipts (this shift)</div>
+            <div className="text-sm font-semibold mb-2">{t("shift.stock.receiptsThisShift", "Tanker Receipts (this shift)")}</div>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tank</TableHead>
-                  <TableHead>Litres</TableHead>
-                  <TableHead>Bill</TableHead>
-                  <TableHead>Vendor</TableHead>
+                  <TableHead>{t("shift.stock.tank", "Tank")}</TableHead>
+                  <TableHead>{t("common.litres", "Litres")}</TableHead>
+                  <TableHead>{t("shift.stock.bill", "Bill")}</TableHead>
+                  <TableHead>{t("shift.stock.vendor", "Vendor")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {shift.tankerReceipts.map((t: any) => (
-                  <TableRow key={t.id}>
-                    <TableCell>{entries.find((e: any) => e.tankId === t.tankId)?.name}</TableCell>
-                    <TableCell>{formatLitres(t.receivedMl)} L</TableCell>
-                    <TableCell>{t.billNo || "-"}</TableCell>
-                    <TableCell>{t.vendorName || "-"}</TableCell>
+                {shift.tankerReceipts.map((rc: any) => (
+                  <TableRow key={rc.id}>
+                    <TableCell>{entries.find((e: any) => e.tankId === rc.tankId)?.name}</TableCell>
+                    <TableCell>{formatLitres(rc.receivedMl)} L</TableCell>
+                    <TableCell>{rc.billNo || "-"}</TableCell>
+                    <TableCell>{rc.vendorName || "-"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -182,6 +186,7 @@ function TankerReceiptForm({
   tanks: any[];
   onSuccess: () => void;
 }) {
+  const { t } = useT();
   const [tankId, setTankId] = useState(tanks[0]?.tankId || "");
   const [litres, setLitres] = useState("");
   const [rate, setRate] = useState("");
@@ -200,45 +205,45 @@ function TankerReceiptForm({
       })).data;
     },
     onSuccess: () => {
-      toast.success("Tanker receipt added");
+      toast.success(t("shift.stock.receiptAdded", "Tanker receipt added"));
       onSuccess();
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.error || t("common.failed", "Something went wrong")),
   });
 
   return (
     <div className="space-y-3">
       <div>
-        <Label>Tank</Label>
+        <Label>{t("shift.stock.tank", "Tank")}</Label>
         <Select value={tankId} onValueChange={setTankId}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {tanks.map((t: any) => (
-              <SelectItem key={t.tankId} value={t.tankId}>
-                {t.name} ({FUEL_LABELS[t.fuelType] || t.fuelType})
+            {tanks.map((tk: any) => (
+              <SelectItem key={tk.tankId} value={tk.tankId}>
+                {tk.name} ({t(`shift.fuel.${tk.fuelType}`, FUEL_LABELS[tk.fuelType] || tk.fuelType)})
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label>Litres received</Label>
+        <Label>{t("shift.stock.litresReceived", "Litres received")}</Label>
         <Input type="number" step="0.001" value={litres} onChange={(e) => setLitres(e.target.value)} />
       </div>
       <div>
-        <Label>Rate / litre (₹) — optional</Label>
+        <Label>{t("shift.stock.ratePerLitre", "Rate / litre (₹) — optional")}</Label>
         <Input type="number" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} />
       </div>
       <div>
-        <Label>Bill no</Label>
+        <Label>{t("shift.stock.billNo", "Bill no")}</Label>
         <Input value={billNo} onChange={(e) => setBillNo(e.target.value)} />
       </div>
       <div>
-        <Label>Vendor</Label>
+        <Label>{t("shift.stock.vendor", "Vendor")}</Label>
         <Input value={vendor} onChange={(e) => setVendor(e.target.value)} />
       </div>
       <Button onClick={() => submit.mutate()} disabled={!tankId || !litres || submit.isPending}>
-        {submit.isPending ? "Saving…" : "Add receipt"}
+        {submit.isPending ? t("common.saving", "Saving…") : t("shift.stock.addReceipt", "Add receipt")}
       </Button>
     </div>
   );

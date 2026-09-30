@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn, formatINR, formatLitres, FUEL_LABELS } from "@/lib/utils";
 import { AlertTriangle, CheckCircle } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 type ReconRow = {
   employeeId: string;
@@ -39,6 +40,7 @@ type ReconResponse = {
 };
 
 export function ReconciliationTab({ shift }: { shift: any }) {
+  const { t } = useT();
   // The same figures the Cash Handover tab works from, so the two can never
   // disagree: sales per attendant, what they gave on credit or took digitally,
   // the cash that leaves them owing, and what has actually been settled.
@@ -61,8 +63,8 @@ export function ReconciliationTab({ shift }: { shift: any }) {
     meterByFuel[r.fuelType] = (meterByFuel[r.fuelType] || 0) + sale;
   }
   const purchaseByTank: Record<string, number> = {};
-  for (const t of shift.tankerReceipts || []) {
-    purchaseByTank[t.tankId] = (purchaseByTank[t.tankId] || 0) + Number(t.receivedMl);
+  for (const rc of shift.tankerReceipts || []) {
+    purchaseByTank[rc.tankId] = (purchaseByTank[rc.tankId] || 0) + Number(rc.receivedMl);
   }
   const stockByFuel: Record<string, number> = {};
   for (const e of shift.stockEntries) {
@@ -82,39 +84,41 @@ export function ReconciliationTab({ shift }: { shift: any }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {matched ? <CheckCircle className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-amber-600" />}
-            Cash Flow — Where the money went
-            {matched ? <Badge variant="success">Matched</Badge> : <Badge variant="warning">Difference {formatINR(diff)}</Badge>}
+            {t("shift.recon.cashFlowTitle", "Cash Flow — Where the money went")}
+            {matched ? <Badge variant="success">{t("shift.recon.matched", "Matched")}</Badge> : <Badge variant="warning">{t("shift.recon.differenceBadge", "Difference {amount}", { amount: formatINR(diff) })}</Badge>}
           </CardTitle>
           <CardDescription>
-            Sales generate money. Some is paid in cash/UPI/card now, some becomes credit. Plus any
-            past credit collected today. The total of these should match what's in the collections tab.
+            {t(
+              "shift.recon.cashFlowDesc",
+              "Sales generate money. Some is paid in cash/UPI/card now, some becomes credit. Plus any past credit collected today. The total of these should match what's in the collections tab.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <table className="w-full text-sm">
             <tbody>
               <tr className="border-b">
-                <td className="py-2">Total Sales (qty × rate)</td>
+                <td className="py-2">{t("shift.recon.totalSalesRow", "Total Sales (qty × rate)")}</td>
                 <td className="text-right font-medium">{formatINR(shift.totalSalesPaise)}</td>
               </tr>
               <tr className="border-b">
-                <td className="py-2 pl-4 text-muted-foreground">− Credit Issued (not collected today)</td>
+                <td className="py-2 pl-4 text-muted-foreground">{t("shift.recon.lessCredit", "− Credit Issued (not collected today)")}</td>
                 <td className="text-right text-red-600">- {formatINR(shift.totalCreditIssuedPaise)}</td>
               </tr>
               <tr className="border-b">
-                <td className="py-2 pl-4 text-muted-foreground">+ Outstanding Received (past credit)</td>
+                <td className="py-2 pl-4 text-muted-foreground">{t("shift.recon.plusOutstanding", "+ Outstanding Received (past credit)")}</td>
                 <td className="text-right text-green-600">+ {formatINR(shift.totalOutstandingReceivedPaise)}</td>
               </tr>
               <tr className="border-b font-semibold">
-                <td className="py-2">Expected money received</td>
+                <td className="py-2">{t("shift.recon.expectedMoney", "Expected money received")}</td>
                 <td className="text-right">{formatINR(expectedCollections)}</td>
               </tr>
               <tr className="border-b">
-                <td className="py-2">Actual collections (cash + UPI + card + bank)</td>
+                <td className="py-2">{t("shift.recon.actualCollections", "Actual collections (cash + UPI + card + bank)")}</td>
                 <td className="text-right">{formatINR(collected)}</td>
               </tr>
               <tr className={matched ? "" : "bg-amber-50"}>
-                <td className="py-2 font-semibold">Difference</td>
+                <td className="py-2 font-semibold">{t("shift.recon.difference", "Difference")}</td>
                 <td className="text-right font-semibold">
                   {diff >= 0n ? "+ " : "- "}{formatINR(diff < 0n ? -diff : diff)}
                 </td>
@@ -126,26 +130,27 @@ export function ReconciliationTab({ shift }: { shift: any }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Employee Sales vs Cash Settled</CardTitle>
+          <CardTitle>{t("shift.recon.empSalesTitle", "Employee Sales vs Cash Settled")}</CardTitle>
           <CardDescription>
-            What each attendant sold, and how much of it has reached the office. Cash due is
-            their fuel sales less the credit they gave and the card/UPI they took — the rest is
-            cash they owe. Settled counts mid-shift drops and their end-of-shift hand-over.
+            {t(
+              "shift.recon.empSalesDesc",
+              "What each attendant sold, and how much of it has reached the office. Cash due is their fuel sales less the credit they gave and the card/UPI they took — the rest is cash they owe. Settled counts mid-shift drops and their end-of-shift hand-over.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Nozzles</TableHead>
-                <TableHead className="text-right">Litres</TableHead>
-                <TableHead className="text-right">Fuel sold</TableHead>
-                <TableHead className="text-right">Credit given</TableHead>
-                <TableHead className="text-right">Digital taken</TableHead>
-                <TableHead className="text-right">Cash due</TableHead>
-                <TableHead className="text-right">Settled</TableHead>
-                <TableHead className="text-right">Difference</TableHead>
+                <TableHead>{t("shift.recon.colEmployee", "Employee")}</TableHead>
+                <TableHead>{t("shift.recon.colNozzles", "Nozzles")}</TableHead>
+                <TableHead className="text-right">{t("common.litres", "Litres")}</TableHead>
+                <TableHead className="text-right">{t("shift.recon.colFuelSold", "Fuel sold")}</TableHead>
+                <TableHead className="text-right">{t("shift.recon.colCreditGiven", "Credit given")}</TableHead>
+                <TableHead className="text-right">{t("shift.recon.colDigital", "Digital taken")}</TableHead>
+                <TableHead className="text-right">{t("shift.recon.colCashDue", "Cash due")}</TableHead>
+                <TableHead className="text-right">{t("shift.recon.colSettled", "Settled")}</TableHead>
+                <TableHead className="text-right">{t("shift.recon.colDifference", "Difference")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -170,7 +175,7 @@ export function ReconciliationTab({ shift }: { shift: any }) {
                     <TableCell className="text-right">
                       {formatINR(r.settledCashPaise)}
                       {!r.handoverRecorded && (
-                        <div className="text-[11px] text-muted-foreground">hand-over not recorded</div>
+                        <div className="text-[11px] text-muted-foreground">{t("shift.recon.handoverNotRecorded", "hand-over not recorded")}</div>
                       )}
                     </TableCell>
                     <TableCell
@@ -179,14 +184,14 @@ export function ReconciliationTab({ shift }: { shift: any }) {
                         diff === 0n ? "text-green-700" : short ? "text-red-700" : "text-amber-700"
                       )}
                     >
-                      {diff === 0n ? "settled" : formatINR(diff)}
+                      {diff === 0n ? t("shift.recon.settled", "settled") : formatINR(diff)}
                       {short && (
                         <div className="text-[11px] font-normal text-muted-foreground">
-                          still to come in
+                          {t("shift.recon.stillToCome", "still to come in")}
                         </div>
                       )}
                       {diff > 0n && (
-                        <div className="text-[11px] font-normal text-muted-foreground">excess</div>
+                        <div className="text-[11px] font-normal text-muted-foreground">{t("shift.recon.excess", "excess")}</div>
                       )}
                     </TableCell>
                   </TableRow>
@@ -195,7 +200,7 @@ export function ReconciliationTab({ shift }: { shift: any }) {
               {settlementRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center text-muted-foreground">
-                    No employees assigned to this shift yet — use the Employees tab.
+                    {t("shift.recon.noEmployees", "No employees assigned to this shift yet — use the Employees tab.")}
                   </TableCell>
                 </TableRow>
               )}
@@ -203,7 +208,7 @@ export function ReconciliationTab({ shift }: { shift: any }) {
             {settlementRows.length > 0 && st && (
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={3} className="font-bold">Total</TableCell>
+                  <TableCell colSpan={3} className="font-bold">{t("common.total", "Total")}</TableCell>
                   <TableCell className="text-right font-bold">{formatINR(st.salesValuePaise)}</TableCell>
                   <TableCell className="text-right font-bold">{formatINR(st.creditIssuedPaise)}</TableCell>
                   <TableCell className="text-right font-bold">{formatINR(st.nonCashCollectedPaise)}</TableCell>
@@ -219,7 +224,7 @@ export function ReconciliationTab({ shift }: { shift: any }) {
                           : "text-amber-700"
                     )}
                   >
-                    {BigInt(st.differencePaise) === 0n ? "settled" : formatINR(st.differencePaise)}
+                    {BigInt(st.differencePaise) === 0n ? t("shift.recon.settled", "settled") : formatINR(st.differencePaise)}
                   </TableCell>
                 </TableRow>
               </TableFooter>
@@ -228,19 +233,26 @@ export function ReconciliationTab({ shift }: { shift: any }) {
 
           {st && BigInt(st.differencePaise) < 0n && (
             <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-              {formatINR(-BigInt(st.differencePaise))} of this shift&apos;s sales has not been
-              settled yet
+              {t("shift.recon.unsettledA", "{amount} of this shift's sales has not been settled yet", {
+                amount: formatINR(-BigInt(st.differencePaise)),
+              })}
               {st.awaitingHandover > 0
-                ? ` — ${st.awaitingHandover} attendant(s) have no hand-over recorded.`
+                ? t("shift.recon.unsettledAwaiting", " — {n} attendant(s) have no hand-over recorded.", {
+                    n: st.awaitingHandover,
+                  })
                 : "."}{" "}
-              Record it on the <span className="font-medium">Cash Handover</span> tab. A shortfall
-              left at lock time becomes money that attendant owes.
+              {t("shift.recon.unsettledB", "Record it on the ")}
+              <span className="font-medium">{t("shift.tabs.cashHandover", "Cash Handover")}</span>
+              {t("shift.recon.unsettledC", " tab. A shortfall left at lock time becomes money that attendant owes.")}
             </p>
           )}
           {recon && BigInt(recon.unattributedSalesPaise) > 0n && (
             <p className="mt-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-900">
-              {formatINR(recon.unattributedSalesPaise)} was dispensed on nozzles with nobody
-              assigned, so it is not anyone&apos;s responsibility. Assign them on the Employees tab.
+              {t(
+                "shift.recon.unattributed",
+                "{amount} was dispensed on nozzles with nobody assigned, so it is not anyone's responsibility. Assign them on the Employees tab.",
+                { amount: formatINR(recon.unattributedSalesPaise) },
+              )}
             </p>
           )}
         </CardContent>
@@ -248,16 +260,16 @@ export function ReconciliationTab({ shift }: { shift: any }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Cash Position</CardTitle>
+          <CardTitle>{t("shift.recon.cashPosition", "Cash Position")}</CardTitle>
         </CardHeader>
         <CardContent>
           <table className="w-full text-sm">
             <tbody>
-              <tr className="border-b"><td className="py-2">Opening Cash</td><td className="text-right">{formatINR(shift.openingCashPaise)}</td></tr>
-              <tr className="border-b"><td className="py-2 pl-4">+ Cash from sales (sales − credit issued)</td><td className="text-right text-green-600">+ {formatINR(BigInt(shift.totalSalesPaise) - BigInt(shift.totalCreditIssuedPaise))}</td></tr>
-              <tr className="border-b"><td className="py-2 pl-4">+ Outstanding received</td><td className="text-right text-green-600">+ {formatINR(shift.totalOutstandingReceivedPaise)}</td></tr>
-              <tr className="border-b"><td className="py-2 pl-4">− Total expenses</td><td className="text-right text-red-600">- {formatINR(shift.totalExpensesPaise)}</td></tr>
-              <tr className="border-t-2"><td className="py-2 font-bold">Closing Cash</td><td className="text-right font-bold text-lg">{formatINR(shift.closingCashPaise)}</td></tr>
+              <tr className="border-b"><td className="py-2">{t("shift.recon.openingCash", "Opening Cash")}</td><td className="text-right">{formatINR(shift.openingCashPaise)}</td></tr>
+              <tr className="border-b"><td className="py-2 pl-4">{t("shift.recon.plusCashFromSales", "+ Cash from sales (sales − credit issued)")}</td><td className="text-right text-green-600">+ {formatINR(BigInt(shift.totalSalesPaise) - BigInt(shift.totalCreditIssuedPaise))}</td></tr>
+              <tr className="border-b"><td className="py-2 pl-4">{t("shift.recon.plusOutstandingRecv", "+ Outstanding received")}</td><td className="text-right text-green-600">+ {formatINR(shift.totalOutstandingReceivedPaise)}</td></tr>
+              <tr className="border-b"><td className="py-2 pl-4">{t("shift.recon.lessExpenses", "− Total expenses")}</td><td className="text-right text-red-600">- {formatINR(shift.totalExpensesPaise)}</td></tr>
+              <tr className="border-t-2"><td className="py-2 font-bold">{t("shift.recon.closingCash", "Closing Cash")}</td><td className="text-right font-bold text-lg">{formatINR(shift.closingCashPaise)}</td></tr>
             </tbody>
           </table>
         </CardContent>
@@ -265,19 +277,19 @@ export function ReconciliationTab({ shift }: { shift: any }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Quantity Reconciliation — Meter vs Stock</CardTitle>
+          <CardTitle>{t("shift.recon.qtyTitle", "Quantity Reconciliation — Meter vs Stock")}</CardTitle>
           <CardDescription>
-            Two independent measures of how much fuel was sold. They should match within tolerance.
+            {t("shift.recon.qtyDesc", "Two independent measures of how much fuel was sold. They should match within tolerance.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-muted-foreground">
-                <th className="text-left py-2">Fuel</th>
-                <th className="text-right">By meter (L)</th>
-                <th className="text-right">By stock (L)</th>
-                <th className="text-right">Diff (L)</th>
+                <th className="text-left py-2">{t("shift.recon.fuel", "Fuel")}</th>
+                <th className="text-right">{t("shift.recon.byMeter", "By meter (L)")}</th>
+                <th className="text-right">{t("shift.recon.byStock", "By stock (L)")}</th>
+                <th className="text-right">{t("shift.recon.diffL", "Diff (L)")}</th>
               </tr>
             </thead>
             <tbody>
@@ -287,7 +299,7 @@ export function ReconciliationTab({ shift }: { shift: any }) {
                 const diff = meter - stock;
                 return (
                   <tr key={f} className="border-b">
-                    <td className="py-2">{FUEL_LABELS[f] || f}</td>
+                    <td className="py-2">{t(`shift.fuel.${f}`, FUEL_LABELS[f] || f)}</td>
                     <td className="text-right">{formatLitres(meter)}</td>
                     <td className="text-right">{formatLitres(stock)}</td>
                     <td className={`text-right ${Math.abs(diff) > 500 ? "text-amber-600 font-semibold" : ""}`}>

@@ -29,6 +29,9 @@ import {
 import { formatINR, rupeesToPaise } from "@/lib/utils";
 import { apiError, type CreditCustomer } from "@/lib/types";
 import { format, parseISO } from "date-fns";
+import type { Locale } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -187,8 +190,8 @@ const STATEMENT_STATUSES = ["DRAFT", "SENT", "PARTIALLY_PAID", "PAID", "OVERDUE"
 const SENT_VIA = ["WhatsApp", "Email", "Printed", "Hand delivered", "SMS"];
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const day = (iso: string | null | undefined) =>
-  iso ? format(parseISO(iso), "dd MMM yyyy") : "—";
+const fmtDay = (iso: string | null | undefined, locale: Locale) =>
+  iso ? format(parseISO(iso), "dd MMM yyyy", { locale }) : "—";
 
 const statusVariant = (
   status: string,
@@ -210,12 +213,16 @@ const statusVariant = (
   }
 };
 
-const copy = async (text: string, what = "Message") => {
+const copy = async (
+  text: string,
+  what: string,
+  t: (key: string, fallback?: string, vars?: Record<string, string | number>) => string,
+) => {
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(`${what} copied — paste it into WhatsApp or SMS`);
+    toast.success(t("receivables.copied", "{what} copied — paste it into WhatsApp or SMS", { what }));
   } catch {
-    toast.error("Could not copy. Select the text and copy it manually.");
+    toast.error(t("receivables.copyFailed", "Could not copy. Select the text and copy it manually."));
   }
 };
 
@@ -248,6 +255,9 @@ function Stat({
 }
 
 export default function ReceivablesPage() {
+  const { t } = useT();
+  const locale = useDateLocale();
+  const day = (iso: string | null | undefined) => fmtDay(iso, locale);
   const qc = useQueryClient();
   const canManage = can("canManageCreditCustomers");
   const [tab, setTab] = useState("ageing");
@@ -295,13 +305,13 @@ export default function ReceivablesPage() {
         })
       ).data as StatementRow,
     onSuccess: (s) => {
-      toast.success(`Statement ${s.statementNo} generated`);
+      toast.success(t("receivables.statementGenerated", "Statement {no} generated", { no: s.statementNo }));
       setGenOpen(false);
       setGen({ customerId: "", periodFrom: "", periodTo: "" });
       qc.invalidateQueries({ queryKey: ["cl-statements"] });
       qc.invalidateQueries({ queryKey: ["cl-ageing"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not generate the statement")),
+    onError: (e) => toast.error(apiError(e, t("receivables.generateFailed", "Could not generate the statement"))),
   });
 
   const [sendFor, setSendFor] = useState<StatementRow | null>(null);
@@ -315,11 +325,11 @@ export default function ReceivablesPage() {
         })
       ).data,
     onSuccess: () => {
-      toast.success("Marked as sent");
+      toast.success(t("receivables.markedSent", "Marked as sent"));
       setSendFor(null);
       qc.invalidateQueries({ queryKey: ["cl-statements"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not update the statement")),
+    onError: (e) => toast.error(apiError(e, t("receivables.updateStatementFailed", "Could not update the statement"))),
   });
 
   // ---- instruments --------------------------------------------------------
@@ -379,29 +389,29 @@ export default function ReceivablesPage() {
         })
       ).data as Instrument & { warnings: string[] },
     onSuccess: (data) => {
-      toast.success("Recorded in the register");
+      toast.success(t("receivables.recordedInRegister", "Recorded in the register"));
       for (const w of data.warnings || []) toast.warning(w, { duration: 15000 });
       setInstOpen(false);
       setNewInst(emptyInst);
       qc.invalidateQueries({ queryKey: ["cl-instruments"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not record the payment")),
+    onError: (e) => toast.error(apiError(e, t("receivables.recordPaymentFailed", "Could not record the payment"))),
   });
 
   const patchInstrument = useMutation({
     mutationFn: async (vars: { id: string; body: Record<string, unknown> }) =>
       (await api.patch(`/api/credit-lifecycle/instruments/${vars.id}`, vars.body)).data,
     onSuccess: (data: { changed?: boolean; message?: string; status?: string }) => {
-      if (data.changed === false) toast.info(data.message || "Nothing changed");
+      if (data.changed === false) toast.info(data.message || t("receivables.nothingChanged", "Nothing changed"));
       else if (data.status === "BOUNCED")
-        toast.success("Bounce recorded — the amount is back on the customer's balance");
-      else toast.success("Updated");
+        toast.success(t("receivables.bounceRecorded", "Bounce recorded — the amount is back on the customer's balance"));
+      else toast.success(t("receivables.updated", "Updated"));
       setBounceFor(null);
       qc.invalidateQueries({ queryKey: ["cl-instruments"] });
       qc.invalidateQueries({ queryKey: ["cl-ageing"] });
       qc.invalidateQueries({ queryKey: ["credit-customers"] });
     },
-    onError: (e) => toast.error(apiError(e, "Could not update the instrument")),
+    onError: (e) => toast.error(apiError(e, t("receivables.updateInstrumentFailed", "Could not update the instrument"))),
   });
 
   const [bounceFor, setBounceFor] = useState<Instrument | null>(null);
@@ -424,25 +434,25 @@ export default function ReceivablesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Receivables</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">{t("receivables.title", "Receivables")}</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Monthly statements, cheque tracking, ageing by due date and payment reminders
+          {t("receivables.subtitle", "Monthly statements, cheque tracking, ageing by due date and payment reminders")}
         </p>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex w-full sm:w-auto">
-          <TabsTrigger value="ageing">Ageing</TabsTrigger>
-          <TabsTrigger value="statements">Statements</TabsTrigger>
-          <TabsTrigger value="cheques">Cheques</TabsTrigger>
-          <TabsTrigger value="reminders">Reminders</TabsTrigger>
+          <TabsTrigger value="ageing">{t("receivables.tab.ageing", "Ageing")}</TabsTrigger>
+          <TabsTrigger value="statements">{t("receivables.tab.statements", "Statements")}</TabsTrigger>
+          <TabsTrigger value="cheques">{t("receivables.tab.cheques", "Cheques")}</TabsTrigger>
+          <TabsTrigger value="reminders">{t("receivables.tab.reminders", "Reminders")}</TabsTrigger>
         </TabsList>
 
         {/* ===================== AGEING ===================== */}
         <TabsContent value="ageing" className="space-y-4 mt-4">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <Label>As on</Label>
+              <Label>{t("receivables.asOn", "As on")}</Label>
               <Input
                 type="date"
                 value={asOf}
@@ -451,45 +461,44 @@ export default function ReceivablesPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground max-w-md">
-              Ageing is counted from each bill&apos;s <strong>due date</strong>. The ageing table
-              in Reports counts from the sale date, so the two will not match — both are correct.
+              {t("receivables.ageingNote", "Ageing is counted from each bill's due date. The ageing table in Reports counts from the sale date, so the two will not match — both are correct.")}
             </p>
           </div>
 
           {ageingQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading ageing…</p>
+            <p className="text-sm text-muted-foreground">{t("receivables.loadingAgeing", "Loading ageing…")}</p>
           ) : ageingQ.error ? (
-            <p className="text-sm text-destructive">{apiError(ageingQ.error, "Could not load ageing")}</p>
+            <p className="text-sm text-destructive">{apiError(ageingQ.error, t("receivables.loadAgeingFailed", "Could not load ageing"))}</p>
           ) : !ageing || ageing.customers.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground">
-                No credit outstanding. Nothing to chase.
+                {t("receivables.noOutstanding", "No credit outstanding. Nothing to chase.")}
               </CardContent>
             </Card>
           ) : (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Stat
-                  label="Total outstanding"
+                  label={t("receivables.totalOutstanding", "Total outstanding")}
                   value={formatINR(ageing.summary.totalOutstandingPaise)}
-                  hint={`${ageing.summary.customerCount} customers`}
+                  hint={t("receivables.customersCount", "{n} customers", { n: ageing.summary.customerCount })}
                 />
                 <Stat
-                  label="Past due date"
+                  label={t("receivables.pastDueDate", "Past due date")}
                   value={formatINR(ageing.summary.totalOverduePaise)}
                   tone="danger"
-                  hint={`${ageing.summary.overdueCustomers} customers late`}
+                  hint={t("receivables.customersLate", "{n} customers late", { n: ageing.summary.overdueCustomers })}
                 />
                 <Stat
-                  label="Over credit limit"
+                  label={t("receivables.overLimit", "Over credit limit")}
                   value={String(ageing.summary.overLimitCustomers)}
                   tone={ageing.summary.overLimitCustomers > 0 ? "warn" : undefined}
-                  hint="Customers above their sanctioned limit"
+                  hint={t("receivables.overLimitHint", "Customers above their sanctioned limit")}
                 />
                 <Stat
-                  label="Not yet due"
+                  label={t("receivables.notYetDue", "Not yet due")}
                   value={formatINR(ageing.summary.buckets.notYetDue)}
-                  hint="Within agreed credit terms"
+                  hint={t("receivables.withinTermsHint", "Within agreed credit terms")}
                 />
               </div>
 
@@ -497,7 +506,7 @@ export default function ReceivablesPage() {
                 {BUCKETS.map((b) => (
                   <Card key={b}>
                     <CardContent className="pt-5">
-                      <p className="text-xs text-muted-foreground">{BUCKET_LABELS[b]}</p>
+                      <p className="text-xs text-muted-foreground">{t(`receivables.bucket.${b}`, BUCKET_LABELS[b])}</p>
                       <p className="text-lg font-semibold tabular-nums">
                         {formatINR(ageing.summary.buckets[b])}
                       </p>
@@ -508,20 +517,20 @@ export default function ReceivablesPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Customer ageing</CardTitle>
-                  <CardDescription>Most overdue first</CardDescription>
+                  <CardTitle>{t("receivables.customerAgeing", "Customer ageing")}</CardTitle>
+                  <CardDescription>{t("receivables.mostOverdueFirst", "Most overdue first")}</CardDescription>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Customer</TableHead>
-                        <TableHead className="text-right">Balance</TableHead>
-                        <TableHead className="text-right">Overdue</TableHead>
-                        <TableHead>Oldest unpaid</TableHead>
-                        <TableHead className="text-right">Days late</TableHead>
-                        <TableHead className="text-right">Limit</TableHead>
-                        <TableHead className="text-right">Headroom</TableHead>
+                        <TableHead>{t("receivables.customer", "Customer")}</TableHead>
+                        <TableHead className="text-right">{t("receivables.balance", "Balance")}</TableHead>
+                        <TableHead className="text-right">{t("receivables.overdue", "Overdue")}</TableHead>
+                        <TableHead>{t("receivables.oldestUnpaid", "Oldest unpaid")}</TableHead>
+                        <TableHead className="text-right">{t("receivables.daysLateCol", "Days late")}</TableHead>
+                        <TableHead className="text-right">{t("receivables.limit", "Limit")}</TableHead>
+                        <TableHead className="text-right">{t("receivables.headroom", "Headroom")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -539,11 +548,11 @@ export default function ReceivablesPage() {
                                 <span className="text-xs text-muted-foreground">{r.code}</span>
                               ) : null}
                               {r.overLimit ? (
-                                <Badge variant="warning">Over limit</Badge>
+                                <Badge variant="warning">{t("receivables.overLimitBadge", "Over limit")}</Badge>
                               ) : null}
                               {Number(r.unbilledPaise) > 0 ? (
                                 <span className="text-xs text-muted-foreground">
-                                  {formatINR(r.unbilledPaise)} unbilled
+                                  {t("receivables.unbilledAmount", "{amount} unbilled", { amount: formatINR(r.unbilledPaise) })}
                                 </span>
                               ) : null}
                             </div>
@@ -563,11 +572,11 @@ export default function ReceivablesPage() {
                               <>
                                 {r.oldestUnpaid.label}
                                 <div className="text-xs text-muted-foreground">
-                                  due {day(r.oldestUnpaid.dueDate)}
+                                  {t("receivables.dueOn", "due {date}", { date: day(r.oldestUnpaid.dueDate) })}
                                 </div>
                               </>
                             ) : (
-                              <span className="text-muted-foreground">Within terms</span>
+                              <span className="text-muted-foreground">{t("receivables.withinTerms", "Within terms")}</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
@@ -598,7 +607,7 @@ export default function ReceivablesPage() {
           <div className="flex flex-wrap items-end gap-3 justify-between">
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <Label>Customer</Label>
+                <Label>{t("receivables.customer", "Customer")}</Label>
                 <Select
                   value={stFilters.customerId}
                   onValueChange={(v) => setStFilters((f) => ({ ...f, customerId: v }))}
@@ -607,7 +616,7 @@ export default function ReceivablesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ALL}>All customers</SelectItem>
+                    <SelectItem value={ALL}>{t("credit.allCustomers", "All customers")}</SelectItem>
                     {customers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {customerLabel(c)}
@@ -617,7 +626,7 @@ export default function ReceivablesPage() {
                 </Select>
               </div>
               <div>
-                <Label>Status</Label>
+                <Label>{t("common.status", "Status")}</Label>
                 <Select
                   value={stFilters.status}
                   onValueChange={(v) => setStFilters((f) => ({ ...f, status: v }))}
@@ -626,10 +635,10 @@ export default function ReceivablesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ALL}>Any status</SelectItem>
+                    <SelectItem value={ALL}>{t("receivables.anyStatus", "Any status")}</SelectItem>
                     {STATEMENT_STATUSES.map((s) => (
                       <SelectItem key={s} value={s}>
-                        {s.replace("_", " ")}
+                        {t(`receivables.status.${s}`, s.replace("_", " "))}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -639,43 +648,43 @@ export default function ReceivablesPage() {
                 variant={stFilters.overdueOnly ? "default" : "outline"}
                 onClick={() => setStFilters((f) => ({ ...f, overdueOnly: !f.overdueOnly }))}
               >
-                Overdue only
+                {t("receivables.overdueOnly", "Overdue only")}
               </Button>
             </div>
             {canManage ? (
               <Button onClick={() => setGenOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Generate statement
+                <Plus className="h-4 w-4 mr-1" /> {t("receivables.generateStatement", "Generate statement")}
               </Button>
             ) : null}
           </div>
 
           {statementsQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading statements…</p>
+            <p className="text-sm text-muted-foreground">{t("receivables.loadingStatements", "Loading statements…")}</p>
           ) : statementsQ.error ? (
             <p className="text-sm text-destructive">
-              {apiError(statementsQ.error, "Could not load statements")}
+              {apiError(statementsQ.error, t("receivables.loadStatementsFailed", "Could not load statements"))}
             </p>
           ) : (statementsQ.data?.statements.length || 0) === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground">
-                No statements yet. Generate one for a customer to bill a month of credit.
+                {t("receivables.noStatements", "No statements yet. Generate one for a customer to bill a month of credit.")}
               </CardContent>
             </Card>
           ) : (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <Stat label="Statements" value={String(statementsQ.data!.totals.count)} />
+                <Stat label={t("receivables.statementsCount", "Statements")} value={String(statementsQ.data!.totals.count)} />
                 <Stat
-                  label="Billed (closing)"
+                  label={t("receivables.billedClosing", "Billed (closing)")}
                   value={formatINR(statementsQ.data!.totals.closingBalancePaise)}
                 />
                 <Stat
-                  label="Still unpaid"
+                  label={t("receivables.stillUnpaid", "Still unpaid")}
                   value={formatINR(statementsQ.data!.totals.unpaidPaise)}
                   tone="warn"
                 />
                 <Stat
-                  label="Overdue statements"
+                  label={t("receivables.overdueStatements", "Overdue statements")}
                   value={String(statementsQ.data!.totals.overdueCount)}
                   tone={statementsQ.data!.totals.overdueCount > 0 ? "danger" : undefined}
                 />
@@ -686,13 +695,13 @@ export default function ReceivablesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Statement</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Period</TableHead>
-                        <TableHead>Due</TableHead>
-                        <TableHead className="text-right">Closing</TableHead>
-                        <TableHead className="text-right">Unpaid</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>{t("receivables.statement", "Statement")}</TableHead>
+                        <TableHead>{t("receivables.customer", "Customer")}</TableHead>
+                        <TableHead>{t("receivables.period", "Period")}</TableHead>
+                        <TableHead>{t("receivables.due", "Due")}</TableHead>
+                        <TableHead className="text-right">{t("receivables.closing", "Closing")}</TableHead>
+                        <TableHead className="text-right">{t("receivables.unpaid", "Unpaid")}</TableHead>
+                        <TableHead>{t("common.status", "Status")}</TableHead>
                         <TableHead />
                       </TableRow>
                     </TableHeader>
@@ -715,7 +724,7 @@ export default function ReceivablesPage() {
                             {day(s.dueDate)}
                             {s.derived.daysPastDue > 0 ? (
                               <div className="text-xs text-destructive">
-                                {s.derived.daysPastDue} days late
+                                {t("receivables.daysLate", "{n} days late", { n: s.derived.daysPastDue })}
                               </div>
                             ) : null}
                           </TableCell>
@@ -727,11 +736,11 @@ export default function ReceivablesPage() {
                           </TableCell>
                           <TableCell>
                             <Badge variant={statusVariant(s.derived.status)}>
-                              {s.derived.status.replace("_", " ")}
+                              {t(`receivables.status.${s.derived.status}`, s.derived.status.replace("_", " "))}
                             </Badge>
                             {s.sentVia ? (
                               <div className="text-xs text-muted-foreground mt-1">
-                                via {s.sentVia}
+                                {t("receivables.sentViaShort", "via {via}", { via: t(`receivables.via.${s.sentVia}`, s.sentVia) })}
                               </div>
                             ) : null}
                           </TableCell>
@@ -739,7 +748,7 @@ export default function ReceivablesPage() {
                             <div className="flex gap-2 justify-end">
                               <Button asChild variant="outline" size="sm">
                                 <Link href={`/receivables/statements/${s.id}`}>
-                                  <FileText className="h-4 w-4 mr-1" /> Open
+                                  <FileText className="h-4 w-4 mr-1" /> {t("receivables.open", "Open")}
                                 </Link>
                               </Button>
                               {canManage && s.status === "DRAFT" ? (
@@ -750,7 +759,7 @@ export default function ReceivablesPage() {
                                     setSentVia("WhatsApp");
                                   }}
                                 >
-                                  <Send className="h-4 w-4 mr-1" /> Mark sent
+                                  <Send className="h-4 w-4 mr-1" /> {t("receivables.markSent", "Mark sent")}
                                 </Button>
                               ) : null}
                             </div>
@@ -770,29 +779,29 @@ export default function ReceivablesPage() {
           <div className="flex flex-wrap items-end gap-3 justify-between">
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <Label>Status</Label>
+                <Label>{t("common.status", "Status")}</Label>
                 <Select value={instStatus} onValueChange={setInstStatus}>
                   <SelectTrigger className="w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ALL}>All</SelectItem>
+                    <SelectItem value={ALL}>{t("receivables.all", "All")}</SelectItem>
                     {["PENDING", "CLEARED", "BOUNCED", "CANCELLED"].map((s) => (
                       <SelectItem key={s} value={s}>
-                        {s}
+                        {t(`receivables.instStatus.${s}`, s)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Customer</Label>
+                <Label>{t("receivables.customer", "Customer")}</Label>
                 <Select value={instCustomer} onValueChange={setInstCustomer}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ALL}>All customers</SelectItem>
+                    <SelectItem value={ALL}>{t("credit.allCustomers", "All customers")}</SelectItem>
                     {customers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {customerLabel(c)}
@@ -802,7 +811,7 @@ export default function ReceivablesPage() {
                 </Select>
               </div>
               <div>
-                <Label>Cheque date on/before</Label>
+                <Label>{t("receivables.chequeDateOnBefore", "Cheque date on/before")}</Label>
                 <Input
                   type="date"
                   value={dueBefore}
@@ -813,7 +822,7 @@ export default function ReceivablesPage() {
             </div>
             {canManage ? (
               <Button onClick={() => setInstOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Record payment
+                <Plus className="h-4 w-4 mr-1" /> {t("receivables.recordPayment", "Record payment")}
               </Button>
             ) : null}
           </div>
@@ -821,50 +830,50 @@ export default function ReceivablesPage() {
           {instrumentsQ.data ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <Stat
-                label="Pending to clear"
+                label={t("receivables.pendingToClear", "Pending to clear")}
                 value={formatINR(instrumentsQ.data.totals.pendingPaise)}
-                hint={`${instrumentsQ.data.totals.pendingCount} instruments`}
+                hint={t("receivables.instrumentsCount", "{n} instruments", { n: instrumentsQ.data.totals.pendingCount })}
                 tone="warn"
               />
-              <Stat label="Cleared" value={formatINR(instrumentsQ.data.totals.clearedPaise)} />
+              <Stat label={t("receivables.cleared", "Cleared")} value={formatINR(instrumentsQ.data.totals.clearedPaise)} />
               <Stat
-                label="Bounced"
+                label={t("receivables.bounced", "Bounced")}
                 value={formatINR(instrumentsQ.data.totals.bouncedPaise)}
                 tone="danger"
-                hint={`${instrumentsQ.data.totals.bouncedCount} instruments`}
+                hint={t("receivables.instrumentsCount", "{n} instruments", { n: instrumentsQ.data.totals.bouncedCount })}
               />
-              <Stat label="Shown" value={String(instrumentsQ.data.totals.count)} />
+              <Stat label={t("receivables.shown", "Shown")} value={String(instrumentsQ.data.totals.count)} />
             </div>
           ) : null}
 
           <Card>
             <CardHeader>
-              <CardTitle>Register</CardTitle>
+              <CardTitle>{t("receivables.register", "Register")}</CardTitle>
               <CardDescription>
-                Pending cheques are listed by cheque date — bank the earliest first
+                {t("receivables.registerHint", "Pending cheques are listed by cheque date — bank the earliest first")}
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {instrumentsQ.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading register…</p>
+                <p className="text-sm text-muted-foreground">{t("receivables.loadingRegister", "Loading register…")}</p>
               ) : instrumentsQ.error ? (
                 <p className="text-sm text-destructive">
-                  {apiError(instrumentsQ.error, "Could not load the register")}
+                  {apiError(instrumentsQ.error, t("receivables.loadRegisterFailed", "Could not load the register"))}
                 </p>
               ) : (instrumentsQ.data?.instruments.length || 0) === 0 ? (
                 <p className="py-8 text-center text-muted-foreground">
-                  Nothing here. Record a cheque or bank transfer to track whether it clears.
+                  {t("receivables.registerEmpty", "Nothing here. Record a cheque or bank transfer to track whether it clears.")}
                 </p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Cheque date</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Kind</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>{t("receivables.chequeDate", "Cheque date")}</TableHead>
+                      <TableHead>{t("receivables.customer", "Customer")}</TableHead>
+                      <TableHead>{t("receivables.kind", "Kind")}</TableHead>
+                      <TableHead>{t("receivables.details", "Details")}</TableHead>
+                      <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
+                      <TableHead>{t("common.status", "Status")}</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -874,14 +883,14 @@ export default function ReceivablesPage() {
                         <TableCell className="whitespace-nowrap text-sm">
                           {i.chequeDate ? day(i.chequeDate) : day(i.receivedOn)}
                           <div className="text-xs text-muted-foreground">
-                            received {day(i.receivedOn)}
+                            {t("receivables.receivedOnShort", "received {date}", { date: day(i.receivedOn) })}
                           </div>
                         </TableCell>
                         <TableCell>{i.customer.name}</TableCell>
-                        <TableCell>{i.kind}</TableCell>
+                        <TableCell>{t(`receivables.instKind.${i.kind}`, i.kind)}</TableCell>
                         <TableCell className="text-sm">
-                          {i.chequeNo ? <div>Cheque {i.chequeNo}</div> : null}
-                          {i.utrNo ? <div>UTR {i.utrNo}</div> : null}
+                          {i.chequeNo ? <div>{t("receivables.chequeNoValue", "Cheque {no}", { no: i.chequeNo })}</div> : null}
+                          {i.utrNo ? <div>{t("receivables.utrValue", "UTR {no}", { no: i.utrNo })}</div> : null}
                           {i.bankName ? (
                             <div className="text-muted-foreground">{i.bankName}</div>
                           ) : null}
@@ -893,7 +902,7 @@ export default function ReceivablesPage() {
                           {formatINR(i.amountPaise)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={statusVariant(i.status)}>{i.status}</Badge>
+                          <Badge variant={statusVariant(i.status)}>{t(`receivables.instStatus.${i.status}`, i.status)}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           {canManage && i.status === "PENDING" ? (
@@ -909,7 +918,7 @@ export default function ReceivablesPage() {
                                   })
                                 }
                               >
-                                <CheckCircle2 className="h-4 w-4 mr-1" /> Clear
+                                <CheckCircle2 className="h-4 w-4 mr-1" /> {t("receivables.clear", "Clear")}
                               </Button>
                               <Button
                                 size="sm"
@@ -919,7 +928,7 @@ export default function ReceivablesPage() {
                                   setBounce({ reason: "", charge: "", bouncedOn: todayStr() });
                                 }}
                               >
-                                <Ban className="h-4 w-4 mr-1" /> Bounce
+                                <Ban className="h-4 w-4 mr-1" /> {t("receivables.bounce", "Bounce")}
                               </Button>
                             </div>
                           ) : null}
@@ -932,7 +941,7 @@ export default function ReceivablesPage() {
                                 setBounce({ reason: "", charge: "", bouncedOn: todayStr() });
                               }}
                             >
-                              <Ban className="h-4 w-4 mr-1" /> Bounce
+                              <Ban className="h-4 w-4 mr-1" /> {t("receivables.bounce", "Bounce")}
                             </Button>
                           ) : null}
                         </TableCell>
@@ -947,28 +956,27 @@ export default function ReceivablesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" /> Bounce history
+                <AlertTriangle className="h-4 w-4 text-destructive" /> {t("receivables.bounceHistory", "Bounce history")}
               </CardTitle>
               <CardDescription>
-                Every bounce puts the amount (and any bank charge) back on the customer&apos;s
-                balance
+                {t("receivables.bounceHistoryHint", "Every bounce puts the amount (and any bank charge) back on the customer's balance")}
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {(bouncedQ.data?.instruments.length || 0) === 0 ? (
                 <p className="py-6 text-center text-muted-foreground">
-                  No cheque has bounced. Good.
+                  {t("receivables.noBounces", "No cheque has bounced. Good.")}
                 </p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Bounced on</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Instrument</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Charge</TableHead>
-                      <TableHead>Reason</TableHead>
+                      <TableHead>{t("receivables.bouncedOn", "Bounced on")}</TableHead>
+                      <TableHead>{t("receivables.customer", "Customer")}</TableHead>
+                      <TableHead>{t("receivables.instrument", "Instrument")}</TableHead>
+                      <TableHead className="text-right">{t("common.amount", "Amount")}</TableHead>
+                      <TableHead className="text-right">{t("receivables.charge", "Charge")}</TableHead>
+                      <TableHead>{t("receivables.reason", "Reason")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -977,7 +985,7 @@ export default function ReceivablesPage() {
                         <TableCell className="whitespace-nowrap">{day(i.bouncedOn)}</TableCell>
                         <TableCell>{i.customer.name}</TableCell>
                         <TableCell className="text-sm">
-                          {i.kind}
+                          {t(`receivables.instKind.${i.kind}`, i.kind)}
                           {i.chequeNo ? ` ${i.chequeNo}` : ""}
                           {i.bankName ? (
                             <div className="text-xs text-muted-foreground">{i.bankName}</div>
@@ -1006,46 +1014,46 @@ export default function ReceivablesPage() {
               variant={remOverdueOnly ? "default" : "outline"}
               onClick={() => setRemOverdueOnly(true)}
             >
-              Overdue only
+              {t("receivables.overdueOnly", "Overdue only")}
             </Button>
             <Button
               variant={!remOverdueOnly ? "default" : "outline"}
               onClick={() => setRemOverdueOnly(false)}
             >
-              Everyone with a balance
+              {t("receivables.everyoneWithBalance", "Everyone with a balance")}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Nothing is sent from here. Copy the message and send it yourself on WhatsApp or SMS.
+              {t("receivables.remindersNote", "Nothing is sent from here. Copy the message and send it yourself on WhatsApp or SMS.")}
             </p>
           </div>
 
           {remindersQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Preparing reminders…</p>
+            <p className="text-sm text-muted-foreground">{t("receivables.preparingReminders", "Preparing reminders…")}</p>
           ) : remindersQ.error ? (
             <p className="text-sm text-destructive">
-              {apiError(remindersQ.error, "Could not prepare reminders")}
+              {apiError(remindersQ.error, t("receivables.remindersFailed", "Could not prepare reminders"))}
             </p>
           ) : (remindersQ.data?.reminders.length || 0) === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground">
                 {remOverdueOnly
-                  ? "Nobody is past their due date. Nothing to chase."
-                  : "No customer has an outstanding balance."}
+                  ? t("receivables.nobodyOverdue", "Nobody is past their due date. Nothing to chase.")
+                  : t("receivables.nobodyOwes", "No customer has an outstanding balance.")}
               </CardContent>
             </Card>
           ) : (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                <Stat label="Customers to chase" value={String(remindersQ.data!.count)} />
+                <Stat label={t("receivables.customersToChase", "Customers to chase")} value={String(remindersQ.data!.count)} />
                 <Stat
-                  label="Total overdue"
+                  label={t("receivables.totalOverdue", "Total overdue")}
                   value={formatINR(remindersQ.data!.totalOverduePaise)}
                   tone="danger"
                 />
                 <Stat
-                  label="Without a phone number"
+                  label={t("receivables.withoutPhone", "Without a phone number")}
                   value={String(remindersQ.data!.withoutPhone)}
-                  hint="Add a number on the customer profile"
+                  hint={t("receivables.withoutPhoneHint", "Add a number on the customer profile")}
                   tone={remindersQ.data!.withoutPhone > 0 ? "warn" : undefined}
                 />
               </div>
@@ -1058,15 +1066,15 @@ export default function ReceivablesPage() {
                         <div>
                           <CardTitle className="text-base">{r.name}</CardTitle>
                           <CardDescription>
-                            {r.phone ? r.phone : "No phone on file"} ·{" "}
-                            {formatINR(r.balancePaise)} outstanding
-                            {r.daysPastDue > 0 ? ` · ${r.daysPastDue} days late` : ""}
+                            {r.phone ? r.phone : t("receivables.noPhoneOnFile", "No phone on file")} ·{" "}
+                            {t("receivables.outstandingSuffix", "{amount} outstanding", { amount: formatINR(r.balancePaise) })}
+                            {r.daysPastDue > 0 ? ` · ${t("receivables.daysLate", "{n} days late", { n: r.daysPastDue })}` : ""}
                           </CardDescription>
                         </div>
                         <div className="flex gap-1">
-                          {r.overLimit ? <Badge variant="warning">Over limit</Badge> : null}
+                          {r.overLimit ? <Badge variant="warning">{t("receivables.overLimitBadge", "Over limit")}</Badge> : null}
                           {Number(r.overduePaise) > 0 ? (
-                            <Badge variant="destructive">{formatINR(r.overduePaise)} overdue</Badge>
+                            <Badge variant="destructive">{t("receivables.overdueBadge", "{amount} overdue", { amount: formatINR(r.overduePaise) })}</Badge>
                           ) : null}
                         </div>
                       </div>
@@ -1076,16 +1084,16 @@ export default function ReceivablesPage() {
                         {r.message}
                       </pre>
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" onClick={() => copy(r.message)}>
-                          <ClipboardCopy className="h-4 w-4 mr-1" /> Copy message
+                        <Button size="sm" onClick={() => copy(r.message, t("receivables.message", "Message"), t)}>
+                          <ClipboardCopy className="h-4 w-4 mr-1" /> {t("receivables.copyMessage", "Copy message")}
                         </Button>
                         {r.phone ? (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => copy(r.phone!, "Phone number")}
+                            onClick={() => copy(r.phone!, t("receivables.phoneNumber", "Phone number"), t)}
                           >
-                            Copy number
+                            {t("receivables.copyNumber", "Copy number")}
                           </Button>
                         ) : null}
                       </div>
@@ -1102,17 +1110,17 @@ export default function ReceivablesPage() {
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Generate statement</DialogTitle>
+            <DialogTitle>{t("receivables.generateStatement", "Generate statement")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Customer</Label>
+              <Label>{t("receivables.customer", "Customer")}</Label>
               <Select
                 value={gen.customerId}
                 onValueChange={(v) => setGen((g) => ({ ...g, customerId: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a customer" />
+                  <SelectValue placeholder={t("receivables.pickCustomer", "Pick a customer")} />
                 </SelectTrigger>
                 <SelectContent>
                   {customers.map((c) => (
@@ -1125,7 +1133,7 @@ export default function ReceivablesPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>Period from</Label>
+                <Label>{t("receivables.periodFrom", "Period from")}</Label>
                 <Input
                   type="date"
                   value={gen.periodFrom}
@@ -1133,7 +1141,7 @@ export default function ReceivablesPage() {
                 />
               </div>
               <div>
-                <Label>Period to</Label>
+                <Label>{t("receivables.periodTo", "Period to")}</Label>
                 <Input
                   type="date"
                   value={gen.periodTo}
@@ -1142,8 +1150,7 @@ export default function ReceivablesPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Only credit sales and receipts from locked shifts are billed. The due date is the
-              period end plus the customer&apos;s credit terms.
+              {t("receivables.generateNote", "Only credit sales and receipts from locked shifts are billed. The due date is the period end plus the customer's credit terms.")}
             </p>
             <Button
               className="w-full"
@@ -1152,7 +1159,7 @@ export default function ReceivablesPage() {
               }
               onClick={() => generate.mutate()}
             >
-              {generate.isPending ? "Generating…" : "Generate"}
+              {generate.isPending ? t("receivables.generating", "Generating…") : t("receivables.generate", "Generate")}
             </Button>
           </div>
         </DialogContent>
@@ -1162,11 +1169,11 @@ export default function ReceivablesPage() {
       <Dialog open={!!sendFor} onOpenChange={(o) => !o && setSendFor(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark {sendFor?.statementNo} as sent</DialogTitle>
+            <DialogTitle>{t("receivables.markAsSentTitle", "Mark {no} as sent", { no: sendFor?.statementNo ?? "" })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Sent via</Label>
+              <Label>{t("receivables.sentVia", "Sent via")}</Label>
               <Select value={sentVia} onValueChange={setSentVia}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1174,7 +1181,7 @@ export default function ReceivablesPage() {
                 <SelectContent>
                   {SENT_VIA.map((s) => (
                     <SelectItem key={s} value={s}>
-                      {s}
+                      {t(`receivables.via.${s}`, s)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1185,7 +1192,7 @@ export default function ReceivablesPage() {
               disabled={markSent.isPending}
               onClick={() => sendFor && markSent.mutate({ id: sendFor.id, sentVia })}
             >
-              {markSent.isPending ? "Saving…" : "Mark sent"}
+              {markSent.isPending ? t("common.saving", "Saving…") : t("receivables.markSent", "Mark sent")}
             </Button>
           </div>
         </DialogContent>
@@ -1195,17 +1202,17 @@ export default function ReceivablesPage() {
       <Dialog open={instOpen} onOpenChange={setInstOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Record a payment</DialogTitle>
+            <DialogTitle>{t("receivables.recordPaymentTitle", "Record a payment")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Customer</Label>
+              <Label>{t("receivables.customer", "Customer")}</Label>
               <Select
                 value={newInst.customerId}
                 onValueChange={(v) => setNewInst((s) => ({ ...s, customerId: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a customer" />
+                  <SelectValue placeholder={t("receivables.pickCustomer", "Pick a customer")} />
                 </SelectTrigger>
                 <SelectContent>
                   {customers.map((c) => (
@@ -1218,7 +1225,7 @@ export default function ReceivablesPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>Kind</Label>
+                <Label>{t("receivables.kind", "Kind")}</Label>
                 <Select
                   value={newInst.kind}
                   onValueChange={(v) => setNewInst((s) => ({ ...s, kind: v }))}
@@ -1229,14 +1236,14 @@ export default function ReceivablesPage() {
                   <SelectContent>
                     {INSTRUMENT_KINDS.map((k) => (
                       <SelectItem key={k} value={k}>
-                        {k}
+                        {t(`receivables.instKind.${k}`, k)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Amount (₹)</Label>
+                <Label>{t("receivables.amountRupees", "Amount (₹)")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1245,7 +1252,7 @@ export default function ReceivablesPage() {
                 />
               </div>
               <div>
-                <Label>Received on</Label>
+                <Label>{t("receivables.receivedOn", "Received on")}</Label>
                 <Input
                   type="date"
                   value={newInst.receivedOn}
@@ -1253,24 +1260,24 @@ export default function ReceivablesPage() {
                 />
               </div>
               <div>
-                <Label>Bank</Label>
+                <Label>{t("receivables.bank", "Bank")}</Label>
                 <Input
                   value={newInst.bankName}
                   onChange={(e) => setNewInst((s) => ({ ...s, bankName: e.target.value }))}
-                  placeholder="SBI, HDFC…"
+                  placeholder={t("receivables.bankPlaceholder", "SBI, HDFC…")}
                 />
               </div>
               {newInst.kind === "CHEQUE" ? (
                 <>
                   <div>
-                    <Label>Cheque no</Label>
+                    <Label>{t("receivables.chequeNo", "Cheque no")}</Label>
                     <Input
                       value={newInst.chequeNo}
                       onChange={(e) => setNewInst((s) => ({ ...s, chequeNo: e.target.value }))}
                     />
                   </div>
                   <div>
-                    <Label>Cheque date</Label>
+                    <Label>{t("receivables.chequeDate", "Cheque date")}</Label>
                     <Input
                       type="date"
                       value={newInst.chequeDate}
@@ -1281,7 +1288,7 @@ export default function ReceivablesPage() {
               ) : null}
               {["RTGS", "NEFT", "IMPS"].includes(newInst.kind) ? (
                 <div className="sm:col-span-2">
-                  <Label>UTR number</Label>
+                  <Label>{t("receivables.utrNo", "UTR number")}</Label>
                   <Input
                     value={newInst.utrNo}
                     onChange={(e) => setNewInst((s) => ({ ...s, utrNo: e.target.value }))}
@@ -1289,7 +1296,7 @@ export default function ReceivablesPage() {
                 </div>
               ) : null}
               <div className="sm:col-span-2">
-                <Label>Notes</Label>
+                <Label>{t("common.notes", "Notes")}</Label>
                 <Input
                   value={newInst.notes}
                   onChange={(e) => setNewInst((s) => ({ ...s, notes: e.target.value }))}
@@ -1300,28 +1307,24 @@ export default function ReceivablesPage() {
             {cashWarning ? (
               <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm">
                 <p className="font-semibold flex items-center gap-1 text-destructive">
-                  <AlertTriangle className="h-4 w-4" /> Section 269ST warning
+                  <AlertTriangle className="h-4 w-4" /> {t("receivables.cashWarningTitle", "Section 269ST warning")}
                 </p>
                 <p className="mt-1">
-                  Receiving ₹2,00,000 or more in cash from one person in one transaction is
-                  prohibited under section 269ST of the Income Tax Act. The penalty under section
-                  271DA equals the amount received. Take it by cheque or RTGS, or split it across
-                  separate transactions. This entry will still be saved.
+                  {t("receivables.cashWarningBody", "Receiving ₹2,00,000 or more in cash from one person in one transaction is prohibited under section 269ST of the Income Tax Act. The penalty under section 271DA equals the amount received. Take it by cheque or RTGS, or split it across separate transactions. This entry will still be saved.")}
                 </p>
               </div>
             ) : null}
 
             <Separator />
             <p className="text-xs text-muted-foreground">
-              Recording an instrument does not change the customer&apos;s balance — balances move
-              when a shift is locked. A bounce is the one exception and puts the money back.
+              {t("receivables.instrumentNote", "Recording an instrument does not change the customer's balance — balances move when a shift is locked. A bounce is the one exception and puts the money back.")}
             </p>
             <Button
               className="w-full"
               disabled={!newInst.customerId || !newInst.amount || createInstrument.isPending}
               onClick={() => createInstrument.mutate()}
             >
-              {createInstrument.isPending ? "Saving…" : "Record payment"}
+              {createInstrument.isPending ? t("common.saving", "Saving…") : t("receivables.recordPayment", "Record payment")}
             </Button>
           </div>
         </DialogContent>
@@ -1332,25 +1335,32 @@ export default function ReceivablesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Bounce {bounceFor?.kind} {bounceFor?.chequeNo || ""}
+              {t("receivables.bounceTitle", "Bounce {kind} {no}", {
+                kind: bounceFor ? t(`receivables.instKind.${bounceFor.kind}`, bounceFor.kind) : "",
+                no: bounceFor?.chequeNo || "",
+              })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {bounceFor ? formatINR(bounceFor.amountPaise) : ""} from {bounceFor?.customer.name}{" "}
-              will go back onto their outstanding balance, along with any bank charge you enter.
+              {bounceFor
+                ? t("receivables.bounceExplain", "{amount} from {name} will go back onto their outstanding balance, along with any bank charge you enter.", {
+                    amount: formatINR(bounceFor.amountPaise),
+                    name: bounceFor.customer.name,
+                  })
+                : ""}
             </p>
             <div>
-              <Label>Reason</Label>
+              <Label>{t("receivables.reason", "Reason")}</Label>
               <Input
                 value={bounce.reason}
                 onChange={(e) => setBounce((b) => ({ ...b, reason: e.target.value }))}
-                placeholder="Insufficient funds / signature mismatch"
+                placeholder={t("receivables.bounceReasonPlaceholder", "Insufficient funds / signature mismatch")}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>Bounced on</Label>
+                <Label>{t("receivables.bouncedOnLabel", "Bounced on")}</Label>
                 <Input
                   type="date"
                   value={bounce.bouncedOn}
@@ -1358,13 +1368,13 @@ export default function ReceivablesPage() {
                 />
               </div>
               <div>
-                <Label>Bank charge (₹)</Label>
+                <Label>{t("receivables.bankCharge", "Bank charge (₹)")}</Label>
                 <Input
                   type="number"
                   step="0.01"
                   value={bounce.charge}
                   onChange={(e) => setBounce((b) => ({ ...b, charge: e.target.value }))}
-                  placeholder="Optional"
+                  placeholder={t("common.optional", "Optional")}
                 />
               </div>
             </div>
@@ -1387,7 +1397,7 @@ export default function ReceivablesPage() {
                 })
               }
             >
-              {patchInstrument.isPending ? "Recording…" : "Record bounce"}
+              {patchInstrument.isPending ? t("receivables.recording", "Recording…") : t("receivables.recordBounce", "Record bounce")}
             </Button>
           </div>
         </DialogContent>

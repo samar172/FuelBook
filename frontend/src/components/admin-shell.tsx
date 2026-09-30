@@ -27,6 +27,7 @@ import {
   FileText,
   ShieldCheck,
   Compass,
+  Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiUser, clearAuth, getAuthUser, setAuth } from "@/lib/api";
@@ -40,39 +41,43 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n";
+import { LanguageSwitch } from "@/components/language-switch";
 
 // The handful of places staff actually go on a phone. Everything else lives behind
 // "More", which opens the same drawer the desktop sidebar shows.
 const MOBILE_TABS = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/shifts", label: "Shifts", icon: ClipboardList },
-  { href: "/cash", label: "Cash", icon: Banknote },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/dashboard", label: "Home", key: "tab.home", icon: LayoutDashboard },
+  { href: "/shifts", label: "Shifts", key: "tab.shifts", icon: ClipboardList },
+  { href: "/cash", label: "Cash", key: "tab.cash", icon: Banknote },
+  { href: "/reports", label: "Reports", key: "tab.reports", icon: BarChart3 },
 ] as const;
 
 const NAV = [
-  { href: "/guide", label: "Setup Guide", icon: Compass },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/shifts", label: "Shift Reports", icon: ClipboardList },
-  { href: "/wet-stock", label: "Wet Stock & Testing", icon: Gauge },
-  { href: "/tanker-receipts", label: "Tanker Receipts", icon: Truck },
-  { href: "/cash", label: "Cash & Bank", icon: Banknote },
-  { href: "/credit", label: "Credit Customers", icon: Wallet },
-  { href: "/receivables", label: "Statements & Cheques", icon: FileText },
-  { href: "/products", label: "Lubes & Non-Fuel", icon: Package },
-  { href: "/pricing", label: "Price Revisions", icon: IndianRupee },
-  { href: "/rates", label: "Fuel Rates", icon: Fuel },
-  { href: "/employees", label: "Employees", icon: HardHat },
-  { href: "/compliance", label: "Compliance & Staff", icon: ShieldCheck },
-  { href: "/expenses", label: "Expense Categories", icon: Tags },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/books", label: "Books (Ledger)", icon: BookOpen },
-  { href: "/settings/users", label: "Users", icon: Users },
-  { href: "/settings/pump", label: "Pump Setup", icon: Settings },
-  { href: "/settings/pumps", label: "Manage Pumps", icon: Building2, ownerOnly: true },
+  { href: "/guide", label: "Setup Guide", key: "nav.guide", icon: Compass },
+  { href: "/dashboard", label: "Dashboard", key: "nav.dashboard", icon: LayoutDashboard },
+  { href: "/shifts", label: "Shift Reports", key: "nav.shifts", icon: ClipboardList },
+  { href: "/wet-stock", label: "Wet Stock & Testing", key: "nav.wetStock", icon: Gauge },
+  { href: "/tanker-receipts", label: "Tanker Receipts", key: "nav.tankers", icon: Truck },
+  { href: "/cash", label: "Cash & Bank", key: "nav.cash", icon: Banknote },
+  { href: "/credit", label: "Credit Customers", key: "nav.credit", icon: Wallet },
+  { href: "/receivables", label: "Statements & Cheques", key: "nav.receivables", icon: FileText },
+  { href: "/products", label: "Lubes & Non-Fuel", key: "nav.products", icon: Package },
+  { href: "/pricing", label: "Price Revisions", key: "nav.pricing", icon: IndianRupee },
+  { href: "/rates", label: "Fuel Rates", key: "nav.rates", icon: Fuel },
+  { href: "/employees", label: "Employees", key: "nav.employees", icon: HardHat },
+  { href: "/compliance", label: "Compliance & Staff", key: "nav.compliance", icon: ShieldCheck },
+  { href: "/expenses", label: "Expense Categories", key: "nav.expenses", icon: Tags },
+  { href: "/reports", label: "Reports", key: "nav.reports", icon: BarChart3 },
+  { href: "/books", label: "Books (Ledger)", key: "nav.books", icon: BookOpen },
+  { href: "/opening-balances", label: "Opening Balances", key: "nav.opening", icon: Landmark },
+  { href: "/settings/users", label: "Users", key: "nav.users", icon: Users },
+  { href: "/settings/pump", label: "Pump Setup", key: "nav.pumpSetup", icon: Settings },
+  { href: "/settings/pumps", label: "Manage Pumps", key: "nav.managePumps", icon: Building2, ownerOnly: true },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const { t } = useT();
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<ApiUser | null>(null);
@@ -99,9 +104,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
-  const currentLabel =
-    NAV.find((n) => pathname === n.href || pathname.startsWith(n.href + "/"))
-      ?.label || "FuelBook";
+  const current = NAV.find(
+    (n) => pathname === n.href || pathname.startsWith(n.href + "/")
+  );
+  const currentLabel = current ? t(current.key, current.label) : "FuelBook";
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex">
@@ -194,11 +200,12 @@ function MobileTabBar({
   onMore: () => void;
   moreOpen: boolean;
 }) {
+  const { t } = useT();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
   // A section that is not one of the four tabs is still "somewhere", so More owns it.
   const otherActive =
-    !moreOpen && !MOBILE_TABS.some((t) => isActive(t.href));
+    !moreOpen && !MOBILE_TABS.some((item) => isActive(item.href));
 
   return (
     <nav
@@ -207,20 +214,20 @@ function MobileTabBar({
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="grid grid-cols-5">
-        {MOBILE_TABS.map((t) => {
-          const active = isActive(t.href);
+        {MOBILE_TABS.map((item) => {
+          const active = isActive(item.href);
           return (
             <Link
-              key={t.href}
-              href={t.href}
+              key={item.href}
+              href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <t.icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
-              <span className="leading-none">{t.label}</span>
+              <item.icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
+              <span className="leading-none">{t(item.key, item.label)}</span>
             </Link>
           );
         })}
@@ -237,7 +244,7 @@ function MobileTabBar({
           )}
         >
           <Menu className={cn("h-5 w-5", (moreOpen || otherActive) && "stroke-[2.5]")} />
-          <span className="leading-none">More</span>
+          <span className="leading-none">{t("tab.more", "More")}</span>
         </button>
       </div>
     </nav>
@@ -305,6 +312,7 @@ function SidebarBranding({
 }
 
 function SidebarNav({ pathname, user }: { pathname: string; user: ApiUser }) {
+  const { t } = useT();
   const items = NAV.filter((n) => !n.ownerOnly || user.role === "OWNER");
   return (
     <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
@@ -323,7 +331,7 @@ function SidebarNav({ pathname, user }: { pathname: string; user: ApiUser }) {
             )}
           >
             <Icon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{n.label}</span>
+            <span className="truncate">{t(n.key, n.label)}</span>
           </Link>
         );
       })}
@@ -338,8 +346,10 @@ function SidebarFooter({
   user: ApiUser;
   onLogout: () => void;
 }) {
+  const { t } = useT();
   return (
     <div className="p-3 border-t">
+      <LanguageSwitch className="mb-3 justify-between" />
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="min-w-0">
           <div className="text-sm font-medium truncate">{user.name}</div>
@@ -355,7 +365,7 @@ function SidebarFooter({
         </Badge>
       </div>
       <Button variant="outline" size="sm" className="w-full" onClick={onLogout}>
-        <LogOut className="h-4 w-4 mr-2" /> Sign out
+        <LogOut className="h-4 w-4 mr-2" /> {t("common.signOut", "Sign out")}
       </Button>
     </div>
   );

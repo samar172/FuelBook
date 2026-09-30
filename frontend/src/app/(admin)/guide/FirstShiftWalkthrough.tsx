@@ -5,11 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useT } from "@/lib/i18n";
 import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw } from "lucide-react";
 
 const STORAGE_KEY = "fuelbook.guide.firstShiftStep";
 
 type WalkStep = {
+  /** Dictionary key prefix, e.g. "w1" -> guide.w1Title. The English below is the fallback. */
+  id: string;
   screen: string;
   title: string;
   href: string;
@@ -20,6 +23,7 @@ type WalkStep = {
 
 const STEPS: WalkStep[] = [
   {
+    id: "w1",
     screen: "Pump Setup",
     title: "Check the pump is described correctly",
     href: "/settings/pump",
@@ -34,6 +38,7 @@ const STEPS: WalkStep[] = [
     tip: "A tank with no nozzle can never show a sale, so check each tank has at least one.",
   },
   {
+    id: "w2",
     screen: "Fuel Rates",
     title: "Put today's rate against every fuel",
     href: "/rates",
@@ -42,6 +47,7 @@ const STEPS: WalkStep[] = [
     tip: "Litres times rate is the sale value. An unpriced fuel cannot be valued.",
   },
   {
+    id: "w3",
     screen: "Expense Categories",
     title: "Name the heads you spend under",
     href: "/expenses",
@@ -49,6 +55,7 @@ const STEPS: WalkStep[] = [
     enter: ["Electricity, salary, tea, repairs, generator diesel — whatever you actually spend on."],
   },
   {
+    id: "w4",
     screen: "Employees",
     title: "Add the staff who will work the shift",
     href: "/employees",
@@ -57,6 +64,7 @@ const STEPS: WalkStep[] = [
     tip: "Sales and cash are pinned to the attendant on the nozzle, so the names must exist first.",
   },
   {
+    id: "w5",
     screen: "Shift Reports",
     title: "Create the shift",
     href: "/shifts/new",
@@ -65,6 +73,7 @@ const STEPS: WalkStep[] = [
     tip: "Opening readings, tank stock, expense opening balances and the crew are filled in from the previous shift of the same type. For your very first shift, enter the opening readings yourself.",
   },
   {
+    id: "w6",
     screen: "The shift — nozzles",
     title: "Set the crew and enter closing meter readings",
     href: "/shifts",
@@ -76,6 +85,7 @@ const STEPS: WalkStep[] = [
     tip: "Sales = closing − opening − test litres.",
   },
   {
+    id: "w7",
     screen: "The shift — stock",
     title: "Record dips and any tanker load",
     href: "/shifts",
@@ -86,6 +96,7 @@ const STEPS: WalkStep[] = [
     ],
   },
   {
+    id: "w8",
     screen: "The shift — money in",
     title: "Enter collections and credit sales",
     href: "/shifts",
@@ -97,6 +108,7 @@ const STEPS: WalkStep[] = [
     tip: "Only slots tagged for this shift type appear here.",
   },
   {
+    id: "w9",
     screen: "The shift — money out and testing",
     title: "Enter expenses and the nozzle tests",
     href: "/shifts",
@@ -107,6 +119,7 @@ const STEPS: WalkStep[] = [
     ],
   },
   {
+    id: "w10",
     screen: "The shift — cash",
     title: "Record cash drops and settle each attendant",
     href: "/shifts",
@@ -118,6 +131,7 @@ const STEPS: WalkStep[] = [
     tip: "Expected cash = their nozzle sales − credit they gave − digital payments they took. Expenses they paid from the drawer are shown but not deducted. A shortfall becomes money they owe.",
   },
   {
+    id: "w11",
     screen: "The shift — finish",
     title: "Submit, then Lock",
     href: "/shifts",
@@ -126,6 +140,7 @@ const STEPS: WalkStep[] = [
     tip: "Locking updates customer balances and posts the shift to the ledger. Unlocking posts mirror entries; nothing is deleted.",
   },
   {
+    id: "w12",
     screen: "Books and Reports",
     title: "See what the shift did to your accounts",
     href: "/books",
@@ -151,6 +166,7 @@ const readStored = (): number => {
 };
 
 export default function FirstShiftWalkthrough() {
+  const { t } = useT();
   // Start at 0 so the server and first client render agree, then restore.
   const [index, setIndex] = useState(0);
   const [restored, setRestored] = useState(false);
@@ -170,7 +186,15 @@ export default function FirstShiftWalkthrough() {
     }
   }, [index, restored]);
 
-  const step = STEPS[index];
+  const raw = STEPS[index];
+  const step = {
+    ...raw,
+    screen: t(`guide.${raw.id}Screen`, raw.screen),
+    title: t(`guide.${raw.id}Title`, raw.title),
+    linkLabel: t(`guide.${raw.id}Link`, raw.linkLabel),
+    enter: raw.enter.map((line, n) => t(`guide.${raw.id}e${n + 1}`, line)),
+    tip: raw.tip ? t(`guide.${raw.id}tip`, raw.tip) : undefined,
+  };
   const isFirst = index === 0;
   const isLast = index === STEPS.length - 1;
 
@@ -178,21 +202,23 @@ export default function FirstShiftWalkthrough() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Walk me through the first shift</CardTitle>
+          <CardTitle className="text-base">{t("guide.walkTitle", "Walk me through the first shift")}</CardTitle>
           <CardDescription>
-            Twelve steps, in the order you will actually use the screens. Move through them at your
-            own pace — this page remembers where you stopped.
+            {t(
+              "guide.walkDesc",
+              "Twelve steps, in the order you will actually use the screens. Move through them at your own pace — this page remembers where you stopped."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-medium">
-                Step {index + 1} of {STEPS.length}
+                {t("guide.stepOf", "Step {n} of {total}", { n: index + 1, total: STEPS.length })}
               </span>
               {index > 0 && (
                 <Button size="sm" variant="ghost" onClick={() => setIndex(0)}>
-                  <RotateCcw className="mr-1 h-3.5 w-3.5" /> Start over
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" /> {t("guide.startOver", "Start over")}
                 </Button>
               )}
             </div>
@@ -207,16 +233,16 @@ export default function FirstShiftWalkthrough() {
           <div className="rounded-md border p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{step.screen}</Badge>
-              {isLast && <Badge variant="success">Last step</Badge>}
+              {isLast && <Badge variant="success">{t("guide.lastStep", "Last step")}</Badge>}
             </div>
             <div className="text-lg font-semibold leading-snug">{step.title}</div>
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                What to enter
+                {t("guide.whatToEnter", "What to enter")}
               </div>
               <ul className="mt-1 space-y-1 text-sm">
-                {step.enter.map((line) => (
-                  <li key={line} className="flex gap-2">
+                {step.enter.map((line, n) => (
+                  <li key={n} className="flex gap-2">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
                     <span>{line}</span>
                   </li>
@@ -240,21 +266,23 @@ export default function FirstShiftWalkthrough() {
               disabled={isFirst}
               onClick={() => setIndex((i) => Math.max(0, i - 1))}
             >
-              <ArrowLeft className="mr-1 h-4 w-4" /> Back
+              <ArrowLeft className="mr-1 h-4 w-4" /> {t("common.back", "Back")}
             </Button>
             <Button
               className="w-full sm:w-auto"
               disabled={isLast}
               onClick={() => setIndex((i) => Math.min(STEPS.length - 1, i + 1))}
             >
-              Next <ArrowRight className="ml-1 h-4 w-4" />
+              {t("common.next", "Next")} <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
 
           {isLast && (
             <p className="text-sm text-muted-foreground">
-              That is the whole loop. Every shift after this one is the same, and most of it is
-              already filled in for you.
+              {t(
+                "guide.walkDone",
+                "That is the whole loop. Every shift after this one is the same, and most of it is already filled in for you."
+              )}
             </p>
           )}
         </CardContent>
@@ -262,13 +290,13 @@ export default function FirstShiftWalkthrough() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All steps</CardTitle>
-          <CardDescription>Jump straight to any step.</CardDescription>
+          <CardTitle className="text-base">{t("guide.allSteps", "All steps")}</CardTitle>
+          <CardDescription>{t("guide.allStepsDesc", "Jump straight to any step.")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-1">
           {STEPS.map((s, i) => (
             <button
-              key={s.title}
+              key={s.id}
               type="button"
               onClick={() => setIndex(i)}
               className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
@@ -282,13 +310,15 @@ export default function FirstShiftWalkthrough() {
               >
                 {i + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate">{s.title}</span>
+              <span className="min-w-0 flex-1 truncate">{t(`guide.${s.id}Title`, s.title)}</span>
             </button>
           ))}
           <Separator className="my-2" />
           <p className="px-1 text-xs text-muted-foreground">
-            Your place is kept in this browser only. If it cannot be saved, the walkthrough simply
-            starts at step 1 each time.
+            {t(
+              "guide.placeKept",
+              "Your place is kept in this browser only. If it cannot be saved, the walkthrough simply starts at step 1 each time."
+            )}
           </p>
         </CardContent>
       </Card>

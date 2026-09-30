@@ -32,11 +32,15 @@ import { formatLitres, FUEL_LABELS } from "@/lib/utils";
 import { apiError } from "@/lib/types";
 import { format, parseISO, subDays } from "date-fns";
 import { AlertTriangle, Info, Scale } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { VarianceResponse, SHIFT_LABELS, signedLitres, signedPct, todayStr } from "./types";
 
 const ALL = "__all__";
 
 export function VarianceTab() {
+  const { t } = useT();
+  const locale = useDateLocale();
   const [range, setRange] = useState({
     from: subDays(new Date(), 13).toISOString().slice(0, 10),
     to: todayStr(),
@@ -79,17 +83,19 @@ export function VarianceTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Scale className="h-4 w-4" /> Wet-stock variance
+            <Scale className="h-4 w-4" /> {t("wetstock.var.title", "Wet-stock variance")}
           </CardTitle>
           <CardDescription>
-            Book stock (opening + tanker receipts − metered sales) against the stock the dip
-            actually measured, per shift and tank.
+            {t(
+              "wetstock.var.desc",
+              "Book stock (opening + tanker receipts − metered sales) against the stock the dip actually measured, per shift and tank."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div>
-              <Label htmlFor="v-from">From</Label>
+              <Label htmlFor="v-from">{t("common.from", "From")}</Label>
               <Input
                 id="v-from"
                 type="date"
@@ -99,7 +105,7 @@ export function VarianceTab() {
               />
             </div>
             <div>
-              <Label htmlFor="v-to">To</Label>
+              <Label htmlFor="v-to">{t("common.to", "To")}</Label>
               <Input
                 id="v-to"
                 type="date"
@@ -109,13 +115,13 @@ export function VarianceTab() {
               />
             </div>
             <div>
-              <Label htmlFor="v-tank">Tank</Label>
+              <Label htmlFor="v-tank">{t("wetstock.var.tank", "Tank")}</Label>
               <Select value={tankId} onValueChange={setTankId}>
                 <SelectTrigger id="v-tank" className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All tanks</SelectItem>
+                  <SelectItem value={ALL}>{t("wetstock.var.allTanks", "All tanks")}</SelectItem>
                   {tanks.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}
@@ -125,7 +131,7 @@ export function VarianceTab() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="v-tol">Tolerance (%)</Label>
+              <Label htmlFor="v-tol">{t("wetstock.var.tolerance", "Tolerance (%)")}</Label>
               <Input
                 id="v-tol"
                 inputMode="decimal"
@@ -136,15 +142,18 @@ export function VarianceTab() {
             </div>
             <div className="flex items-end">
               <Button onClick={apply} className="w-full">
-                Apply
+                {t("common.apply", "Apply")}
               </Button>
             </div>
           </div>
           <p className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              {data?.note ??
-                "Variance = dip-measured stock minus book stock. A small negative variance is normal for petrol/MS because it evaporates."}
+              {t(
+                "wetstock.var.note",
+                data?.note ??
+                  "Variance = dip-measured stock minus book stock. A small negative variance is normal for petrol/MS because it evaporates."
+              )}
             </span>
           </p>
         </CardContent>
@@ -153,12 +162,14 @@ export function VarianceTab() {
       {isError ? (
         <Card>
           <CardContent className="py-6 text-sm text-destructive">
-            {apiError(error, "Could not load the variance report")}
+            {apiError(error, t("wetstock.var.loadError", "Could not load the variance report"))}
           </CardContent>
         </Card>
       ) : isLoading ? (
         <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">Loading…</CardContent>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            {t("common.loading", "Loading…")}
+          </CardContent>
         </Card>
       ) : (
         <>
@@ -166,36 +177,48 @@ export function VarianceTab() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardContent className="pt-6">
-                  <div className="text-xs text-muted-foreground">Shifts covered</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("wetstock.var.shiftsCovered", "Shifts covered")}
+                  </div>
                   <div className="text-2xl font-semibold">{data.totals.shiftsCovered}</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <div className="text-xs text-muted-foreground">Net variance</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("wetstock.var.netVariance", "Net variance")}
+                  </div>
                   <div className="text-2xl font-semibold">
                     {signedLitres(data.totals.totalVarianceMl)} L
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {signedPct(data.totals.totalVariancePct)} of{" "}
-                    {formatLitres(data.totals.totalThroughputMl, 0)} L throughput
+                    {t("wetstock.var.ofThroughput", "{pct} of {litres} L throughput", {
+                      pct: signedPct(data.totals.totalVariancePct),
+                      litres: formatLitres(data.totals.totalThroughputMl, 0),
+                    })}
                   </div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
                   <div className="text-xs text-muted-foreground">
-                    Flagged (beyond ±{data.tolerancePct}%)
+                    {t("wetstock.var.flagged", "Flagged (beyond ±{pct}%)", {
+                      pct: data.tolerancePct,
+                    })}
                   </div>
                   <div className="text-2xl font-semibold">{data.totals.flaggedCount}</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
-                  <div className="text-xs text-muted-foreground">Tank-shifts without a dip</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("wetstock.var.withoutDip", "Tank-shifts without a dip")}
+                  </div>
                   <div className="text-2xl font-semibold">{data.totals.rowsWithoutDip}</div>
                   <div className="text-xs text-muted-foreground">
-                    {data.totals.rowsWithDip} measured
+                    {t("wetstock.var.measured", "{count} measured", {
+                      count: data.totals.rowsWithDip,
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -204,31 +227,49 @@ export function VarianceTab() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Per shift and tank</CardTitle>
+              <CardTitle className="text-base">
+                {t("wetstock.var.perShiftTank", "Per shift and tank")}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {rows.length === 0 ? (
                 <p className="py-4 text-sm text-muted-foreground">
-                  Nothing to compare in this range — there are no shifts with stock entries or dip
-                  readings.
+                  {t(
+                    "wetstock.var.empty",
+                    "Nothing to compare in this range — there are no shifts with stock entries or dip readings."
+                  )}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Shift</TableHead>
-                        <TableHead>Tank</TableHead>
-                        <TableHead className="text-right">Opening L</TableHead>
-                        <TableHead className="text-right">Receipts L</TableHead>
-                        <TableHead className="text-right">Sales L</TableHead>
-                        <TableHead className="text-right">Book L</TableHead>
-                        <TableHead className="text-right">Dip mm</TableHead>
-                        <TableHead className="text-right">Measured L</TableHead>
-                        <TableHead className="text-right">Variance L</TableHead>
+                        <TableHead>{t("common.date", "Date")}</TableHead>
+                        <TableHead>{t("wetstock.shift", "Shift")}</TableHead>
+                        <TableHead>{t("wetstock.var.tank", "Tank")}</TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.var.thOpening", "Opening L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.var.thReceipts", "Receipts L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.var.thSales", "Sales L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.var.thBook", "Book L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.var.thDip", "Dip mm")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.var.thMeasured", "Measured L")}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t("wetstock.var.thVariance", "Variance L")}
+                        </TableHead>
                         <TableHead className="text-right">%</TableHead>
-                        <TableHead>Flag</TableHead>
+                        <TableHead>{t("wetstock.var.thFlag", "Flag")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -238,13 +279,18 @@ export function VarianceTab() {
                           className={r.flagged ? "bg-destructive/5" : undefined}
                         >
                           <TableCell className="whitespace-nowrap">
-                            {format(parseISO(r.reportDate), "dd MMM")}
+                            {format(parseISO(r.reportDate), "dd MMM", { locale })}
                           </TableCell>
-                          <TableCell>{SHIFT_LABELS[r.shiftType] ?? r.shiftType}</TableCell>
+                          <TableCell>
+                            {t(
+                              `wetstock.shiftType.${r.shiftType}`,
+                              SHIFT_LABELS[r.shiftType] ?? r.shiftType
+                            )}
+                          </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {r.tankName}
                             <span className="ml-1 text-xs text-muted-foreground">
-                              {FUEL_LABELS[r.fuelType] ?? r.fuelType}
+                              {t(`shift.fuel.${r.fuelType}`, FUEL_LABELS[r.fuelType] ?? r.fuelType)}
                             </span>
                           </TableCell>
                           <TableCell className="text-right">{formatLitres(r.openingMl)}</TableCell>
@@ -263,13 +309,14 @@ export function VarianceTab() {
                           <TableCell className="text-right">{signedPct(r.variancePct)}</TableCell>
                           <TableCell>
                             {!r.hasDip ? (
-                              <Badge variant="outline">No dip</Badge>
+                              <Badge variant="outline">{t("wetstock.var.noDip", "No dip")}</Badge>
                             ) : r.flagged ? (
                               <Badge variant="destructive" className="whitespace-nowrap">
-                                <AlertTriangle className="mr-1 h-3 w-3" /> Investigate
+                                <AlertTriangle className="mr-1 h-3 w-3" />{" "}
+                                {t("wetstock.var.investigate", "Investigate")}
                               </Badge>
                             ) : (
-                              <Badge variant="success">OK</Badge>
+                              <Badge variant="success">{t("wetstock.var.ok", "OK")}</Badge>
                             )}
                           </TableCell>
                         </TableRow>

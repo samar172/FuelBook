@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/sortable-table";
 import { formatINR, formatLitres } from "@/lib/utils";
 import { format } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 
 const ALL = "__all__";
 
@@ -31,6 +33,8 @@ type Filters = { from: string; to: string; tankId: string; vendor: string };
 const EMPTY: Filters = { from: "", to: "", tankId: ALL, vendor: "" };
 
 export default function TankerReceiptsPage() {
+  const { t: tr } = useT();
+  const locale = useDateLocale();
   const { data = [] } = useQuery({
     queryKey: ["tanker-receipts"],
     queryFn: async () => (await api.get("/api/tanker-receipts")).data,
@@ -76,16 +80,18 @@ export default function TankerReceiptsPage() {
   );
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
-  if (f.from) chips.push({ key: "from", label: `From ${f.from}`, clear: () => set("from", "") });
-  if (f.to) chips.push({ key: "to", label: `To ${f.to}`, clear: () => set("to", "") });
+  if (f.from) chips.push({ key: "from", label: tr("tankers.chipFrom", "From {d}", { d: f.from }), clear: () => set("from", "") });
+  if (f.to) chips.push({ key: "to", label: tr("tankers.chipTo", "To {d}", { d: f.to }), clear: () => set("to", "") });
   if (f.tankId !== ALL)
     chips.push({
       key: "tank",
-      label: `Tank: ${tanks.find((t) => t.id === f.tankId)?.name || f.tankId}`,
+      label: tr("tankers.chipTank", "Tank: {name}", {
+        name: tanks.find((t) => t.id === f.tankId)?.name || f.tankId,
+      }),
       clear: () => set("tankId", ALL),
     });
   if (f.vendor.trim())
-    chips.push({ key: "vendor", label: `Vendor: ${f.vendor.trim()}`, clear: () => set("vendor", "") });
+    chips.push({ key: "vendor", label: tr("tankers.chipVendor", "Vendor: {v}", { v: f.vendor.trim() }), clear: () => set("vendor", "") });
   const active = chips.length > 0;
   const clearAll = () => setF(EMPTY);
 
@@ -93,14 +99,17 @@ export default function TankerReceiptsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl sm:text-3xl font-bold">Tanker Receipts</h1>
-      <p className="text-muted-foreground text-sm sm:text-base">Fuel deliveries received. Add a new one from inside a Shift &raquo; Stock tab.</p>
+      <h1 className="text-2xl sm:text-3xl font-bold">{tr("tankers.title", "Tanker Receipts")}</h1>
+      <p className="text-muted-foreground text-sm sm:text-base">{tr(
+          "tankers.subtitle",
+          "Fuel deliveries received. Add a new one from inside a Shift » Stock tab."
+        )}</p>
 
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <Label className="text-xs">From</Label>
+              <Label className="text-xs">{tr("common.from", "From")}</Label>
               <Input
                 type="date"
                 value={f.from}
@@ -109,7 +118,7 @@ export default function TankerReceiptsPage() {
               />
             </div>
             <div>
-              <Label className="text-xs">To</Label>
+              <Label className="text-xs">{tr("common.to", "To")}</Label>
               <Input
                 type="date"
                 value={f.to}
@@ -118,13 +127,13 @@ export default function TankerReceiptsPage() {
               />
             </div>
             <div className="min-w-0">
-              <Label className="text-xs">Tank</Label>
+              <Label className="text-xs">{tr("tankers.tank", "Tank")}</Label>
               <Select value={f.tankId} onValueChange={(v) => set("tankId", v)}>
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All tanks</SelectItem>
+                  <SelectItem value={ALL}>{tr("tankers.allTanks", "All tanks")}</SelectItem>
                   {tanks.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}
@@ -134,9 +143,9 @@ export default function TankerReceiptsPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Vendor / bill</Label>
+              <Label className="text-xs">{tr("tankers.vendorBill", "Vendor / bill")}</Label>
               <Input
-                placeholder="Search vendor or bill no"
+                placeholder={tr("tankers.vendorPh", "Search vendor or bill no")}
                 value={f.vendor}
                 onChange={(e) => set("vendor", e.target.value)}
               />
@@ -148,7 +157,7 @@ export default function TankerReceiptsPage() {
                 <FilterChip key={c.key} label={c.label} onRemove={c.clear} />
               ))}
               <Button size="sm" variant="ghost" onClick={clearAll}>
-                Clear all
+                {tr("common.clearAll", "Clear all")}
               </Button>
             </div>
           )}
@@ -159,20 +168,26 @@ export default function TankerReceiptsPage() {
         <CardHeader>
           <CardTitle className="text-base">
             {active
-              ? `${sorted.rows.length} of ${(data as any[]).length} receipts · ${formatLitres(totalLitres)} L`
-              : `Recent receipts · ${formatLitres(totalLitres)} L`}
+              ? tr("tankers.countTitle", "{n} of {total} receipts · {litres} L", {
+                  n: sorted.rows.length,
+                  total: (data as any[]).length,
+                  litres: formatLitres(totalLitres),
+                })
+              : tr("tankers.recent", "Recent receipts · {litres} L", {
+                  litres: formatLitres(totalLitres),
+                })}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader><TableRow>
-              <SortableHead {...sorted.sortProps("date")}>Date</SortableHead>
-              <SortableHead {...sorted.sortProps("tank")}>Tank</SortableHead>
-              <SortableHead {...sorted.sortProps("litres")} align="right">Litres</SortableHead>
-              <SortableHead {...sorted.sortProps("rate")} align="right">Rate / L</SortableHead>
-              <SortableHead {...sorted.sortProps("cost")} align="right">Total Cost</SortableHead>
-              <SortableHead {...sorted.sortProps("bill")}>Bill</SortableHead>
-              <SortableHead {...sorted.sortProps("vendor")}>Vendor</SortableHead>
+              <SortableHead {...sorted.sortProps("date")}>{tr("common.date", "Date")}</SortableHead>
+              <SortableHead {...sorted.sortProps("tank")}>{tr("tankers.col.tank", "Tank")}</SortableHead>
+              <SortableHead {...sorted.sortProps("litres")} align="right">{tr("common.litres", "Litres")}</SortableHead>
+              <SortableHead {...sorted.sortProps("rate")} align="right">{tr("tankers.col.rate", "Rate / L")}</SortableHead>
+              <SortableHead {...sorted.sortProps("cost")} align="right">{tr("tankers.col.cost", "Total Cost")}</SortableHead>
+              <SortableHead {...sorted.sortProps("bill")}>{tr("tankers.col.bill", "Bill")}</SortableHead>
+              <SortableHead {...sorted.sortProps("vendor")}>{tr("tankers.col.vendor", "Vendor")}</SortableHead>
             </TableRow></TableHeader>
             <TableBody>
               {sorted.rows.length === 0 ? (
@@ -180,12 +195,12 @@ export default function TankerReceiptsPage() {
                   colSpan={7}
                   filtered={active}
                   onClear={clearAll}
-                  emptyMessage="No tanker receipts yet"
+                  emptyMessage={tr("tankers.empty", "No tanker receipts yet")}
                 />
               ) : (
                 sorted.rows.map((t: any) => (
                   <TableRow key={t.id}>
-                    <TableCell>{format(new Date(t.receivedAt), "dd MMM yyyy HH:mm")}</TableCell>
+                    <TableCell>{format(new Date(t.receivedAt), "d MMM yyyy HH:mm", { locale })}</TableCell>
                     <TableCell>{t.tank?.name || "-"}</TableCell>
                     <TableCell className="text-right">{formatLitres(t.receivedMl)} L</TableCell>
                     <TableCell className="text-right">{t.ratePaise ? formatINR(t.ratePaise) : "-"}</TableCell>

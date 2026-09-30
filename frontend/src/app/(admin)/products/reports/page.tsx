@@ -34,6 +34,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatINR } from "@/lib/utils";
 import { format, parseISO, subDays } from "date-fns";
+import { useT } from "@/lib/i18n";
+import { useDateLocale } from "@/lib/i18n/core";
 import { ArrowLeft } from "lucide-react";
 import {
   CATEGORIES,
@@ -49,6 +51,8 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const daysAgoStr = (d: number) => subDays(new Date(), d).toISOString().slice(0, 10);
 
 export default function ProductReportsPage() {
+  const { t } = useT();
+  const locale = useDateLocale();
   const [from, setFrom] = useState(daysAgoStr(29));
   const [to, setTo] = useState(todayStr());
   const [category, setCategory] = useState(ALL);
@@ -83,11 +87,11 @@ export default function ProductReportsPage() {
           href="/products"
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Non-Fuel Retail
+          <ArrowLeft className="h-3.5 w-3.5 mr-1" /> {t("products.title", "Non-Fuel Retail")}
         </Link>
-        <h1 className="text-2xl sm:text-3xl font-bold mt-1">Non-Fuel Reports</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-1">{t("products.reportsTitle", "Non-Fuel Reports")}</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Margin, stock and movement for lubes, AdBlue, accessories and services.
+          {t("products.reportsSubtitle", "Margin, stock and movement for lubes, AdBlue, accessories and services.")}
         </p>
       </div>
 
@@ -95,38 +99,38 @@ export default function ProductReportsPage() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div>
-              <Label className="text-xs">From</Label>
+              <Label className="text-xs">{t("common.from", "From")}</Label>
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">To</Label>
+              <Label className="text-xs">{t("common.to", "To")}</Label>
               <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">Category</Label>
+              <Label className="text-xs">{t("products.category", "Category")}</Label>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All categories</SelectItem>
+                  <SelectItem value={ALL}>{t("products.allCategories", "All categories")}</SelectItem>
                   {CATEGORIES.map((c) => (
                     <SelectItem key={c} value={c}>
-                      {CATEGORY_LABELS[c]}
+                      {t(`products.category.${c}`, CATEGORY_LABELS[c])}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Group movement by</Label>
+              <Label className="text-xs">{t("products.groupMovementBy", "Group movement by")}</Label>
               <Select value={groupBy} onValueChange={(v) => setGroupBy(v as "day" | "month")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="day">Day</SelectItem>
-                  <SelectItem value="month">Month</SelectItem>
+                  <SelectItem value="day">{t("products.day", "Day")}</SelectItem>
+                  <SelectItem value="month">{t("products.month", "Month")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -136,9 +140,9 @@ export default function ProductReportsPage() {
 
       <Tabs defaultValue="margin">
         <TabsList>
-          <TabsTrigger value="margin">Margin</TabsTrigger>
-          <TabsTrigger value="stock">Stock</TabsTrigger>
-          <TabsTrigger value="movement">Movement</TabsTrigger>
+          <TabsTrigger value="margin">{t("products.tab.margin", "Margin")}</TabsTrigger>
+          <TabsTrigger value="stock">{t("products.tab.stock", "Stock")}</TabsTrigger>
+          <TabsTrigger value="movement">{t("products.tab.movement", "Movement")}</TabsTrigger>
         </TabsList>
 
         {/* ---------------- MARGIN ---------------- */}
@@ -146,7 +150,7 @@ export default function ProductReportsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Revenue (net of GST)</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">{t("products.revenueNet", "Revenue (net of GST)")}</CardTitle>
               </CardHeader>
               <CardContent className="text-xl font-bold">
                 {formatINR(margin?.totals.revenueNetPaise || "0")}
@@ -154,7 +158,7 @@ export default function ProductReportsPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">GST collected</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">{t("products.gstCollected", "GST collected")}</CardTitle>
               </CardHeader>
               <CardContent className="text-xl font-bold">
                 {formatINR(margin?.totals.gstPaise || "0")}
@@ -162,7 +166,7 @@ export default function ProductReportsPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Cost of goods</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">{t("products.cogs", "Cost of goods")}</CardTitle>
               </CardHeader>
               <CardContent className="text-xl font-bold">
                 {formatINR(margin?.totals.cogsPaise || "0")}
@@ -170,14 +174,14 @@ export default function ProductReportsPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Gross margin</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">{t("products.grossMargin", "Gross margin")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-xl font-bold text-green-700">
                   {formatINR(margin?.totals.marginPaise || "0")}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {(margin?.totals.marginPct ?? 0).toFixed(1)}% of net revenue
+                  {t("products.marginPctOfRevenue", "{pct}% of net revenue", { pct: (margin?.totals.marginPct ?? 0).toFixed(1) })}
                 </p>
               </CardContent>
             </Card>
@@ -185,34 +189,34 @@ export default function ProductReportsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>By category</CardTitle>
-              <CardDescription>Where the non-fuel money comes from.</CardDescription>
+              <CardTitle>{t("products.byCategory", "By category")}</CardTitle>
+              <CardDescription>{t("products.byCategoryHint", "Where the non-fuel money comes from.")}</CardDescription>
             </CardHeader>
             <CardContent className="px-0 sm:px-6">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Qty sold</TableHead>
-                      <TableHead className="text-right">Revenue (net)</TableHead>
-                      <TableHead className="text-right">COGS</TableHead>
-                      <TableHead className="text-right">Margin</TableHead>
-                      <TableHead className="text-right">Margin %</TableHead>
+                      <TableHead>{t("products.category", "Category")}</TableHead>
+                      <TableHead className="text-right">{t("products.qtySold", "Qty sold")}</TableHead>
+                      <TableHead className="text-right">{t("products.revenueNetShort", "Revenue (net)")}</TableHead>
+                      <TableHead className="text-right">{t("products.cogsShort", "COGS")}</TableHead>
+                      <TableHead className="text-right">{t("products.margin", "Margin")}</TableHead>
+                      <TableHead className="text-right">{t("products.marginPct", "Margin %")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(margin?.categories || []).length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                          {marginQ.isLoading ? "Loading…" : "No non-fuel sales in this window."}
+                          {marginQ.isLoading ? t("common.loading", "Loading…") : t("products.noSalesInWindow", "No non-fuel sales in this window.")}
                         </TableCell>
                       </TableRow>
                     ) : (
                       margin!.categories.map((c) => (
                         <TableRow key={c.category}>
                           <TableCell className="font-medium">
-                            {CATEGORY_LABELS[c.category]}
+                            {t(`products.category.${c.category}`, CATEGORY_LABELS[c.category])}
                           </TableCell>
                           <TableCell className="text-right">{c.quantitySold}</TableCell>
                           <TableCell className="text-right">
@@ -234,9 +238,9 @@ export default function ProductReportsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>By product</CardTitle>
+              <CardTitle>{t("products.byProduct", "By product")}</CardTitle>
               <CardDescription>
-                Ranked by margin contribution — the top rows are the lines worth pushing.
+                {t("products.byProductHint", "Ranked by margin contribution — the top rows are the lines worth pushing.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="px-0 sm:px-6">
@@ -244,13 +248,13 @@ export default function ProductReportsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty sold</TableHead>
-                      <TableHead className="text-right">Revenue (net)</TableHead>
-                      <TableHead className="text-right">GST</TableHead>
-                      <TableHead className="text-right">COGS</TableHead>
-                      <TableHead className="text-right">Margin</TableHead>
-                      <TableHead className="text-right">Margin %</TableHead>
+                      <TableHead>{t("products.product", "Product")}</TableHead>
+                      <TableHead className="text-right">{t("products.qtySold", "Qty sold")}</TableHead>
+                      <TableHead className="text-right">{t("products.revenueNetShort", "Revenue (net)")}</TableHead>
+                      <TableHead className="text-right">{t("products.gst", "GST")}</TableHead>
+                      <TableHead className="text-right">{t("products.cogsShort", "COGS")}</TableHead>
+                      <TableHead className="text-right">{t("products.margin", "Margin")}</TableHead>
+                      <TableHead className="text-right">{t("products.marginPct", "Margin %")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -258,8 +262,8 @@ export default function ProductReportsPage() {
                       <TableRow>
                         <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                           {marginQ.isLoading
-                            ? "Loading…"
-                            : "Nothing sold in this window. Record a sale from the catalog to see margin here."}
+                            ? t("common.loading", "Loading…")
+                            : t("products.nothingSold", "Nothing sold in this window. Record a sale from the catalog to see margin here.")}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -275,7 +279,7 @@ export default function ProductReportsPage() {
                                 {p.name}
                               </Link>
                               <div className="text-xs text-muted-foreground font-mono">
-                                {p.sku} · {p.gstRateBp / 100}% GST
+                                {p.sku} · {p.gstRateBp / 100}% {t("products.gst", "GST")}
                               </div>
                             </TableCell>
                             <TableCell className="text-right">{p.quantitySold}</TableCell>
@@ -305,7 +309,7 @@ export default function ProductReportsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Inventory value</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">{t("products.inventoryValue", "Inventory value")}</CardTitle>
               </CardHeader>
               <CardContent className="text-xl font-bold">
                 {formatINR(stock?.totals.totalValuePaise || "0")}
@@ -313,7 +317,7 @@ export default function ProductReportsPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Below reorder</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">{t("products.belowReorder", "Below reorder")}</CardTitle>
               </CardHeader>
               <CardContent className="text-xl font-bold text-amber-700">
                 {stock?.totals.belowReorderCount ?? 0}
@@ -321,7 +325,7 @@ export default function ProductReportsPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Out of stock</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">{t("products.outOfStock", "Out of stock")}</CardTitle>
               </CardHeader>
               <CardContent className="text-xl font-bold">
                 {stock?.totals.outOfStockCount ?? 0}
@@ -331,9 +335,9 @@ export default function ProductReportsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Stock on hand</CardTitle>
+              <CardTitle>{t("products.stockOnHand", "Stock on hand")}</CardTitle>
               <CardDescription>
-                Valued at weighted-average cost, net of input GST.
+                {t("products.stockValuedHint", "Valued at weighted-average cost, net of input GST.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="px-0 sm:px-6">
@@ -341,11 +345,11 @@ export default function ProductReportsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Avg cost</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="text-right">Reorder at</TableHead>
+                      <TableHead>{t("products.product", "Product")}</TableHead>
+                      <TableHead className="text-right">{t("products.qty", "Qty")}</TableHead>
+                      <TableHead className="text-right">{t("products.avgCost", "Avg cost")}</TableHead>
+                      <TableHead className="text-right">{t("products.value", "Value")}</TableHead>
+                      <TableHead className="text-right">{t("products.reorderAtCol", "Reorder at")}</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -353,7 +357,7 @@ export default function ProductReportsPage() {
                     {(stock?.rows || []).length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                          {stockQ.isLoading ? "Loading…" : "No active products in this category."}
+                          {stockQ.isLoading ? t("common.loading", "Loading…") : t("products.noActiveInCategory", "No active products in this category.")}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -367,7 +371,7 @@ export default function ProductReportsPage() {
                               {r.name}
                             </Link>
                             <div className="text-xs text-muted-foreground font-mono">
-                              {r.sku} · {UNIT_LABELS[r.unit]}
+                              {r.sku} · {t(`products.unit.${r.unit}`, UNIT_LABELS[r.unit])}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">{r.quantity}</TableCell>
@@ -379,7 +383,7 @@ export default function ProductReportsPage() {
                             {r.reorderLevelQty || "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            {r.belowReorder && <Badge variant="warning">reorder</Badge>}
+                            {r.belowReorder && <Badge variant="warning">{t("products.reorderBadge", "reorder")}</Badge>}
                           </TableCell>
                         </TableRow>
                       ))
@@ -395,10 +399,11 @@ export default function ProductReportsPage() {
         <TabsContent value="movement" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Purchases vs sales</CardTitle>
+              <CardTitle>{t("products.purchasesVsSales", "Purchases vs sales")}</CardTitle>
               <CardDescription>
-                Per {groupBy}. Amounts are net of GST; adjustments are stock corrections and carry
-                no tax.
+                {groupBy === "day"
+                  ? t("products.perDayHint", "Per day. Amounts are net of GST; adjustments are stock corrections and carry no tax.")
+                  : t("products.perMonthHint", "Per month. Amounts are net of GST; adjustments are stock corrections and carry no tax.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="px-0 sm:px-6">
@@ -406,14 +411,14 @@ export default function ProductReportsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Period</TableHead>
-                      <TableHead className="text-right">Purchased qty</TableHead>
-                      <TableHead className="text-right">Purchases</TableHead>
-                      <TableHead className="text-right">Sold qty</TableHead>
-                      <TableHead className="text-right">Sales (net)</TableHead>
-                      <TableHead className="text-right">GST</TableHead>
-                      <TableHead className="text-right">Adj. in / out</TableHead>
-                      <TableHead className="text-right">Ret. in / out</TableHead>
+                      <TableHead>{t("products.period", "Period")}</TableHead>
+                      <TableHead className="text-right">{t("products.purchasedQty", "Purchased qty")}</TableHead>
+                      <TableHead className="text-right">{t("products.purchases", "Purchases")}</TableHead>
+                      <TableHead className="text-right">{t("products.soldQty", "Sold qty")}</TableHead>
+                      <TableHead className="text-right">{t("products.salesNet", "Sales (net)")}</TableHead>
+                      <TableHead className="text-right">{t("products.gst", "GST")}</TableHead>
+                      <TableHead className="text-right">{t("products.adjInOut", "Adj. in / out")}</TableHead>
+                      <TableHead className="text-right">{t("products.retInOut", "Ret. in / out")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -421,8 +426,8 @@ export default function ProductReportsPage() {
                       <TableRow>
                         <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           {summaryQ.isLoading
-                            ? "Loading…"
-                            : "No stock movement in this window."}
+                            ? t("common.loading", "Loading…")
+                            : t("products.noMovementInWindow", "No stock movement in this window.")}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -431,8 +436,8 @@ export default function ProductReportsPage() {
                           <TableRow key={b.period}>
                             <TableCell className="whitespace-nowrap">
                               {groupBy === "day"
-                                ? format(parseISO(b.period), "dd MMM yy")
-                                : format(parseISO(b.period + "-01"), "MMM yyyy")}
+                                ? format(parseISO(b.period), "dd MMM yy", { locale })
+                                : format(parseISO(b.period + "-01"), "MMM yyyy", { locale })}
                             </TableCell>
                             <TableCell className="text-right">{b.purchaseQty}</TableCell>
                             <TableCell className="text-right">
@@ -455,7 +460,7 @@ export default function ProductReportsPage() {
                         ))}
                         {summary && (
                           <TableRow className="font-semibold">
-                            <TableCell>Total</TableCell>
+                            <TableCell>{t("common.total", "Total")}</TableCell>
                             <TableCell className="text-right">
                               {summary.totals.purchaseQty}
                             </TableCell>
