@@ -77,7 +77,7 @@ export function StockTab({ shift, disabled }: { shift: any; disabled: boolean })
                 <Plus className="h-4 w-4 mr-1" /> {t("shift.stock.tankerReceipt", "Tanker Receipt")}
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t("shift.stock.addTankerReceipt", "Add Tanker Receipt")}</DialogTitle>
               </DialogHeader>

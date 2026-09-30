@@ -517,7 +517,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
       </Card>
 
       <Dialog open={sendOpen} onOpenChange={setSendOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("receivables.markAsSentTitle", "Mark {no} as sent", { no: s.statementNo })}</DialogTitle>
           </DialogHeader>

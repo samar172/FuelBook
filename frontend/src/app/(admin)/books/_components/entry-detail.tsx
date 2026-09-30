@@ -85,7 +85,7 @@ export function EntryDetailDialog({
 
   return (
     <Dialog open={Boolean(entryId)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("books.entry.title", "Journal entry")}</DialogTitle>
           <DialogDescription>

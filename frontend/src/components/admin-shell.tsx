@@ -116,7 +116,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         className="md:hidden sticky z-30 flex items-center justify-between gap-2 border-b bg-white px-3 py-2.5"
         style={{ top: "env(safe-area-inset-top, 0px)" }}
       >
-        <div className="flex items-center gap-2 min-w-0">
+        {/* Burger in the left corner opens the full menu — the bottom tabs only
+            carry the four most-used sections. */}
+        <button
+          aria-label={t("nav.openMenu", "Open menu")}
+          onClick={() => setNavOpen(true)}
+          className="-ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-slate-100 active:bg-slate-200"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="bg-primary text-primary-foreground rounded-md p-1.5">
             <Fuel className="h-4 w-4" />
           </div>

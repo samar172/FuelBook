@@ -66,7 +66,7 @@ export default function UsersPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> {t("settings.addUser", "Add user")}</Button></DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{t("settings.addUserTitle", "Add User")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label>{t("common.name", "Name")}</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>

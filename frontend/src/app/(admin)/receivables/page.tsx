@@ -1108,7 +1108,7 @@ export default function ReceivablesPage() {
 
       {/* ---------- generate statement ---------- */}
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("receivables.generateStatement", "Generate statement")}</DialogTitle>
           </DialogHeader>
@@ -1167,7 +1167,7 @@ export default function ReceivablesPage() {
 
       {/* ---------- mark sent ---------- */}
       <Dialog open={!!sendFor} onOpenChange={(o) => !o && setSendFor(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("receivables.markAsSentTitle", "Mark {no} as sent", { no: sendFor?.statementNo ?? "" })}</DialogTitle>
           </DialogHeader>
@@ -1332,7 +1332,7 @@ export default function ReceivablesPage() {
 
       {/* ---------- bounce ---------- */}
       <Dialog open={!!bounceFor} onOpenChange={(o) => !o && setBounceFor(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {t("receivables.bounceTitle", "Bounce {kind} {no}", {

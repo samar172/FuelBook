@@ -184,7 +184,7 @@ export function BankAccountsSection() {
       </CardContent>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto max-w-md">
           <DialogHeader>
             <DialogTitle>{t("cash.bank.addTitle", "Add a bank account")}</DialogTitle>
             <DialogDescription>
@@ -833,7 +833,7 @@ function MatchDialog({
 
   return (
     <Dialog open onOpenChange={(v) => (!v ? onClose() : undefined)}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("cash.match.dialogTitle", "Match this bank line")}</DialogTitle>
           <DialogDescription>

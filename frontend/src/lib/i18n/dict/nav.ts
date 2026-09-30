@@ -26,6 +26,7 @@ export const nav = {
     "tab.cash": "Cash",
     "tab.reports": "Reports",
     "tab.more": "More",
+    "nav.openMenu": "Open menu",
   },
   hi: {
     "nav.guide": "सेटअप गाइड",
@@ -53,5 +54,6 @@ export const nav = {
     "tab.cash": "नकद",
     "tab.reports": "रिपोर्ट",
     "tab.more": "और",
+    "nav.openMenu": "मेन्यू खोलें",
   },
 };

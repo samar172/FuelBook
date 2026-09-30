@@ -373,7 +373,7 @@ function TankFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? t("settings.editTank", "Edit tank") : t("settings.addTank", "Add tank")}</DialogTitle>
           <DialogDescription>
@@ -597,7 +597,7 @@ function NozzleFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? t("settings.editNozzle", "Edit nozzle") : t("settings.addNozzle", "Add nozzle")}</DialogTitle>
           <DialogDescription>
@@ -798,7 +798,7 @@ function ChannelFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? t("settings.editChannel", "Edit channel") : t("settings.addChannel", "Add channel")}</DialogTitle>
           <DialogDescription>
@@ -1020,7 +1020,7 @@ function SlotFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? t("settings.editSlot", "Edit slot") : t("settings.addSlot", "Add slot")}</DialogTitle>
           <DialogDescription>

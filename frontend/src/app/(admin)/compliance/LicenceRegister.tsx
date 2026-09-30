@@ -529,7 +529,7 @@ export default function LicenceRegister() {
 
       {/* Renew dialog */}
       <Dialog open={Boolean(renewing)} onOpenChange={(o) => !o && setRenewing(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {t("compliance.lic.renewTitle", "Renew {kind}", {

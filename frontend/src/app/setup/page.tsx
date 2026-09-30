@@ -170,7 +170,7 @@ function PumpFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("settings.addPump", "Add pump")}</DialogTitle>
           <DialogDescription>

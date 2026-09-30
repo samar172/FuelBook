@@ -51,7 +51,7 @@ export function CreditSalesTab({ shift, disabled }: { shift: any; disabled: bool
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4 mr-1" /> {t("shift.credit.add", "Add credit sale")}</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
               <DialogHeader>
                 <DialogTitle>{t("shift.credit.dialogTitle", "Add Credit Sale")}</DialogTitle>
                 <DialogDescription>
